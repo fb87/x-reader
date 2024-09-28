@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.10)
 # make sure we have the esp-idf sdk included
 include ($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-project(2wheeler-cluster LANGUAGE C CXX)
+project(x-reader LANGUAGE C CXX)
 
 
 

@@ -1,6 +1,7 @@
-# vim: tabstop=4 softtabstop=4 shiftwidth=4 expandtab
+# vim: tabstop=4 softtabstop=4 shiftwidth=4 expandtab colorcolumn=80
 
 dependencies:
-  espressif/esp_lvgl_port: "^2.3.1"
+  m5stack/m5unified: "^0.1.16"
+
   idf:
     version: ">=4.1.0"
