@@ -27,8 +27,7 @@ static uint32_t book_hash(const char* path)
     return hash;
 }
 
-static esp_err_t open_page(const char* path, nvs_open_mode_t mode, nvs_handle_t* handle,
-                           char* key)
+static esp_err_t open_page(const char* path, nvs_open_mode_t mode, nvs_handle_t* handle, char* key)
 {
     if (path == nullptr || handle == nullptr || key == nullptr)
         return ESP_ERR_INVALID_ARG;

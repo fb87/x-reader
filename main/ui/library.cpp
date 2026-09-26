@@ -1,8 +1,8 @@
 #include "library.hpp"
 
 #include <dirent.h>
-#include <sys/stat.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "gfx/font.hpp"
 
