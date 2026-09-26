@@ -17,6 +17,9 @@ namespace
 {
 static constexpr const char* namespace_name = "reader";
 static constexpr const char* page_key = "page";
+static char cached_path[512] = {};
+static uint32_t cached_page = 0;
+static bool cache_valid = false;
 
 static uint32_t book_hash(const char* path)
 {
@@ -76,8 +79,13 @@ esp_err_t save_page(uint32_t page)
 
 esp_err_t load_page_for_book(const char* path, uint32_t* page)
 {
-    if (page == nullptr)
+    if (path == nullptr || page == nullptr)
         return ESP_ERR_INVALID_ARG;
+    if (cache_valid && strcmp(path, cached_path) == 0)
+    {
+        *page = cached_page;
+        return ESP_OK;
+    }
     nvs_handle_t handle = 0;
     char key[16] = {};
     esp_err_t error = open_page(path, NVS_READONLY, &handle, key);
@@ -85,11 +93,21 @@ esp_err_t load_page_for_book(const char* path, uint32_t* page)
         return error;
     error = nvs_get_u32(handle, key, page);
     nvs_close(handle);
+    if (error == ESP_OK)
+    {
+        snprintf(cached_path, sizeof(cached_path), "%s", path);
+        cached_page = *page;
+        cache_valid = true;
+    }
     return error;
 }
 
 esp_err_t save_page_for_book(const char* path, uint32_t page)
 {
+    if (path == nullptr)
+        return ESP_ERR_INVALID_ARG;
+    if (cache_valid && strcmp(path, cached_path) == 0 && cached_page == page)
+        return ESP_OK;
     nvs_handle_t handle = 0;
     char key[16] = {};
     esp_err_t error = open_page(path, NVS_READWRITE, &handle, key);
@@ -99,6 +117,12 @@ esp_err_t save_page_for_book(const char* path, uint32_t page)
     if (error == ESP_OK)
         error = nvs_commit(handle);
     nvs_close(handle);
+    if (error == ESP_OK)
+    {
+        snprintf(cached_path, sizeof(cached_path), "%s", path);
+        cached_page = page;
+        cache_valid = true;
+    }
     return error;
 }
 
