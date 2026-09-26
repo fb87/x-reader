@@ -35,8 +35,13 @@ static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_
     ui::draw_reader(framebuffer, book, document, page, page_count);
     esp_err_t error = drivers::it8951e::write_image_4bpp(display, framebuffer->pixels, 0, 0,
                                                          framebuffer->width, framebuffer->height);
-    if (error == ESP_OK)
-        error = drivers::it8951e::refresh(display, 0, 0, framebuffer->width, framebuffer->height,
+    uint16_t dirty_x = 0;
+    uint16_t dirty_y = 0;
+    uint16_t dirty_width = 0;
+    uint16_t dirty_height = 0;
+    if (error == ESP_OK &&
+        gfx::take_dirty(framebuffer, &dirty_x, &dirty_y, &dirty_width, &dirty_height))
+        error = drivers::it8951e::refresh(display, dirty_x, dirty_y, dirty_width, dirty_height,
                                           drivers::it8951e::refresh_gc16);
     return error;
 }
@@ -168,14 +173,17 @@ static void run()
     }
     const uint8_t total_pages = ui::page_count(document);
     uint32_t saved_page = 0;
-    storage::persistence::load_page(&saved_page);
+    storage::persistence::load_page_for_book(first_book_path, &saved_page);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
     show(&framebuffer, &display, book, document, page, total_pages);
     while (events != nullptr && touch.device != nullptr)
     {
         input::event_t event = {};
-        if (xQueueReceive(events, &event, portMAX_DELAY) != pdTRUE)
+        if (xQueueReceive(events, &event, pdMS_TO_TICKS(600000)) != pdTRUE)
+        {
+            board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
             continue;
+        }
         bool changed = false;
         if (event.type == input::event_rotary_clockwise ||
             (event.type == input::event_touch_up && event.x > display_config.width / 2))
@@ -197,7 +205,7 @@ static void run()
         }
         if (changed)
         {
-            storage::persistence::save_page(page);
+            storage::persistence::save_page_for_book(first_book_path, page);
             show(&framebuffer, &display, book, document, page, total_pages);
         }
     }
