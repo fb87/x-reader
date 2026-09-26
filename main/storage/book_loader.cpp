@@ -23,6 +23,7 @@ struct context_t
 {
     char path[256];
     epub::book_t* book;
+    epub::document_t* document;
     volatile bool complete;
     esp_err_t result;
 };
@@ -46,6 +47,13 @@ static void task(void* argument)
         {
             ESP_LOGI(tag, "loaded title='%s' author='%s' spine='%u'", context->book->title,
                      context->book->author, context->book->spine_count);
+            context->document = static_cast<epub::document_t*>(
+                heap_caps_calloc(1, sizeof(epub::document_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+            if (context->document == nullptr)
+                context->result = ESP_ERR_NO_MEM;
+            else
+                context->result =
+                    epub::load_document(context->path, context->book, 0, context->document);
         }
         else
         {
@@ -83,16 +91,19 @@ esp_err_t start(const char* path)
     return ESP_OK;
 }
 
-bool poll(epub::book_t* book, esp_err_t* result)
+bool poll(epub::book_t* book, epub::document_t* document, esp_err_t* result)
 {
     if (active_context == nullptr || !active_context->complete)
         return false;
     context_t* context = active_context;
     if (book != nullptr && context->book != nullptr)
         memcpy(book, context->book, sizeof(*book));
+    if (document != nullptr && context->document != nullptr)
+        memcpy(document, context->document, sizeof(*document));
     if (result != nullptr)
         *result = context->result;
     heap_caps_free(context->book);
+    heap_caps_free(context->document);
     heap_caps_free(context);
     active_context = nullptr;
     return true;

@@ -15,6 +15,10 @@ struct framebuffer_t
     uint8_t* pixels;
     uint16_t width;
     uint16_t height;
+    uint16_t dirty_left;
+    uint16_t dirty_top;
+    uint16_t dirty_right;
+    uint16_t dirty_bottom;
 };
 
 size_t size(uint16_t width, uint16_t height);
@@ -26,6 +30,8 @@ void fill_rect(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t widt
                uint8_t value);
 void draw_rect(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height,
                uint8_t value);
+bool take_dirty(framebuffer_t* framebuffer, uint16_t* x, uint16_t* y, uint16_t* width,
+                uint16_t* height);
 
 } // namespace gfx
 } // namespace xreader

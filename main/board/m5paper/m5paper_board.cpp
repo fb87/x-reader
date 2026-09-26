@@ -2,6 +2,7 @@
 
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_sleep.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -52,6 +53,29 @@ esp_err_t power_on()
     vTaskDelay(pdMS_TO_TICKS(1000));
     ESP_LOGI(tag, "M5Paper power rails enabled");
     return ESP_OK;
+}
+
+esp_err_t power_off()
+{
+    esp_err_t error = gpio_set_level(epd_power_pin, 0);
+    if (error == ESP_OK)
+        error = gpio_set_level(external_power_pin, 0);
+    if (error == ESP_OK)
+        error = gpio_set_level(main_power_pin, 0);
+    return error;
+}
+
+esp_err_t enter_deep_sleep(uint64_t wakeup_us)
+{
+    if (wakeup_us == 0)
+        return ESP_ERR_INVALID_ARG;
+    esp_err_t error = power_off();
+    if (error != ESP_OK)
+        return error;
+    error = esp_sleep_enable_timer_wakeup(wakeup_us);
+    if (error == ESP_OK)
+        esp_deep_sleep_start();
+    return error;
 }
 
 } // namespace m5paper

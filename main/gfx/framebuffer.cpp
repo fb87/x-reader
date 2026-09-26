@@ -29,6 +29,10 @@ esp_err_t create(framebuffer_t* framebuffer, uint16_t width, uint16_t height)
     }
     framebuffer->width = width;
     framebuffer->height = height;
+    framebuffer->dirty_left = width;
+    framebuffer->dirty_top = height;
+    framebuffer->dirty_right = 0;
+    framebuffer->dirty_bottom = 0;
     return ESP_OK;
 }
 
@@ -42,6 +46,10 @@ void destroy(framebuffer_t* framebuffer)
     framebuffer->pixels = nullptr;
     framebuffer->width = 0;
     framebuffer->height = 0;
+    framebuffer->dirty_left = 0;
+    framebuffer->dirty_top = 0;
+    framebuffer->dirty_right = 0;
+    framebuffer->dirty_bottom = 0;
 }
 
 void clear(framebuffer_t* framebuffer, uint8_t value)
@@ -52,6 +60,10 @@ void clear(framebuffer_t* framebuffer, uint8_t value)
     }
     const uint8_t packed = static_cast<uint8_t>((value & 0x0f) | ((value & 0x0f) << 4));
     memset(framebuffer->pixels, packed, size(framebuffer->width, framebuffer->height));
+    framebuffer->dirty_left = 0;
+    framebuffer->dirty_top = 0;
+    framebuffer->dirty_right = framebuffer->width;
+    framebuffer->dirty_bottom = framebuffer->height;
 }
 
 void set_pixel(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint8_t value)
@@ -73,6 +85,32 @@ void set_pixel(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint8_t value
         framebuffer->pixels[offset] =
             static_cast<uint8_t>((framebuffer->pixels[offset] & 0xf0) | (value & 0x0f));
     }
+    if (x < framebuffer->dirty_left)
+        framebuffer->dirty_left = x;
+    if (y < framebuffer->dirty_top)
+        framebuffer->dirty_top = y;
+    if (x + 1 > framebuffer->dirty_right)
+        framebuffer->dirty_right = static_cast<uint16_t>(x + 1);
+    if (y + 1 > framebuffer->dirty_bottom)
+        framebuffer->dirty_bottom = static_cast<uint16_t>(y + 1);
+}
+
+bool take_dirty(framebuffer_t* framebuffer, uint16_t* x, uint16_t* y, uint16_t* width,
+                uint16_t* height)
+{
+    if (framebuffer == nullptr || x == nullptr || y == nullptr || width == nullptr ||
+        height == nullptr || framebuffer->dirty_left >= framebuffer->dirty_right ||
+        framebuffer->dirty_top >= framebuffer->dirty_bottom)
+        return false;
+    *x = framebuffer->dirty_left;
+    *y = framebuffer->dirty_top;
+    *width = static_cast<uint16_t>(framebuffer->dirty_right - framebuffer->dirty_left);
+    *height = static_cast<uint16_t>(framebuffer->dirty_bottom - framebuffer->dirty_top);
+    framebuffer->dirty_left = framebuffer->width;
+    framebuffer->dirty_top = framebuffer->height;
+    framebuffer->dirty_right = 0;
+    framebuffer->dirty_bottom = 0;
+    return true;
 }
 
 void fill_rect(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height,

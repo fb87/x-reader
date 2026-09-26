@@ -163,12 +163,13 @@ esp_err_t load_metadata(const char* path, book_t* book)
         return error;
     }
     xml::init(&reader, opf, opf_size);
-    char* spine_id = static_cast<char*>(heap_caps_calloc(1, book_text_length,
-                                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    char* item_ids = static_cast<char*>(heap_caps_calloc(
-        book_spine_length, book_text_length, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    char* item_hrefs = static_cast<char*>(heap_caps_calloc(
-        book_spine_length, book_text_length, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    char* spine_id = static_cast<char*>(
+        heap_caps_calloc(1, book_text_length, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    char* item_ids = static_cast<char*>(
+        heap_caps_calloc(book_spine_length, book_text_length, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    char* item_hrefs = static_cast<char*>(
+        heap_caps_calloc(book_spine_length, book_text_length, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    char toc_href[book_text_length] = {};
     if (spine_id == nullptr || item_ids == nullptr || item_hrefs == nullptr)
     {
         heap_caps_free(spine_id);
@@ -217,8 +218,8 @@ esp_err_t load_metadata(const char* path, book_t* book)
                 {
                     if (strcmp(item_ids + item * book_text_length, spine_id) == 0)
                     {
-                        strncpy(book->spine[index].href,
-                                item_hrefs + item * book_text_length, book_text_length - 1);
+                        strncpy(book->spine[index].href, item_hrefs + item * book_text_length,
+                                book_text_length - 1);
                         if (index == 0)
                             strncpy(book->first_document, item_hrefs + item * book_text_length,
                                     book_text_length - 1);
@@ -231,9 +232,13 @@ esp_err_t load_metadata(const char* path, book_t* book)
         {
             char id[book_text_length] = {};
             char href[book_text_length] = {};
+            char media_type[book_text_length] = {};
             if (attribute(&token, "id", id, sizeof(id)) &&
                 attribute(&token, "href", href, sizeof(href)))
             {
+                if (attribute(&token, "media-type", media_type, sizeof(media_type)) &&
+                    strcmp(media_type, "application/x-dtbncx+xml") == 0)
+                    strncpy(toc_href, href, sizeof(toc_href) - 1);
                 for (uint8_t item = 0; item < book_spine_length; ++item)
                 {
                     if (item_ids[item * book_text_length] == '\0')
@@ -243,6 +248,56 @@ esp_err_t load_metadata(const char* path, book_t* book)
                         break;
                     }
                 }
+            }
+        }
+    }
+    if (toc_href[0] != '\0' && book->toc_count < book_toc_length)
+    {
+        char toc_path[book_text_length] = {};
+        if (join_path(book->opf_directory, toc_href, toc_path))
+        {
+            char* toc = nullptr;
+            size_t toc_size = 0;
+            if (read_entry(&archive, toc_path, &toc, &toc_size) == ESP_OK)
+            {
+                xml::init(&reader, toc, toc_size);
+                char title[book_text_length] = {};
+                bool in_text = false;
+                while (xml::next(&reader, &token) == ESP_OK && token.type != xml::token_eof)
+                {
+                    if (token.type == xml::token_start && xml::name_is(&token, "text"))
+                        in_text = true;
+                    else if (token.type == xml::token_end && xml::name_is(&token, "text"))
+                        in_text = false;
+                    else if (token.type == xml::token_text && in_text)
+                        trim_copy(title, token.value, token.value_length);
+                    else if (token.type == xml::token_empty && xml::name_is(&token, "content"))
+                    {
+                        char src[book_text_length] = {};
+                        if (attribute(&token, "src", src, sizeof(src)) && title[0] != '\0')
+                        {
+                            char* fragment = strchr(src, '#');
+                            if (fragment != nullptr)
+                                *fragment = '\0';
+                            const uint8_t index = book->toc_count++;
+                            strncpy(book->toc[index].title, title, book_text_length - 1);
+                            strncpy(book->toc[index].href, src, book_text_length - 1);
+                            book->toc[index].spine_index = 0;
+                            for (uint8_t spine = 0; spine < book->spine_count; ++spine)
+                            {
+                                if (strcmp(book->spine[spine].href, src) == 0)
+                                {
+                                    book->toc[index].spine_index = spine;
+                                    break;
+                                }
+                            }
+                            title[0] = '\0';
+                            if (book->toc_count == book_toc_length)
+                                break;
+                        }
+                    }
+                }
+                heap_caps_free(toc);
             }
         }
     }

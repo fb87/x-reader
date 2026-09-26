@@ -140,13 +140,21 @@ static void run()
         input::start(&input_config, events);
     }
 
-    epub::book_t book = {};
-    epub::document_t document = {};
+    epub::book_t* book = static_cast<epub::book_t*>(
+        heap_caps_calloc(1, sizeof(epub::book_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    epub::document_t* document = static_cast<epub::document_t*>(
+        heap_caps_calloc(1, sizeof(epub::document_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (book == nullptr || document == nullptr)
+    {
+        heap_caps_free(book);
+        heap_caps_free(document);
+        return;
+    }
     esp_err_t load_result = ESP_ERR_INVALID_STATE;
     bool have_book = false;
     for (uint32_t wait_ms = 0; wait_ms < 15000 && !have_book; wait_ms += 50)
     {
-        if (storage::book_loader::poll(&book, &load_result))
+        if (storage::book_loader::poll(book, document, &load_result))
             have_book = load_result == ESP_OK;
         vTaskDelay(pdMS_TO_TICKS(50));
     }
@@ -155,17 +163,11 @@ static void run()
         ESP_LOGW(tag, "first book metadata unavailable: %s", esp_err_to_name(load_result));
         return;
     }
-    error = epub::load_document(first_book_path, &book, 0, &document);
-    if (error != ESP_OK)
-    {
-        ESP_LOGW(tag, "first document unavailable: %s", esp_err_to_name(error));
-        return;
-    }
-    const uint8_t total_pages = ui::page_count(&document);
+    const uint8_t total_pages = ui::page_count(document);
     uint32_t saved_page = 0;
     storage::persistence::load_page(&saved_page);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
-    show(&framebuffer, &display, &book, &document, page, total_pages);
+    show(&framebuffer, &display, book, document, page, total_pages);
     while (events != nullptr)
     {
         input::event_t event = {};
@@ -193,7 +195,7 @@ static void run()
         if (changed)
         {
             storage::persistence::save_page(page);
-            show(&framebuffer, &display, &book, &document, page, total_pages);
+            show(&framebuffer, &display, book, document, page, total_pages);
         }
     }
 }

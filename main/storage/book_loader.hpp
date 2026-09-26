@@ -12,8 +12,8 @@ namespace book_loader
 {
 
 esp_err_t start(const char* path);
-bool poll(epub::book_t* book, esp_err_t* result);
+bool poll(epub::book_t* book, epub::document_t* document, esp_err_t* result);
 
-}
+} // namespace book_loader
 } // namespace storage
 } // namespace xreader
