@@ -2,6 +2,10 @@
 
 #include "board/board.hpp"
 
+#ifndef XREADER_XTEINK_CONFIGURED
+#define XREADER_XTEINK_CONFIGURED 0
+#endif
+
 namespace xreader
 {
 namespace board

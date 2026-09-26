@@ -55,3 +55,11 @@ configuration rather than scattering coordinate transforms through the UI.
 The Xteink 4 backend is blocked until the exact revision, SoC, display
 controller, panel dimensions, touch hardware, storage bus, and pin map are
 confirmed. No M5Paper pin or controller assumption may be reused implicitly.
+
+`main/board/xteink/xteink_board.hpp` exposes the compile-time
+`XREADER_XTEINK_CONFIGURED` gate and the shared `capabilities_t` contract. The
+default value is zero and `get_capabilities()` returns `ESP_ERR_NOT_SUPPORTED`.
+Enabling the gate without filling the capability values is intentionally not a
+backend implementation. A real port must provide the verified display
+controller and dimensions, storage bus, touch/rotary presence, and power and
+deep-sleep behavior before the firmware can select it.
