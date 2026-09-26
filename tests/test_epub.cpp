@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "epub/inflate.hpp"
+#include "epub/image.hpp"
 #include "epub/xml.hpp"
 #include "epub/zip.hpp"
 
@@ -20,6 +21,19 @@ static void append_u32(uint8_t* data, size_t* size, uint32_t value)
 
 int main()
 {
+    const uint8_t png[] = {
+        0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a,
+        0, 0, 0, 13, 'I', 'H', 'D', 'R', 0, 0, 0, 2, 0, 0, 0, 1, 8, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 14, 'I', 'D', 'A', 'T', 0x78, 0x01, 0x01, 0x03, 0x00, 0xfc, 0xff, 0x00, 0x00,
+        0xff, 0x00, 0x01, 0x01, 0x00, 0, 0, 0, 0, 'I', 'E', 'N', 'D', 0, 0, 0, 0,
+    };
+    xreader::epub::image::info_t image_info = {};
+    assert(xreader::epub::image::inspect(png, sizeof(png), &image_info) == ESP_OK);
+    assert(image_info.width == 2 && image_info.height == 1 && image_info.supported);
+    uint8_t image_pixels[1] = {};
+    assert(xreader::epub::image::decode_mono(png, sizeof(png), image_pixels, sizeof(image_pixels)) == ESP_OK);
+    assert(image_pixels[0] == 0xf0);
+
     uint8_t zip_data[128] = {};
     size_t zip_size = 0;
     append_u32(zip_data, &zip_size, 0x04034b50);

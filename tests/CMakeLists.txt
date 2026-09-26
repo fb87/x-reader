@@ -4,6 +4,7 @@ project(xreader_host_tests CXX)
 add_executable(xreader_epub_tests
     test_epub.cpp
     ../main/epub/inflate.cpp
+    ../main/epub/image.cpp
     ../main/epub/xml.cpp
     ../main/epub/zip.cpp
 )
