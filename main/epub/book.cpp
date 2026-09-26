@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <string.h>
+#include <strings.h>
 
 #include "esp_heap_caps.h"
 #include "inflate.hpp"
@@ -103,14 +104,76 @@ static void directory_name(const char* path, char* output)
         output[0] = '\0';
 }
 
+static int hex_digit(char value)
+{
+    if (value >= '0' && value <= '9')
+        return value - '0';
+    if (value >= 'a' && value <= 'f')
+        return value - 'a' + 10;
+    if (value >= 'A' && value <= 'F')
+        return value - 'A' + 10;
+    return -1;
+}
+
 static bool join_path(const char* directory, const char* href, char* output)
 {
+    char combined[book_text_length * 2] = {};
     const size_t directory_length = strlen(directory);
     const size_t href_length = strlen(href);
-    if (directory_length + href_length >= book_text_length)
+    if (directory_length + href_length + 2 > sizeof(combined))
         return false;
-    memcpy(output, directory, directory_length);
-    memcpy(output + directory_length, href, href_length + 1);
+    memcpy(combined, directory, directory_length);
+    size_t length = directory_length;
+    if (length > 0 && combined[length - 1] != '/')
+        combined[length++] = '/';
+    for (size_t index = 0; index < href_length && length + 1 < sizeof(combined); ++index)
+    {
+        if (href[index] == '#')
+            break;
+        if (href[index] == '%' && index + 2 < href_length)
+        {
+            const int high = hex_digit(href[index + 1]);
+            const int low = hex_digit(href[index + 2]);
+            if (high >= 0 && low >= 0)
+            {
+                combined[length++] = static_cast<char>((high << 4) | low);
+                index += 2;
+                continue;
+            }
+        }
+        combined[length++] = href[index];
+    }
+    combined[length] = '\0';
+
+    size_t output_length = 0;
+    size_t cursor = 0;
+    while (cursor < length)
+    {
+        while (cursor < length && combined[cursor] == '/')
+            ++cursor;
+        const size_t segment_start = cursor;
+        while (cursor < length && combined[cursor] != '/')
+            ++cursor;
+        const size_t segment_length = cursor - segment_start;
+        if (segment_length == 0 || (segment_length == 1 && combined[segment_start] == '.'))
+            continue;
+        if (segment_length == 2 && combined[segment_start] == '.' &&
+            combined[segment_start + 1] == '.')
+        {
+            while (output_length > 0 && output[output_length - 1] != '/')
+                --output_length;
+            if (output_length > 0)
+                --output_length;
+            continue;
+        }
+        if (output_length != 0)
+            output[output_length++] = '/';
+        if (output_length + segment_length >= book_text_length)
+            return false;
+        memcpy(output + output_length, combined + segment_start, segment_length);
+        output_length += segment_length;
+    }
+    output[output_length] = '\0';
     return true;
 }
 
@@ -152,11 +215,18 @@ esp_err_t load_metadata(const char* path, book_t* book)
         zip::close(&archive);
         return ESP_ERR_NOT_FOUND;
     }
-    strncpy(book->opf_path, rootfile, book_text_length - 1);
+    char normalized_rootfile[book_text_length] = {};
+    if (!join_path("", rootfile, normalized_rootfile))
+    {
+        zip::close(&archive);
+        return ESP_ERR_INVALID_SIZE;
+    }
+    strncpy(book->opf_path, normalized_rootfile, book_text_length - 1);
+    book->opf_path[book_text_length - 1] = '\0';
 
     char* opf = nullptr;
     size_t opf_size = 0;
-    error = read_entry(&archive, rootfile, &opf, &opf_size);
+    error = read_entry(&archive, normalized_rootfile, &opf, &opf_size);
     if (error != ESP_OK)
     {
         zip::close(&archive);
@@ -306,6 +376,15 @@ esp_err_t load_metadata(const char* path, book_t* book)
     heap_caps_free(item_ids);
     heap_caps_free(item_hrefs);
     zip::close(&archive);
+    if (book->title[0] == '\0')
+    {
+        const char* filename = strrchr(path, '/');
+        filename = filename == nullptr ? path : filename + 1;
+        copy_text(book->title, filename, strlen(filename));
+        char* extension = strrchr(book->title, '.');
+        if (extension != nullptr && strcasecmp(extension, ".epub") == 0)
+            *extension = '\0';
+    }
     return ESP_OK;
 }
 

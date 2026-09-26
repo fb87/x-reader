@@ -1,6 +1,7 @@
 #include "library.hpp"
 
 #include <dirent.h>
+#include <sys/stat.h>
 #include <string.h>
 
 #include "gfx/font.hpp"
@@ -82,7 +83,10 @@ static void scan_directory(const char* path, book_list_t* books, uint8_t depth)
         memcpy(entry_path, path, path_length);
         entry_path[path_length] = '/';
         strcpy(entry_path + path_length + 1, entry->d_name);
-        if (entry->d_type == DT_DIR)
+        struct stat entry_stat = {};
+        if (stat(entry_path, &entry_stat) != 0)
+            continue;
+        if (S_ISDIR(entry_stat.st_mode))
         {
             scan_directory(entry_path, books, static_cast<uint8_t>(depth + 1));
             continue;
@@ -115,7 +119,10 @@ static bool find_book(const char* directory, char* path, size_t capacity, uint8_
         memcpy(candidate, directory, length);
         candidate[length] = '/';
         strcpy(candidate + length + 1, entry->d_name);
-        if (entry->d_type == DT_DIR)
+        struct stat entry_stat = {};
+        if (stat(candidate, &entry_stat) != 0)
+            continue;
+        if (S_ISDIR(entry_stat.st_mode))
         {
             if (find_book(candidate, path, capacity, static_cast<uint8_t>(depth + 1)))
             {
