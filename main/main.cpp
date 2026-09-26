@@ -11,7 +11,6 @@
 #include "epub/book.hpp"
 #include "gfx/framebuffer.hpp"
 #include "input/input.hpp"
-#include "storage/book_loader.hpp"
 #include "storage/sdcard/sdcard.hpp"
 #include "ui/hardware_test.hpp"
 #include "ui/library.hpp"
@@ -90,13 +89,6 @@ static void run()
     if (error != ESP_OK)
     {
         ESP_LOGW(tag, "SD-card initialization failed: %s", esp_err_to_name(error));
-    }
-
-    char first_book_path[256] = {};
-    if (sd_card.mounted &&
-        ui::find_first_book(sd_config.mount_path, first_book_path, sizeof(first_book_path)))
-    {
-        storage::book_loader::start(first_book_path);
     }
 
     gfx::framebuffer_t framebuffer = {};
