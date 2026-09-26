@@ -98,6 +98,7 @@ static void run()
     if (error != ESP_OK)
     {
         ESP_LOGE(tag, "Display initialization failed: %s", esp_err_to_name(error));
+        board::m5paper::power_off();
         return;
     }
 
@@ -139,6 +140,7 @@ static void run()
     if (error != ESP_OK)
     {
         ESP_LOGE(tag, "Unable to allocate display framebuffer: %s", esp_err_to_name(error));
+        board::m5paper::power_off();
         return;
     }
 
@@ -147,6 +149,8 @@ static void run()
     if (error != ESP_OK)
     {
         ESP_LOGE(tag, "Library display update failed: %s", esp_err_to_name(error));
+        gfx::destroy(&framebuffer);
+        board::m5paper::power_off();
         return;
     }
     ESP_LOGI(tag, "Library display update complete");
@@ -188,6 +192,7 @@ static void run()
         heap_caps_free(book);
         heap_caps_free(document);
         gfx::destroy(&framebuffer);
+        board::m5paper::power_off();
         return;
     }
     const uint8_t total_pages = ui::page_count(document);
