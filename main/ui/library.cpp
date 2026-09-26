@@ -1,5 +1,6 @@
 #include "library.hpp"
 
+#include <ctype.h>
 #include <dirent.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -61,6 +62,40 @@ static void copy_name(char* destination, const char* source)
     destination[index] = '\0';
 }
 
+static int compare_names(const char* left, const char* right)
+{
+    while (*left != '\0' && *right != '\0')
+    {
+        const int left_value = tolower(static_cast<unsigned char>(*left));
+        const int right_value = tolower(static_cast<unsigned char>(*right));
+        if (left_value != right_value)
+            return left_value < right_value ? -1 : 1;
+        ++left;
+        ++right;
+    }
+    return *left == *right ? 0 : (*left == '\0' ? -1 : 1);
+}
+
+static void sort_books(book_list_t* books)
+{
+    for (uint8_t index = 1; index < books->count; ++index)
+    {
+        char name[max_name_length] = {};
+        char title[max_name_length] = {};
+        copy_name(name, books->names[index]);
+        copy_name(title, books->titles[index]);
+        uint8_t position = index;
+        while (position > 0 && compare_names(name, books->names[position - 1]) < 0)
+        {
+            copy_name(books->names[position], books->names[position - 1]);
+            copy_name(books->titles[position], books->titles[position - 1]);
+            --position;
+        }
+        copy_name(books->names[position], name);
+        copy_name(books->titles[position], title);
+    }
+}
+
 static void scan_directory(const char* path, book_list_t* books, uint8_t depth)
 {
     if (depth > 3 || books->count >= max_books)
@@ -107,6 +142,8 @@ static bool find_book(const char* directory, char* path, size_t capacity, uint8_
     DIR* handle = opendir(directory);
     if (handle == nullptr)
         return false;
+    bool found = false;
+    char best[512] = {};
     struct dirent* entry = nullptr;
     while ((entry = readdir(handle)) != nullptr)
     {
@@ -124,21 +161,25 @@ static bool find_book(const char* directory, char* path, size_t capacity, uint8_
             continue;
         if (S_ISDIR(entry_stat.st_mode))
         {
-            if (find_book(candidate, path, capacity, static_cast<uint8_t>(depth + 1)))
+            char nested[512] = {};
+            if (find_book(candidate, nested, sizeof(nested), static_cast<uint8_t>(depth + 1)) &&
+                (!found || compare_names(nested, best) < 0))
             {
-                closedir(handle);
-                return true;
+                strcpy(best, nested);
+                found = true;
             }
         }
-        else if (is_epub(entry->d_name) && strlen(candidate) + 1 <= capacity)
+        else if (is_epub(entry->d_name) && (!found || compare_names(candidate, best) < 0))
         {
-            strcpy(path, candidate);
-            closedir(handle);
-            return true;
+            strcpy(best, candidate);
+            found = true;
         }
     }
     closedir(handle);
-    return false;
+    if (!found || strlen(best) + 1 > capacity)
+        return false;
+    strcpy(path, best);
+    return true;
 }
 
 } // namespace
@@ -168,6 +209,7 @@ void draw_library(gfx::framebuffer_t* framebuffer, bool storage_mounted, const c
         return;
     }
     scan_directory(mount_path, &books, 0);
+    sort_books(&books);
     if (books.count == 0)
     {
         gfx::draw_text(framebuffer, 40, 130, "NO EPUB BOOKS", 3, 0x0f);
