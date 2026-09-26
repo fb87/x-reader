@@ -64,7 +64,7 @@ esp_err_t start(const char* path)
     if (context == nullptr)
         return ESP_ERR_NO_MEM;
     strcpy(context->path, path);
-    if (xTaskCreate(task, "xreader_book", 8192, context, 4, nullptr) != pdPASS)
+    if (xTaskCreate(task, "xreader_book", 32768, context, 4, nullptr) != pdPASS)
     {
         heap_caps_free(context);
         return ESP_ERR_NO_MEM;
