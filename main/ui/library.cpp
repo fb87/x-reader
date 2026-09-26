@@ -76,7 +76,7 @@ static void scan_directory(const char* path, book_list_t* books, uint8_t depth)
     {
         if (entry->d_name[0] == '.')
             continue;
-        char entry_path[256] = {};
+        char entry_path[512] = {};
         const size_t path_length = strlen(path);
         if (path_length + 1 + strlen(entry->d_name) >= sizeof(entry_path))
             continue;
@@ -112,7 +112,7 @@ static bool find_book(const char* directory, char* path, size_t capacity, uint8_
     {
         if (entry->d_name[0] == '.')
             continue;
-        char candidate[256] = {};
+        char candidate[512] = {};
         const size_t length = strlen(directory);
         if (length + 1 + strlen(entry->d_name) >= sizeof(candidate))
             continue;

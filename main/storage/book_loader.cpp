@@ -21,7 +21,7 @@ static const char* const tag = "book_loader";
 
 struct context_t
 {
-    char path[256];
+    char path[512];
     epub::book_t* book;
     epub::document_t* document;
     volatile bool complete;
@@ -69,7 +69,7 @@ static void task(void* argument)
 
 esp_err_t start(const char* path)
 {
-    if (path == nullptr || strlen(path) >= 256)
+    if (path == nullptr || strlen(path) >= 512)
     {
         return ESP_ERR_INVALID_ARG;
     }

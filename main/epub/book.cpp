@@ -94,6 +94,46 @@ static void trim_copy(char* destination, const char* source, size_t length)
     copy_text(destination, source, length);
 }
 
+static void append_text(document_t* document, const char* source, size_t length, bool* last_space)
+{
+    for (size_t index = 0; index < length && document->length + 1 < document_text_length; ++index)
+    {
+        char value = source[index];
+        if (value == '&')
+        {
+            const char* end = static_cast<const char*>(memchr(source + index, ';', length - index));
+            if (end != nullptr)
+            {
+                const size_t entity_length = static_cast<size_t>(end - (source + index));
+                if (entity_length == 4 && memcmp(source + index, "&amp", 4) == 0)
+                    value = '&';
+                else if (entity_length == 3 && memcmp(source + index, "&lt", 3) == 0)
+                    value = '<';
+                else if (entity_length == 3 && memcmp(source + index, "&gt", 3) == 0)
+                    value = '>';
+                else if (entity_length == 5 && memcmp(source + index, "&quot", 5) == 0)
+                    value = '"';
+                else if (entity_length == 5 && memcmp(source + index, "&apos", 5) == 0)
+                    value = '\'';
+                else
+                    value = ' ';
+                index = static_cast<size_t>(end - source);
+            }
+        }
+        if (isspace(static_cast<unsigned char>(value)))
+        {
+            if (!*last_space && document->length + 1 < document_text_length)
+                document->text[document->length++] = ' ';
+            *last_space = true;
+        }
+        else
+        {
+            document->text[document->length++] = value;
+            *last_space = false;
+        }
+    }
+}
+
 static void directory_name(const char* path, char* output)
 {
     strncpy(output, path, book_text_length - 1);
@@ -412,44 +452,36 @@ esp_err_t load_document(const char* path, const book_t* book, uint8_t spine_inde
     xml::init(&reader, data, size);
     xml::token_t token = {};
     bool in_body = false;
+    bool ignored = false;
     bool last_space = true;
     while (xml::next(&reader, &token) == ESP_OK && token.type != xml::token_eof)
     {
-        if (token.type == xml::token_start &&
-            (xml::name_is(&token, "body") || xml::name_is(&token, "html")))
+        if (token.type == xml::token_start && xml::name_is(&token, "body"))
             in_body = true;
         if (token.type == xml::token_end && xml::name_is(&token, "body"))
             in_body = false;
-        if (!in_body)
+        if (token.type == xml::token_start &&
+            (xml::name_is(&token, "head") || xml::name_is(&token, "style") ||
+             xml::name_is(&token, "script")))
+            ignored = true;
+        if (token.type == xml::token_end &&
+            (xml::name_is(&token, "head") || xml::name_is(&token, "style") ||
+             xml::name_is(&token, "script")))
+            ignored = false;
+        if (!in_body || ignored)
             continue;
         if (token.type == xml::token_start &&
             (xml::name_is(&token, "p") || xml::name_is(&token, "br") ||
+             xml::name_is(&token, "div") || xml::name_is(&token, "section") ||
              xml::name_is(&token, "h1") || xml::name_is(&token, "h2") ||
-             xml::name_is(&token, "li")))
+             xml::name_is(&token, "h3") || xml::name_is(&token, "li")))
         {
             if (document->length + 1 < document_text_length && document->length > 0)
                 document->text[document->length++] = '\n';
             last_space = true;
         }
         if (token.type == xml::token_text)
-        {
-            for (size_t index = 0;
-                 index < token.value_length && document->length + 1 < document_text_length; ++index)
-            {
-                const char value = token.value[index];
-                if (isspace(static_cast<unsigned char>(value)))
-                {
-                    if (!last_space && document->length + 1 < document_text_length)
-                        document->text[document->length++] = ' ';
-                    last_space = true;
-                }
-                else
-                {
-                    document->text[document->length++] = value;
-                    last_space = false;
-                }
-            }
-        }
+            append_text(document, token.value, token.value_length, &last_space);
     }
     document->text[document->length] = '\0';
     heap_caps_free(data);

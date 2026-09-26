@@ -161,6 +161,9 @@ static void run()
     if (!have_book)
     {
         ESP_LOGW(tag, "first book metadata unavailable: %s", esp_err_to_name(load_result));
+        heap_caps_free(book);
+        heap_caps_free(document);
+        gfx::destroy(&framebuffer);
         return;
     }
     const uint8_t total_pages = ui::page_count(document);
@@ -168,7 +171,7 @@ static void run()
     storage::persistence::load_page(&saved_page);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
     show(&framebuffer, &display, book, document, page, total_pages);
-    while (events != nullptr)
+    while (events != nullptr && touch.device != nullptr)
     {
         input::event_t event = {};
         if (xQueueReceive(events, &event, portMAX_DELAY) != pdTRUE)
