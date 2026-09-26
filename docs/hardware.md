@@ -11,6 +11,10 @@ must be checked against the device schematic during driver bring-up.
 | E-ink and SD MOSI | SPI | GPIO 12 |
 | E-ink and SD SCK | SPI | GPIO 14 |
 | E-ink CS | SPI | GPIO 15 |
+| E-ink busy | IT8951E status | GPIO 27 |
+| Main power enable | Power rail | GPIO 2 |
+| External power enable | Power rail | GPIO 5 |
+| E-ink power enable | Power rail | GPIO 23 |
 | SD CS | SPI | GPIO 4 |
 | Internal I2C SDA | I2C | GPIO 21 |
 | Internal I2C SCL | I2C | GPIO 22 |

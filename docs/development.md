@@ -10,14 +10,15 @@ nix develop
 ```
 
 The flake pins the upstream ESP-IDF source and provides host-side tools such
-as CMake, Ninja, Clang, clang-format, Python, and esptool. Nixpkgs 26.05 does
-not provide a complete native ESP-IDF toolchain package, so the Xtensa
-toolchain and ESP-IDF Python environment must be supplied by the documented
-bootstrap step before the first firmware build.
+as CMake, Ninja, Clang, clang-format, Python, and esptool. It also packages
+the official ESP-IDF 5.5.2 Xtensa and ULP tool archives through Nix.
 
-The bootstrap must not add a runtime firmware dependency. Once installed, it
-must expose `idf.py`, `xtensa-esp32-elf-gcc`, and the required Python modules
-inside the development shell.
+The first shell entry creates `.nix/idf-python`, which is ignored by Git, and
+installs the core ESP-IDF Python requirements there. Set
+`XREADER_IDF_PYTHON_ENV_PATH` to use another local path. This environment is
+host-side tooling only and adds no firmware dependency. Constraint checking is
+disabled because the ESP-IDF source is stored in the Nix store rather than in
+the standard mutable `$HOME/.espressif` installation tree.
 
 ## Build
 

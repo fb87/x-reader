@@ -4,17 +4,19 @@
       "flake": false,
       "locked": {
         "lastModified": 1766586887,
-        "narHash": "sha256-f4bUrWeMeXlJ+2iCd9eIwLXZ07H71xZJWtrWE1aW8Fs=",
-        "owner": "espressif",
-        "repo": "esp-idf",
+        "narHash": "sha256-xYlj8uG/nxeMMNdAY8AbBiA7RYuEOOxoDyb+wVK8QWc=",
+        "ref": "refs/heads/master",
         "rev": "30aaf64524299d3bde422ca9a2848090d1bc5d0f",
-        "type": "github"
+        "revCount": 46176,
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/espressif/esp-idf.git"
       },
       "original": {
-        "owner": "espressif",
-        "ref": "v5.5.2",
-        "repo": "esp-idf",
-        "type": "github"
+        "rev": "30aaf64524299d3bde422ca9a2848090d1bc5d0f",
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/espressif/esp-idf.git"
       }
     },
     "nixpkgs": {

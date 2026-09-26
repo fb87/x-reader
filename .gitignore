@@ -1,10 +1,12 @@
 # Nix and local development
 .direnv/
+.nix/
 result
 result-*
 
 # ESP-IDF build output
 build/
+sdkconfig
 sdkconfig.old
 managed_components/
 
