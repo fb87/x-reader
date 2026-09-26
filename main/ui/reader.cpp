@@ -33,7 +33,7 @@ static size_t page_start(const epub::document_t* document, uint8_t page)
     }
     return offset;
 }
-}
+} // namespace
 
 uint8_t page_count(const epub::document_t* document)
 {

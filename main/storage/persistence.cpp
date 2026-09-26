@@ -14,7 +14,7 @@ namespace
 {
 static constexpr const char* namespace_name = "reader";
 static constexpr const char* page_key = "page";
-}
+} // namespace
 
 esp_err_t init()
 {
