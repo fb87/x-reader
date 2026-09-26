@@ -117,6 +117,8 @@ esp_err_t inspect(const uint8_t* data, size_t size, info_t* info)
     *info = {};
     png_t png = {};
     esp_err_t error = parse_png(data, size, &png);
+    if (error != ESP_OK && size >= 2 && data[0] == 0xff && data[1] == 0xd8)
+        error = ESP_ERR_NOT_SUPPORTED;
     if (error == ESP_OK)
     {
         info->width = png.width;
@@ -156,11 +158,12 @@ esp_err_t decode_mono(const uint8_t* data, size_t size, uint8_t* output, size_t 
         return ESP_ERR_NO_MEM;
     }
     size_t decoded_size = 0;
-    if (png.compressed_size < 2 || inflate::decode(png.compressed + 2, png.compressed_size - 6,
+    if (png.compressed_size < 6 || inflate::decode(png.compressed + 2, png.compressed_size - 6,
                                                    filtered, static_cast<size_t>(png.height) * (row_size + 1),
                                                    &decoded_size) != ESP_OK ||
         decoded_size != static_cast<size_t>(png.height) * (row_size + 1))
         error = ESP_ERR_INVALID_RESPONSE;
+    memset(output, 0, (static_cast<size_t>(png.width) * png.height + 1) / 2);
     for (uint16_t y = 0; error == ESP_OK && y < png.height; ++y)
     {
         uint8_t* row = filtered + static_cast<size_t>(y) * (row_size + 1);
