@@ -1,0 +1,21 @@
+# Nix and local development
+.direnv/
+result
+result-*
+
+# ESP-IDF build output
+build/
+sdkconfig.old
+managed_components/
+
+# Editor and OS files
+.cache/
+.vscode/
+.idea/
+*~
+.#*
+.DS_Store
+
+# Generated or local test data
+data/books/
+*.epub
