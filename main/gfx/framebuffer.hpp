@@ -32,6 +32,8 @@ void draw_rect(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t widt
                uint8_t value);
 bool take_dirty(framebuffer_t* framebuffer, uint16_t* x, uint16_t* y, uint16_t* width,
                 uint16_t* height);
+esp_err_t copy_region_4bpp(const framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t width,
+                           uint16_t height, uint8_t* output, size_t output_size);
 
 } // namespace gfx
 } // namespace xreader

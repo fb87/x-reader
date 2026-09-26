@@ -113,6 +113,33 @@ bool take_dirty(framebuffer_t* framebuffer, uint16_t* x, uint16_t* y, uint16_t* 
     return true;
 }
 
+esp_err_t copy_region_4bpp(const framebuffer_t* framebuffer, uint16_t x, uint16_t y,
+                           uint16_t width, uint16_t height, uint8_t* output, size_t output_size)
+{
+    if (framebuffer == nullptr || framebuffer->pixels == nullptr || output == nullptr || width == 0 ||
+        height == 0 || (width & 3U) != 0 || x >= framebuffer->width || y >= framebuffer->height ||
+        width > framebuffer->width - x || height > framebuffer->height - y ||
+        output_size < size(width, height))
+        return ESP_ERR_INVALID_ARG;
+    memset(output, 0, size(width, height));
+    for (uint16_t row = 0; row < height; ++row)
+    {
+        for (uint16_t column = 0; column < width; ++column)
+        {
+            const uint16_t source_x = static_cast<uint16_t>(x + column);
+            const size_t source_offset = (static_cast<size_t>(y + row) * framebuffer->width + source_x) / 2;
+            const uint8_t value = (source_x & 1U) == 0 ? framebuffer->pixels[source_offset] >> 4
+                                                       : framebuffer->pixels[source_offset] & 0x0f;
+            const size_t destination_offset = (static_cast<size_t>(row) * width + column) / 2;
+            if ((column & 1U) == 0)
+                output[destination_offset] = static_cast<uint8_t>(value << 4);
+            else
+                output[destination_offset] = static_cast<uint8_t>(output[destination_offset] | value);
+        }
+    }
+    return ESP_OK;
+}
+
 void fill_rect(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height,
                uint8_t value)
 {

@@ -6,6 +6,7 @@
 #include "epub/image.hpp"
 #include "epub/xml.hpp"
 #include "epub/zip.hpp"
+#include "gfx/framebuffer.hpp"
 
 static void append_u16(uint8_t* data, size_t* size, uint16_t value)
 {
@@ -33,6 +34,15 @@ int main()
     uint8_t image_pixels[1] = {};
     assert(xreader::epub::image::decode_mono(png, sizeof(png), image_pixels, sizeof(image_pixels)) == ESP_OK);
     assert(image_pixels[0] == 0xf0);
+
+    xreader::gfx::framebuffer_t framebuffer = {};
+    assert(xreader::gfx::create(&framebuffer, 8, 2) == ESP_OK);
+    for (uint16_t x = 0; x < 8; ++x)
+        xreader::gfx::set_pixel(&framebuffer, x, 0, static_cast<uint8_t>(x));
+    uint8_t region[4] = {};
+    assert(xreader::gfx::copy_region_4bpp(&framebuffer, 2, 0, 4, 1, region, sizeof(region)) == ESP_OK);
+    assert(region[0] == 0x23 && region[1] == 0x45);
+    xreader::gfx::destroy(&framebuffer);
 
     uint8_t zip_data[128] = {};
     size_t zip_size = 0;

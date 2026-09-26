@@ -28,22 +28,45 @@ namespace app
 
 static const char* const tag = "xreader";
 
+static esp_err_t transfer_dirty(gfx::framebuffer_t* framebuffer,
+                                drivers::it8951e::device_t* display)
+{
+    uint16_t dirty_x = 0;
+    uint16_t dirty_y = 0;
+    uint16_t dirty_width = 0;
+    uint16_t dirty_height = 0;
+    if (!gfx::take_dirty(framebuffer, &dirty_x, &dirty_y, &dirty_width, &dirty_height))
+        return ESP_OK;
+    const uint16_t right = static_cast<uint16_t>(
+        ((dirty_x + dirty_width + 3U) & ~3U) > framebuffer->width ? framebuffer->width
+                                                                  : (dirty_x + dirty_width + 3U) & ~3U);
+    dirty_x = static_cast<uint16_t>(dirty_x & ~3U);
+    dirty_width = static_cast<uint16_t>(right - dirty_x);
+    if ((dirty_width & 3U) != 0)
+        return ESP_ERR_INVALID_SIZE;
+    const size_t transfer_size = gfx::size(dirty_width, dirty_height);
+    uint8_t* transfer = static_cast<uint8_t*>(
+        heap_caps_malloc(transfer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (transfer == nullptr)
+        return ESP_ERR_NO_MEM;
+    esp_err_t error = gfx::copy_region_4bpp(framebuffer, dirty_x, dirty_y, dirty_width, dirty_height,
+                                            transfer, transfer_size);
+    if (error == ESP_OK)
+        error = drivers::it8951e::write_image_4bpp(display, transfer, dirty_x, dirty_y, dirty_width,
+                                                   dirty_height);
+    if (error == ESP_OK)
+        error = drivers::it8951e::refresh(display, dirty_x, dirty_y, dirty_width, dirty_height,
+                                          drivers::it8951e::refresh_gc16);
+    heap_caps_free(transfer);
+    return error;
+}
+
 static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* display,
                       const epub::book_t* book, const epub::document_t* document, uint8_t page,
                       uint8_t page_count)
 {
     ui::draw_reader(framebuffer, book, document, page, page_count);
-    esp_err_t error = drivers::it8951e::write_image_4bpp(display, framebuffer->pixels, 0, 0,
-                                                         framebuffer->width, framebuffer->height);
-    uint16_t dirty_x = 0;
-    uint16_t dirty_y = 0;
-    uint16_t dirty_width = 0;
-    uint16_t dirty_height = 0;
-    if (error == ESP_OK &&
-        gfx::take_dirty(framebuffer, &dirty_x, &dirty_y, &dirty_width, &dirty_height))
-        error = drivers::it8951e::refresh(display, dirty_x, dirty_y, dirty_width, dirty_height,
-                                          drivers::it8951e::refresh_gc16);
-    return error;
+    return transfer_dirty(framebuffer, display);
 }
 
 static void run()
@@ -120,11 +143,7 @@ static void run()
     }
 
     ui::draw_library(&framebuffer, sd_card.mounted, sd_config.mount_path);
-    error = drivers::it8951e::write_image_4bpp(&display, framebuffer.pixels, 0, 0,
-                                               display_config.width, display_config.height);
-    if (error == ESP_OK)
-        error = drivers::it8951e::refresh(&display, 0, 0, display_config.width,
-                                          display_config.height, drivers::it8951e::refresh_gc16);
+    error = transfer_dirty(&framebuffer, &display);
     if (error != ESP_OK)
     {
         ESP_LOGE(tag, "Library display update failed: %s", esp_err_to_name(error));
