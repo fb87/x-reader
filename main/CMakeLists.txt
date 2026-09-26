@@ -13,6 +13,7 @@ idf_component_register(
         "gfx/m5epd_font16.c"
         "input/input.cpp"
         "storage/sdcard/sdcard.cpp"
+        "storage/persistence.cpp"
         "storage/book_loader.cpp"
         "ui/library.cpp"
         "ui/reader.cpp"

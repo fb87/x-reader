@@ -163,9 +163,21 @@ esp_err_t load_metadata(const char* path, book_t* book)
         return error;
     }
     xml::init(&reader, opf, opf_size);
-    char spine_id[book_text_length] = {};
-    char item_ids[book_spine_length][book_text_length] = {};
-    char item_hrefs[book_spine_length][book_text_length] = {};
+    char* spine_id = static_cast<char*>(heap_caps_calloc(1, book_text_length,
+                                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    char* item_ids = static_cast<char*>(heap_caps_calloc(
+        book_spine_length, book_text_length, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    char* item_hrefs = static_cast<char*>(heap_caps_calloc(
+        book_spine_length, book_text_length, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (spine_id == nullptr || item_ids == nullptr || item_hrefs == nullptr)
+    {
+        heap_caps_free(spine_id);
+        heap_caps_free(item_ids);
+        heap_caps_free(item_hrefs);
+        heap_caps_free(opf);
+        zip::close(&archive);
+        return ESP_ERR_NO_MEM;
+    }
     directory_name(rootfile, book->opf_directory);
     bool in_title = false;
     bool in_creator = false;
@@ -203,11 +215,13 @@ esp_err_t load_metadata(const char* path, book_t* book)
                 strncpy(book->spine[index].id, spine_id, book_text_length - 1);
                 for (uint8_t item = 0; item < book_spine_length; ++item)
                 {
-                    if (strcmp(item_ids[item], spine_id) == 0)
+                    if (strcmp(item_ids + item * book_text_length, spine_id) == 0)
                     {
-                        strncpy(book->spine[index].href, item_hrefs[item], book_text_length - 1);
+                        strncpy(book->spine[index].href,
+                                item_hrefs + item * book_text_length, book_text_length - 1);
                         if (index == 0)
-                            strncpy(book->first_document, item_hrefs[item], book_text_length - 1);
+                            strncpy(book->first_document, item_hrefs + item * book_text_length,
+                                    book_text_length - 1);
                         break;
                     }
                 }
@@ -222,10 +236,10 @@ esp_err_t load_metadata(const char* path, book_t* book)
             {
                 for (uint8_t item = 0; item < book_spine_length; ++item)
                 {
-                    if (item_ids[item][0] == '\0')
+                    if (item_ids[item * book_text_length] == '\0')
                     {
-                        strncpy(item_ids[item], id, book_text_length - 1);
-                        strncpy(item_hrefs[item], href, book_text_length - 1);
+                        strncpy(item_ids + item * book_text_length, id, book_text_length - 1);
+                        strncpy(item_hrefs + item * book_text_length, href, book_text_length - 1);
                         break;
                     }
                 }
@@ -233,6 +247,9 @@ esp_err_t load_metadata(const char* path, book_t* book)
         }
     }
     heap_caps_free(opf);
+    heap_caps_free(spine_id);
+    heap_caps_free(item_ids);
+    heap_caps_free(item_hrefs);
     zip::close(&archive);
     return ESP_OK;
 }

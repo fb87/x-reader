@@ -21,6 +21,7 @@ static constexpr uint32_t local_signature = 0x04034b50;
 static constexpr size_t end_record_size = 22;
 static constexpr size_t max_comment_length = 65535;
 static constexpr size_t max_search_size = end_record_size + max_comment_length;
+static constexpr uint32_t max_entry_size = 4 * 1024 * 1024;
 
 static uint16_t read_u16(const uint8_t* data)
 {
@@ -54,7 +55,7 @@ static esp_err_t locate_end_record(FILE* file, uint32_t* central_offset, uint16_
                                    ? static_cast<size_t>(file_size)
                                    : max_search_size;
     uint8_t* search_buffer = static_cast<uint8_t*>(
-        heap_caps_calloc(1, max_search_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        heap_caps_malloc(search_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (search_buffer == nullptr)
     {
         return ESP_ERR_NO_MEM;
@@ -215,6 +216,8 @@ esp_err_t read(archive_t* archive, const entry_t* entry, uint8_t* output, size_t
     {
         return ESP_ERR_INVALID_SIZE;
     }
+    if (entry->uncompressed_size > max_entry_size || entry->compressed_size > max_entry_size)
+        return ESP_ERR_INVALID_SIZE;
 
     if (fseek(archive->file, entry->local_header_offset, SEEK_SET) != 0)
     {

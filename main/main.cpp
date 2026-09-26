@@ -1,6 +1,9 @@
 #include "esp_err.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 
@@ -12,6 +15,7 @@
 #include "gfx/framebuffer.hpp"
 #include "input/input.hpp"
 #include "storage/book_loader.hpp"
+#include "storage/persistence.hpp"
 #include "storage/sdcard/sdcard.hpp"
 #include "ui/hardware_test.hpp"
 #include "ui/library.hpp"
@@ -39,7 +43,10 @@ static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_
 
 static void run()
 {
-    esp_err_t error = board::m5paper::power_on();
+    esp_err_t error = storage::persistence::init();
+    if (error != ESP_OK)
+        ESP_LOGW(tag, "NVS initialization failed: %s", esp_err_to_name(error));
+    error = board::m5paper::power_on();
     if (error != ESP_OK)
     {
         ESP_LOGE(tag, "M5Paper power initialization failed: %s", esp_err_to_name(error));
@@ -113,13 +120,82 @@ static void run()
     if (error == ESP_OK)
         error = drivers::it8951e::refresh(&display, 0, 0, display_config.width,
                                           display_config.height, drivers::it8951e::refresh_gc16);
-    gfx::destroy(&framebuffer);
     if (error != ESP_OK)
     {
         ESP_LOGE(tag, "Library display update failed: %s", esp_err_to_name(error));
         return;
     }
     ESP_LOGI(tag, "Library display update complete");
+
+    QueueHandle_t events = xQueueCreate(8, sizeof(input::event_t));
+    if (events != nullptr && touch.device != nullptr)
+    {
+        const input::config_t input_config = {
+            .rotary_right_pin = board::m5paper::rotary_right_pin,
+            .rotary_press_pin = board::m5paper::rotary_press_pin,
+            .rotary_left_pin = board::m5paper::rotary_left_pin,
+            .touch = &touch,
+            .poll_interval_ms = 30,
+        };
+        input::start(&input_config, events);
+    }
+
+    epub::book_t book = {};
+    epub::document_t document = {};
+    esp_err_t load_result = ESP_ERR_INVALID_STATE;
+    bool have_book = false;
+    for (uint32_t wait_ms = 0; wait_ms < 15000 && !have_book; wait_ms += 50)
+    {
+        if (storage::book_loader::poll(&book, &load_result))
+            have_book = load_result == ESP_OK;
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    if (!have_book)
+    {
+        ESP_LOGW(tag, "first book metadata unavailable: %s", esp_err_to_name(load_result));
+        return;
+    }
+    error = epub::load_document(first_book_path, &book, 0, &document);
+    if (error != ESP_OK)
+    {
+        ESP_LOGW(tag, "first document unavailable: %s", esp_err_to_name(error));
+        return;
+    }
+    const uint8_t total_pages = ui::page_count(&document);
+    uint32_t saved_page = 0;
+    storage::persistence::load_page(&saved_page);
+    uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
+    show(&framebuffer, &display, &book, &document, page, total_pages);
+    while (events != nullptr)
+    {
+        input::event_t event = {};
+        if (xQueueReceive(events, &event, portMAX_DELAY) != pdTRUE)
+            continue;
+        bool changed = false;
+        if (event.type == input::event_rotary_clockwise ||
+            (event.type == input::event_touch_up && event.x > display_config.width / 2))
+        {
+            if (page + 1 < total_pages)
+            {
+                ++page;
+                changed = true;
+            }
+        }
+        else if (event.type == input::event_rotary_counterclockwise ||
+                 (event.type == input::event_touch_up && event.x <= display_config.width / 2))
+        {
+            if (page > 0)
+            {
+                --page;
+                changed = true;
+            }
+        }
+        if (changed)
+        {
+            storage::persistence::save_page(page);
+            show(&framebuffer, &display, &book, &document, page, total_pages);
+        }
+    }
 }
 
 } // namespace app
