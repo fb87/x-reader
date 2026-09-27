@@ -135,51 +135,57 @@ static void scan_directory(const char* path, book_list_t* books, uint8_t depth)
     closedir(directory);
 }
 
-static bool find_book(const char* directory, char* path, size_t capacity, uint8_t depth)
+static void collect_books(const char* directory, char paths[][book_path_length], size_t capacity,
+                          size_t* count, uint8_t depth)
 {
-    if (depth > 3)
-        return false;
+    if (depth > 3 || *count >= capacity)
+        return;
     DIR* handle = opendir(directory);
     if (handle == nullptr)
-        return false;
-    bool found = false;
-    char best[512] = {};
+        return;
     struct dirent* entry = nullptr;
-    while ((entry = readdir(handle)) != nullptr)
+    while (*count < capacity && (entry = readdir(handle)) != nullptr)
     {
         if (entry->d_name[0] == '.')
             continue;
-        char candidate[512] = {};
-        const size_t length = strlen(directory);
-        if (length + 1 + strlen(entry->d_name) >= sizeof(candidate))
+        char candidate[book_path_length] = {};
+        const size_t directory_length = strlen(directory);
+        const size_t entry_length = strlen(entry->d_name);
+        if (directory_length + 1 + entry_length >= sizeof(candidate))
             continue;
-        memcpy(candidate, directory, length);
-        candidate[length] = '/';
-        strcpy(candidate + length + 1, entry->d_name);
+        memcpy(candidate, directory, directory_length);
+        candidate[directory_length] = '/';
+        strcpy(candidate + directory_length + 1, entry->d_name);
         struct stat entry_stat = {};
         if (stat(candidate, &entry_stat) != 0)
             continue;
         if (S_ISDIR(entry_stat.st_mode))
         {
-            char nested[512] = {};
-            if (find_book(candidate, nested, sizeof(nested), static_cast<uint8_t>(depth + 1)) &&
-                (!found || compare_names(nested, best) < 0))
-            {
-                strcpy(best, nested);
-                found = true;
-            }
+            collect_books(candidate, paths, capacity, count, static_cast<uint8_t>(depth + 1));
         }
-        else if (is_epub(entry->d_name) && (!found || compare_names(candidate, best) < 0))
+        else if (is_epub(entry->d_name))
         {
-            strcpy(best, candidate);
-            found = true;
+            strcpy(paths[*count], candidate);
+            ++*count;
         }
     }
     closedir(handle);
-    if (!found || strlen(best) + 1 > capacity)
-        return false;
-    strcpy(path, best);
-    return true;
+}
+
+static void sort_paths(char paths[][book_path_length], size_t count)
+{
+    for (size_t index = 1; index < count; ++index)
+    {
+        char path[book_path_length] = {};
+        strcpy(path, paths[index]);
+        size_t position = index;
+        while (position > 0 && compare_names(path, paths[position - 1]) < 0)
+        {
+            strcpy(paths[position], paths[position - 1]);
+            --position;
+        }
+        strcpy(paths[position], path);
+    }
 }
 
 } // namespace
@@ -229,8 +235,22 @@ bool find_first_book(const char* mount_path, char* path, size_t capacity)
 {
     if (mount_path == nullptr || path == nullptr || capacity == 0)
         return false;
-    path[0] = '\0';
-    return find_book(mount_path, path, capacity, 0);
+    char paths[max_books][book_path_length] = {};
+    const size_t count = find_books(mount_path, paths, max_books);
+    if (count == 0 || strlen(paths[0]) + 1 > capacity)
+        return false;
+    strcpy(path, paths[0]);
+    return true;
+}
+
+size_t find_books(const char* mount_path, char paths[][book_path_length], size_t capacity)
+{
+    if (mount_path == nullptr || paths == nullptr || capacity == 0)
+        return 0;
+    size_t count = 0;
+    collect_books(mount_path, paths, capacity, &count, 0);
+    sort_paths(paths, count);
+    return count;
 }
 
 } // namespace ui

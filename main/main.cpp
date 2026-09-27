@@ -172,29 +172,31 @@ static void run()
         heap_caps_free(document);
         return;
     }
-    char first_book_path[512] = {};
-    if (!sd_card.mounted ||
-        !ui::find_first_book(sd_config.mount_path, first_book_path, sizeof(first_book_path)) ||
-        storage::book_loader::start(first_book_path) != ESP_OK)
-    {
-        ESP_LOGW(tag, "no EPUB book available");
-        heap_caps_free(book);
-        heap_caps_free(document);
-        gfx::destroy(&framebuffer);
-        board::m5paper::power_off();
-        return;
-    }
-    esp_err_t load_result = ESP_ERR_INVALID_STATE;
+    char book_paths[8][ui::book_path_length] = {};
+    const size_t book_count =
+        sd_card.mounted ? ui::find_books(sd_config.mount_path, book_paths, 8) : 0;
+    char book_path[ui::book_path_length] = {};
+    esp_err_t load_result = ESP_ERR_NOT_FOUND;
     bool have_book = false;
-    for (uint32_t wait_ms = 0; wait_ms < 15000 && !have_book; wait_ms += 50)
+    for (size_t book_index = 0; book_index < book_count && !have_book; ++book_index)
     {
-        if (storage::book_loader::poll(book, document, &load_result))
-            have_book = load_result == ESP_OK;
-        vTaskDelay(pdMS_TO_TICKS(50));
+        if (storage::book_loader::start(book_paths[book_index]) != ESP_OK)
+            continue;
+        for (uint32_t wait_ms = 0; wait_ms < 15000 && !have_book; wait_ms += 50)
+        {
+            if (storage::book_loader::poll(book, document, &load_result))
+                have_book = load_result == ESP_OK;
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+        if (have_book)
+            strcpy(book_path, book_paths[book_index]);
+        else
+            ESP_LOGW(tag, "book unavailable: %s: %s", book_paths[book_index],
+                     esp_err_to_name(load_result));
     }
     if (!have_book)
     {
-        ESP_LOGW(tag, "first book metadata unavailable: %s", esp_err_to_name(load_result));
+        ESP_LOGW(tag, "no valid EPUB book available: %s", esp_err_to_name(load_result));
         heap_caps_free(book);
         heap_caps_free(document);
         gfx::destroy(&framebuffer);
@@ -203,7 +205,7 @@ static void run()
     }
     const uint8_t total_pages = ui::page_count(document);
     uint32_t saved_page = 0;
-    storage::persistence::load_page_for_book(first_book_path, &saved_page);
+    storage::persistence::load_page_for_book(book_path, &saved_page);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
     show(&framebuffer, &display, book, document, page, total_pages);
     while (events != nullptr && touch.device != nullptr)
@@ -235,7 +237,7 @@ static void run()
         }
         if (changed)
         {
-            storage::persistence::save_page_for_book(first_book_path, page);
+            storage::persistence::save_page_for_book(book_path, page);
             show(&framebuffer, &display, book, document, page, total_pages);
         }
     }
