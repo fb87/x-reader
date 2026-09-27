@@ -16,6 +16,8 @@ esp_err_t load_page(uint32_t* page);
 esp_err_t save_page(uint32_t page);
 esp_err_t load_page_for_book(const char* path, uint32_t* page);
 esp_err_t save_page_for_book(const char* path, uint32_t page);
+esp_err_t load_position_for_book(const char* path, uint32_t* spine, uint32_t* page);
+esp_err_t save_position_for_book(const char* path, uint32_t spine, uint32_t page);
 
 } // namespace persistence
 } // namespace storage

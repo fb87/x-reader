@@ -221,8 +221,16 @@ static void run()
     }
     uint8_t spine_index = 0;
     uint8_t total_pages = ui::page_count(document);
+    uint32_t saved_spine = 0;
     uint32_t saved_page = 0;
-    storage::persistence::load_page_for_book(book_path, &saved_page);
+    storage::persistence::load_position_for_book(book_path, &saved_spine, &saved_page);
+    if (saved_spine < book->spine_count)
+        spine_index = static_cast<uint8_t>(saved_spine);
+    if (spine_index != 0 && !load_spine(book_path, book, spine_index, book, document))
+    {
+        spine_index = 0;
+    }
+    total_pages = ui::page_count(document);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
     show(&framebuffer, &display, book, document, page, total_pages);
     while (events != nullptr && touch.device != nullptr)
@@ -281,7 +289,7 @@ static void run()
                                                  ? static_cast<int16_t>(1)
                                                  : static_cast<int16_t>(-1)));
             }
-            storage::persistence::save_page_for_book(book_path, page);
+            storage::persistence::save_position_for_book(book_path, spine_index, page);
             show(&framebuffer, &display, book, document, page, total_pages);
         }
     }
