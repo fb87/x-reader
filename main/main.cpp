@@ -133,6 +133,18 @@ static void simulate_navigation_task(void* argument)
 }
 #endif
 
+#if XREADER_SIMULATE_HOME_TOUCH
+static void simulate_home_touch_task(void* argument)
+{
+    QueueHandle_t events = static_cast<QueueHandle_t>(argument);
+    vTaskDelay(pdMS_TO_TICKS(4000));
+    const input::event_t event = {input::event_touch_up, 480, 330};
+    xQueueSend(events, &event, 0);
+    ESP_LOGI(tag, "simulated Home Settings touch injected");
+    vTaskDelete(nullptr);
+}
+#endif
+
 static void run()
 {
     esp_err_t error = storage::persistence::init();
@@ -289,6 +301,9 @@ static void run()
     }
 #if XREADER_SIMULATE_NAVIGATION
     xTaskCreate(simulate_navigation_task, "xreader_nav_sim", 2048, events, 3, nullptr);
+#endif
+#if XREADER_SIMULATE_HOME_TOUCH
+    xTaskCreate(simulate_home_touch_task, "xreader_home_sim", 2048, events, 3, nullptr);
 #endif
     bool open_reader = events == nullptr || touch.device == nullptr;
     bool in_library = false;
