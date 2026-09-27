@@ -22,6 +22,7 @@ idf_component_register(
         "ui/chrome.cpp"
         "ui/home.cpp"
         "ui/settings.cpp"
+        "ui/quick_settings.cpp"
         "ui/reader.cpp"
         "ui/hardware_test.cpp"
     INCLUDE_DIRS

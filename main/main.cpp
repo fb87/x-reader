@@ -22,6 +22,7 @@
 #include "ui/home.hpp"
 #include "ui/library.hpp"
 #include "ui/navigation.hpp"
+#include "ui/quick_settings.hpp"
 #include "ui/reader.hpp"
 #include "ui/settings.hpp"
 
@@ -365,12 +366,64 @@ static void run()
     total_pages = ui::page_count(document);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
     show(&framebuffer, &display, book, document, page, total_pages);
+    bool quick_settings = false;
+    ui::quick_setting_t quick_focus = ui::quick_setting_text_size;
     while (events != nullptr && touch.device != nullptr)
     {
         input::event_t event = {};
         if (xQueueReceive(events, &event, pdMS_TO_TICKS(600000)) != pdTRUE)
         {
             board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
+            continue;
+        }
+        if (quick_settings)
+        {
+            bool redraw_overlay = false;
+            if (event.type == input::event_button_up)
+            {
+                quick_settings = false;
+                show(&framebuffer, &display, book, document, page, total_pages);
+                continue;
+            }
+            if (event.type == input::event_rotary_clockwise)
+            {
+                quick_focus = static_cast<ui::quick_setting_t>(
+                    (static_cast<uint8_t>(quick_focus) + 1) % ui::quick_setting_count);
+                redraw_overlay = true;
+            }
+            else if (event.type == input::event_rotary_counterclockwise)
+            {
+                quick_focus = static_cast<ui::quick_setting_t>(
+                    (static_cast<uint8_t>(quick_focus) + ui::quick_setting_count - 1) %
+                    ui::quick_setting_count);
+                redraw_overlay = true;
+            }
+            else if (event.type == input::event_touch_up)
+            {
+                if (ui::quick_settings_touch(event.x, event.y, &quick_focus))
+                    redraw_overlay = true;
+                else
+                {
+                    quick_settings = false;
+                    show(&framebuffer, &display, book, document, page, total_pages);
+                    continue;
+                }
+            }
+            if (redraw_overlay)
+            {
+                ui::draw_quick_settings(&framebuffer, quick_focus);
+                transfer_dirty(&framebuffer, &display);
+            }
+            continue;
+        }
+        if (event.type == input::event_button_up ||
+            (event.type == input::event_touch_up &&
+             event.y >= display_config.height - ui::chrome::indication_height &&
+             event.x > display_config.width / 3 && event.x < display_config.width * 2 / 3))
+        {
+            quick_settings = true;
+            ui::draw_quick_settings(&framebuffer, quick_focus);
+            transfer_dirty(&framebuffer, &display);
             continue;
         }
         bool navigation_event = false;
