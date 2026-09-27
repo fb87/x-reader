@@ -28,6 +28,7 @@ Hardware drivers and the EPUB implementation have not been added yet.
 
 - [Project scope](docs/project-scope.md)
 - [Architecture](docs/architecture.md)
+- [GUI design](docs/gui-design.md)
 - [Hardware](docs/hardware.md)
 - [Coding rules](docs/coding-rules.md)
 - [Development workflow](docs/development.md)

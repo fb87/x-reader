@@ -66,7 +66,9 @@ for the same book, settings, and viewport.
 
 Owns screen state and user interaction. It renders through `gfx`, requests
 content from `epub` and `layout`, and stores user preferences through
-`storage`.
+`storage`. The UI converts touch and physical input into shared logical actions
+and manages the Home, Library, Reading, Settings, and Quick Settings states.
+The shared status and indication bars are UI chrome, not board-specific code.
 
 ### `storage`
 

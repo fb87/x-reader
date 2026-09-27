@@ -44,6 +44,7 @@
 - XHTML text extraction
 - Basic CSS
 - Layout and pagination
+- Home launcher and shared status/indication bars
 - Library screen
 - Reader navigation
 - Table of contents
@@ -53,6 +54,7 @@
 - Reading-position persistence
 - Bookmarks
 - Settings
+- Quick Settings overlay
 - Resume after wake
 - Refresh and battery optimization
 
