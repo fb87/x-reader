@@ -6,6 +6,7 @@
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "esp_err.h"
+#include "esp_task_wdt.h"
 
 namespace xreader
 {
@@ -50,6 +51,7 @@ struct device_t
     uint8_t rotation;
     uint16_t device_memory_low;
     uint16_t device_memory_high;
+    esp_task_wdt_user_handle_t watchdog_user;
 };
 
 size_t framebuffer_size(uint16_t width, uint16_t height);

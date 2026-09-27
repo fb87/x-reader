@@ -37,9 +37,13 @@ struct config_t
     gpio_num_t rotary_left_pin;
     drivers::gt911::device_t* touch;
     uint32_t poll_interval_ms;
+    uint16_t touch_width;
+    uint16_t touch_height;
+    uint8_t touch_rotation;
 };
 
 esp_err_t start(const config_t* config, QueueHandle_t events);
+void flush(QueueHandle_t events);
 
 } // namespace input
 } // namespace xreader

@@ -1,5 +1,6 @@
 #include "input.hpp"
 
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -12,6 +13,43 @@ namespace
 {
 
 static constexpr uint8_t debounce_samples = 5;
+static const char* const tag = "input";
+
+static const char* event_name(event_type_t type)
+{
+    switch (type)
+    {
+    case event_touch_down:
+        return "touch_down";
+    case event_touch_up:
+        return "touch_up";
+    case event_rotary_clockwise:
+        return "rotary_clockwise";
+    case event_rotary_counterclockwise:
+        return "rotary_counterclockwise";
+    case event_button_down:
+        return "button_down";
+    case event_button_up:
+        return "button_up";
+    default:
+        return "unknown";
+    }
+}
+
+static void touch_coordinates(const config_t* config, uint16_t raw_x, uint16_t raw_y, uint16_t* x,
+                              uint16_t* y)
+{
+    if (config->touch_rotation == 1)
+    {
+        *x = raw_y;
+        *y = raw_x <= config->touch_width ? static_cast<uint16_t>(config->touch_width - raw_x) : 0;
+    }
+    else
+    {
+        *x = raw_x;
+        *y = raw_y;
+    }
+}
 
 struct task_context_t
 {
@@ -35,6 +73,8 @@ static task_context_t task_context = {};
 static void send(task_context_t* context, event_t event)
 {
     xQueueSend(context->events, &event, 0);
+    ESP_LOGI(tag, "emit %s x=%u y=%u", event_name(event.type), static_cast<unsigned>(event.x),
+             static_cast<unsigned>(event.y));
 }
 
 static void poll_rotary(task_context_t* context)
@@ -101,8 +141,8 @@ static void poll_touch(task_context_t* context)
     const bool active = state.count > 0;
     if (active)
     {
-        context->touch_x = state.points[0].x;
-        context->touch_y = state.points[0].y;
+        touch_coordinates(&context->config, state.points[0].x, state.points[0].y, &context->touch_x,
+                          &context->touch_y);
     }
     if (active != context->touch_candidate)
     {
@@ -174,6 +214,21 @@ esp_err_t start(const config_t* config, QueueHandle_t events)
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;
+}
+
+void flush(QueueHandle_t events)
+{
+    if (events == nullptr)
+        return;
+    xQueueReset(events);
+    task_context.rotary_quarters = 0;
+    task_context.rotary_cooldown_samples = 0;
+    task_context.touch_active = false;
+    task_context.touch_candidate = false;
+    task_context.touch_stable_samples = debounce_samples;
+    task_context.button_candidate = gpio_get_level(task_context.config.rotary_press_pin) == 0;
+    task_context.button_state = task_context.button_candidate;
+    task_context.button_stable_samples = debounce_samples;
 }
 
 } // namespace input

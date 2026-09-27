@@ -2,6 +2,7 @@
 
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -156,6 +157,8 @@ static esp_err_t write_pixel_data(device_t* device, const uint8_t* pixels, size_
         {
             return error;
         }
+        if ((offset & 0x1ffU) == 0 && device->watchdog_user != nullptr)
+            (void)esp_task_wdt_reset_user(device->watchdog_user);
     }
     return ESP_OK;
 }
@@ -237,7 +240,6 @@ esp_err_t init(device_t* device, const config_t* config)
     device->rotation = config->rotation;
     device->device_memory_low = static_cast<uint16_t>(default_memory_address);
     device->device_memory_high = static_cast<uint16_t>(default_memory_address >> 16);
-
     error = write_command(device, tcon_system_run);
     if (error == ESP_OK)
     {
@@ -274,7 +276,10 @@ esp_err_t write_image_4bpp(device_t* device, const uint8_t* pixels, uint16_t x, 
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t error = set_target_memory_address(device);
+    esp_err_t error = esp_task_wdt_add_user(tag, &device->watchdog_user);
+    if (error != ESP_OK)
+        device->watchdog_user = nullptr;
+    error = set_target_memory_address(device);
     if (error == ESP_OK)
     {
         error = set_image_area(device, x, y, width, height);
@@ -286,6 +291,11 @@ esp_err_t write_image_4bpp(device_t* device, const uint8_t* pixels, uint16_t x, 
     if (error == ESP_OK)
     {
         error = write_command(device, tcon_load_image_end);
+    }
+    if (device->watchdog_user != nullptr)
+    {
+        (void)esp_task_wdt_delete_user(device->watchdog_user);
+        device->watchdog_user = nullptr;
     }
     return error;
 }

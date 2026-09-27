@@ -1,6 +1,7 @@
 #include "esp_err.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -53,6 +54,10 @@ transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* disp
     if ((dirty_width & 3U) != 0)
         return ESP_ERR_INVALID_SIZE;
     const size_t transfer_size = gfx::size(dirty_width, dirty_height);
+    const int64_t transfer_start = esp_timer_get_time();
+    ESP_LOGI(tag, "graphics dirty x=%u y=%u w=%u h=%u mode=%u", static_cast<unsigned>(dirty_x),
+             static_cast<unsigned>(dirty_y), static_cast<unsigned>(dirty_width),
+             static_cast<unsigned>(dirty_height), static_cast<unsigned>(refresh_mode));
     uint8_t* transfer =
         static_cast<uint8_t*>(heap_caps_malloc(transfer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (transfer == nullptr)
@@ -66,6 +71,8 @@ transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* disp
         error = drivers::it8951e::refresh(display, dirty_x, dirty_y, dirty_width, dirty_height,
                                           refresh_mode);
     heap_caps_free(transfer);
+    ESP_LOGI(tag, "graphics transfer done error=%s elapsed_us=%lld", esp_err_to_name(error),
+             static_cast<long long>(esp_timer_get_time() - transfer_start));
     return error;
 }
 
@@ -73,7 +80,12 @@ static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_
                       const epub::book_t* book, const epub::document_t* document, uint8_t page,
                       uint8_t page_count, const ui::reader_settings_t* settings)
 {
+    const int64_t draw_start = esp_timer_get_time();
+    ESP_LOGI(tag, "draw start page=%u/%u", static_cast<unsigned>(page + 1),
+             static_cast<unsigned>(page_count));
     ui::draw_reader(framebuffer, book, document, page, page_count, settings);
+    ESP_LOGI(tag, "draw done elapsed_us=%lld",
+             static_cast<long long>(esp_timer_get_time() - draw_start));
     const drivers::it8951e::refresh_mode_t refresh_mode =
         settings != nullptr && settings->refresh_mode != 0 ? drivers::it8951e::refresh_du
                                                            : drivers::it8951e::refresh_gc16;
@@ -237,6 +249,9 @@ static void run()
             .rotary_left_pin = board::m5paper::rotary_left_pin,
             .touch = &touch,
             .poll_interval_ms = 30,
+            .touch_width = board::m5paper::display_height,
+            .touch_height = board::m5paper::display_width,
+            .touch_rotation = 1,
         };
         input::start(&input_config, events);
     }
@@ -293,6 +308,7 @@ static void run()
         board::m5paper::power_off();
         return;
     }
+    input::flush(events);
 #if XREADER_SIMULATE_NAVIGATION
     xTaskCreate(simulate_navigation_task, "xreader_nav_sim", 2048, events, 3, nullptr);
 #endif
@@ -305,6 +321,9 @@ static void run()
             board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
             continue;
         }
+        ESP_LOGI(tag, "screen input type=%u x=%u y=%u screen=%u", static_cast<unsigned>(event.type),
+                 static_cast<unsigned>(event.x), static_cast<unsigned>(event.y),
+                 static_cast<unsigned>(screen_state.screen));
         ui::logical_event_t logical_event = {};
         logical_event.x = event.x;
         logical_event.y = event.y;
@@ -321,6 +340,8 @@ static void run()
         const ui::screen_command_t command =
             ui::dispatch(&screen_state, &logical_event, display_config.width, display_config.height,
                          0, 1, 0, book->spine_count);
+        ESP_LOGI(tag, "screen command=%u screen=%u", static_cast<unsigned>(command),
+                 static_cast<unsigned>(screen_state.screen));
         if (command == ui::screen_command_open_reader)
             open_reader = true;
         else if (command == ui::screen_command_sleep)
@@ -381,6 +402,7 @@ static void run()
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
     screen_state.screen = ui::screen_reader;
     show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+    input::flush(events);
     ui::quick_settings_values_t quick_values = {
         .text_scale = settings.text_scale,
         .line_spacing = settings.line_spacing,
@@ -395,6 +417,9 @@ static void run()
             board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
             continue;
         }
+        ESP_LOGI(tag, "reader input type=%u x=%u y=%u screen=%u", static_cast<unsigned>(event.type),
+                 static_cast<unsigned>(event.x), static_cast<unsigned>(event.y),
+                 static_cast<unsigned>(screen_state.screen));
         ui::logical_event_t logical_event = {};
         logical_event.x = event.x;
         logical_event.y = event.y;
@@ -411,15 +436,19 @@ static void run()
         const ui::screen_command_t command =
             ui::dispatch(&screen_state, &logical_event, display_config.width, display_config.height,
                          page, total_pages, spine_index, book->spine_count);
+        ESP_LOGI(tag, "reader command=%u screen=%u", static_cast<unsigned>(command),
+                 static_cast<unsigned>(screen_state.screen));
         if (command == ui::screen_command_open_quick_settings)
         {
             ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values);
             transfer_dirty(&framebuffer, &display);
+            input::flush(events);
             continue;
         }
         if (command == ui::screen_command_close_quick_settings)
         {
             show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+            input::flush(events);
             continue;
         }
         if (command == ui::screen_command_edit_setting)
@@ -441,6 +470,7 @@ static void run()
             else
                 show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
             transfer_dirty(&framebuffer, &display);
+            input::flush(events);
             continue;
         }
         if (command == ui::screen_command_page_forward ||
@@ -475,6 +505,7 @@ static void run()
             }
             storage::persistence::save_position_for_book(book_path, spine_index, page);
             show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+            input::flush(events);
         }
     }
 }
