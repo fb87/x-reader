@@ -37,20 +37,21 @@ static esp_err_t transfer_dirty(gfx::framebuffer_t* framebuffer,
     uint16_t dirty_height = 0;
     if (!gfx::take_dirty(framebuffer, &dirty_x, &dirty_y, &dirty_width, &dirty_height))
         return ESP_OK;
-    const uint16_t right = static_cast<uint16_t>(
-        ((dirty_x + dirty_width + 3U) & ~3U) > framebuffer->width ? framebuffer->width
-                                                                  : (dirty_x + dirty_width + 3U) & ~3U);
+    const uint16_t right =
+        static_cast<uint16_t>(((dirty_x + dirty_width + 3U) & ~3U) > framebuffer->width
+                                  ? framebuffer->width
+                                  : (dirty_x + dirty_width + 3U) & ~3U);
     dirty_x = static_cast<uint16_t>(dirty_x & ~3U);
     dirty_width = static_cast<uint16_t>(right - dirty_x);
     if ((dirty_width & 3U) != 0)
         return ESP_ERR_INVALID_SIZE;
     const size_t transfer_size = gfx::size(dirty_width, dirty_height);
-    uint8_t* transfer = static_cast<uint8_t*>(
-        heap_caps_malloc(transfer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    uint8_t* transfer =
+        static_cast<uint8_t*>(heap_caps_malloc(transfer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (transfer == nullptr)
         return ESP_ERR_NO_MEM;
-    esp_err_t error = gfx::copy_region_4bpp(framebuffer, dirty_x, dirty_y, dirty_width, dirty_height,
-                                            transfer, transfer_size);
+    esp_err_t error = gfx::copy_region_4bpp(framebuffer, dirty_x, dirty_y, dirty_width,
+                                            dirty_height, transfer, transfer_size);
     if (error == ESP_OK)
         error = drivers::it8951e::write_image_4bpp(display, transfer, dirty_x, dirty_y, dirty_width,
                                                    dirty_height);
@@ -128,13 +129,6 @@ static void run()
         ESP_LOGW(tag, "SD-card initialization failed: %s", esp_err_to_name(error));
     }
 
-    char first_book_path[256] = {};
-    if (sd_card.mounted &&
-        ui::find_first_book(sd_config.mount_path, first_book_path, sizeof(first_book_path)))
-    {
-        storage::book_loader::start(first_book_path);
-    }
-
     gfx::framebuffer_t framebuffer = {};
     error = gfx::create(&framebuffer, display_config.width, display_config.height);
     if (error != ESP_OK)
@@ -176,6 +170,18 @@ static void run()
     {
         heap_caps_free(book);
         heap_caps_free(document);
+        return;
+    }
+    char first_book_path[512] = {};
+    if (!sd_card.mounted ||
+        !ui::find_first_book(sd_config.mount_path, first_book_path, sizeof(first_book_path)) ||
+        storage::book_loader::start(first_book_path) != ESP_OK)
+    {
+        ESP_LOGW(tag, "no EPUB book available");
+        heap_caps_free(book);
+        heap_caps_free(document);
+        gfx::destroy(&framebuffer);
+        board::m5paper::power_off();
         return;
     }
     esp_err_t load_result = ESP_ERR_INVALID_STATE;
