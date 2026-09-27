@@ -141,6 +141,12 @@ static void run()
     storage::persistence::settings_t settings = {};
     storage::persistence::default_settings(&settings);
     storage::persistence::load_settings(&settings);
+    ui::quick_settings_values_t settings_values = {
+        .text_scale = settings.text_scale,
+        .line_spacing = settings.line_spacing,
+        .refresh_mode = settings.refresh_mode,
+        .sleep_timeout_minutes = settings.sleep_timeout_minutes,
+    };
     error = board::m5paper::power_on();
     if (error != ESP_OK)
     {
@@ -314,18 +320,43 @@ static void run()
             }
             else if (event.type == input::event_button_up)
             {
-                in_settings = false;
+                if (settings_focus == ui::settings_back)
+                    in_settings = false;
+                else
+                {
+                    cycle_setting(&settings, static_cast<ui::quick_setting_t>(settings_focus));
+                    storage::persistence::save_settings(&settings);
+                    settings_values.text_scale = settings.text_scale;
+                    settings_values.line_spacing = settings.line_spacing;
+                    settings_values.refresh_mode = settings.refresh_mode;
+                    settings_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
+                }
                 redraw = true;
             }
-            else if (event.type == input::event_touch_up && event.y < ui::chrome::status_height)
+            else if (event.type == input::event_touch_up)
             {
-                in_settings = false;
+                if (event.y < ui::chrome::status_height)
+                    in_settings = false;
+                else if (ui::settings_touch_item(event.y, &settings_focus))
+                {
+                    if (settings_focus == ui::settings_back)
+                        in_settings = false;
+                    else
+                    {
+                        cycle_setting(&settings, static_cast<ui::quick_setting_t>(settings_focus));
+                        storage::persistence::save_settings(&settings);
+                        settings_values.text_scale = settings.text_scale;
+                        settings_values.line_spacing = settings.line_spacing;
+                        settings_values.refresh_mode = settings.refresh_mode;
+                        settings_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
+                    }
+                }
                 redraw = true;
             }
             if (redraw)
             {
                 if (in_settings)
-                    ui::draw_settings(&framebuffer, settings_focus);
+                    ui::draw_settings(&framebuffer, settings_focus, &settings_values);
                 else
                     ui::draw_home(&framebuffer, sd_card.mounted, book->title, home_focus);
                 transfer_dirty(&framebuffer, &display);
@@ -369,7 +400,7 @@ static void run()
                 else if (touched == ui::home_settings)
                 {
                     in_settings = true;
-                    ui::draw_settings(&framebuffer, settings_focus);
+                    ui::draw_settings(&framebuffer, settings_focus, &settings_values);
                     transfer_dirty(&framebuffer, &display);
                 }
                 else if (touched == ui::home_sleep)
@@ -389,7 +420,7 @@ static void run()
             else if (home_focus == ui::home_settings)
             {
                 in_settings = true;
-                ui::draw_settings(&framebuffer, settings_focus);
+                ui::draw_settings(&framebuffer, settings_focus, &settings_values);
                 transfer_dirty(&framebuffer, &display);
             }
             else if (home_focus == ui::home_sleep)
