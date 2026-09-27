@@ -35,7 +35,7 @@ static const unsigned char* glyph_data(char character)
     return chrtbl_f16[static_cast<uint8_t>(character) - 32];
 }
 
-static size_t decode_utf8(const char* text, uint32_t* codepoint)
+static size_t decode_utf8_impl(const char* text, uint32_t* codepoint)
 {
     const uint8_t first = static_cast<uint8_t>(text[0]);
     if (first < 0x80U)
@@ -59,6 +59,24 @@ static size_t decode_utf8(const char* text, uint32_t* codepoint)
     }
     *codepoint = '?';
     return 1;
+}
+
+static bool compose_unicode_impl(uint32_t first, uint32_t second, uint32_t third,
+                                 uint32_t* composed, size_t* consumed_codepoints)
+{
+    if (composed == nullptr || consumed_codepoints == nullptr)
+        return false;
+    for (size_t index = 0; index < unicode_composition_count; ++index)
+    {
+        const unicode_composition_t* entry = &unicode_compositions[index];
+        if (entry->first == first && entry->second == second && entry->third == third)
+        {
+            *composed = entry->composed;
+            *consumed_codepoints = entry->length;
+            return true;
+        }
+    }
+    return false;
 }
 
 static const unicode_glyph_t* unicode_glyph(uint32_t codepoint)
@@ -110,6 +128,17 @@ static void draw_glyph(framebuffer_t* framebuffer, uint16_t x, uint16_t y, char 
 
 } // namespace
 
+size_t decode_utf8(const char* text, uint32_t* codepoint)
+{
+    return decode_utf8_impl(text, codepoint);
+}
+
+bool compose_unicode(uint32_t first, uint32_t second, uint32_t third, uint32_t* composed,
+                     size_t* consumed_codepoints)
+{
+    return compose_unicode_impl(first, second, third, composed, consumed_codepoints);
+}
+
 uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const char* text,
                    uint8_t scale, uint8_t value)
 {
@@ -126,7 +155,26 @@ uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const cha
         else
         {
             uint32_t codepoint = 0;
-            const size_t consumed = decode_utf8(text, &codepoint);
+            size_t consumed = decode_utf8(text, &codepoint);
+            uint32_t second = 0;
+            uint32_t third = 0;
+            size_t second_bytes = 0;
+            size_t third_bytes = 0;
+            if (text[consumed] != '\0')
+                second_bytes = decode_utf8(text + consumed, &second);
+            if (second_bytes > 0 && second >= 0x0300U && second <= 0x036fU &&
+                text[consumed + second_bytes] != '\0')
+                third_bytes = decode_utf8(text + consumed + second_bytes, &third);
+            uint32_t composed = 0;
+            size_t consumed_codepoints = 0;
+            if (second_bytes > 0 &&
+                compose_unicode(codepoint, second, third, &composed, &consumed_codepoints))
+            {
+                codepoint = composed;
+                consumed += second_bytes;
+                if (consumed_codepoints == 3)
+                    consumed += third_bytes;
+            }
             const unicode_glyph_t* glyph = codepoint > 0x7fU ? unicode_glyph(codepoint) : nullptr;
             if (glyph != nullptr)
             {

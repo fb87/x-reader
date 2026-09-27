@@ -2,6 +2,7 @@
 """Generate a bounded 16px Vietnamese glyph table from DejaVu Sans."""
 
 import sys
+import unicodedata
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -54,6 +55,26 @@ def main():
             "};",
             "",
             "const size_t unicode_glyph_count = sizeof(unicode_glyphs) / sizeof(unicode_glyphs[0]);",
+            "",
+            "const unicode_composition_t unicode_compositions[] = {",
+        ]
+    )
+    for codepoint in codepoints():
+        decomposition = unicodedata.normalize("NFD", chr(codepoint))
+        if len(decomposition) not in (2, 3):
+            continue
+        values = [ord(value) for value in decomposition]
+        values.append(0)
+        lines.append(
+            f"    {{{values[0]}U, {values[1]}U, {values[2]}U, {codepoint}U, "
+            f"{len(decomposition)}}},"
+        )
+    lines.extend(
+        [
+            "};",
+            "",
+            "const size_t unicode_composition_count = "
+            "sizeof(unicode_compositions) / sizeof(unicode_compositions[0]);",
             "",
         ]
     )

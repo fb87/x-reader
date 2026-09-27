@@ -17,25 +17,27 @@ static constexpr size_t characters_per_line = 56;
 static constexpr size_t lines_per_page = 14;
 static size_t next_codepoint(const char* text, size_t length, size_t offset, uint32_t* codepoint)
 {
-    const uint8_t first = static_cast<uint8_t>(text[offset]);
-    *codepoint = first;
-    if (first < 0x80U)
-        return 1;
-    if ((first & 0xe0U) == 0xc0U && offset + 1 < length)
+    size_t consumed = gfx::decode_utf8(text + offset, codepoint);
+    uint32_t second = 0;
+    uint32_t third = 0;
+    const size_t second_bytes =
+        offset + consumed < length ? gfx::decode_utf8(text + offset + consumed, &second) : 0;
+    const size_t third_bytes =
+        second_bytes > 0 && second >= 0x0300U && second <= 0x036fU &&
+                offset + consumed + second_bytes < length
+            ? gfx::decode_utf8(text + offset + consumed + second_bytes, &third)
+            : 0;
+    uint32_t composed = 0;
+    size_t consumed_codepoints = 0;
+    if (second_bytes > 0 &&
+        gfx::compose_unicode(*codepoint, second, third, &composed, &consumed_codepoints))
     {
-        *codepoint = (static_cast<uint32_t>(first & 0x1fU) << 6) |
-                     (static_cast<uint8_t>(text[offset + 1]) & 0x3fU);
-        return 2;
+        *codepoint = composed;
+        consumed += second_bytes;
+        if (consumed_codepoints == 3)
+            consumed += third_bytes;
     }
-    if ((first & 0xf0U) == 0xe0U && offset + 2 < length)
-    {
-        *codepoint = (static_cast<uint32_t>(first & 0x0fU) << 12) |
-                     (static_cast<uint32_t>(static_cast<uint8_t>(text[offset + 1]) & 0x3fU) << 6) |
-                     (static_cast<uint8_t>(text[offset + 2]) & 0x3fU);
-        return 3;
-    }
-    *codepoint = '?';
-    return 1;
+    return consumed;
 }
 static size_t page_start(const epub::document_t* document, uint8_t page,
                          const reader_settings_t* settings)
