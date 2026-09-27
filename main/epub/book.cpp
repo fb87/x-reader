@@ -1,6 +1,7 @@
 #include "book.hpp"
 
 #include <ctype.h>
+#include <stdint.h>
 #include <string.h>
 #include <strings.h>
 
@@ -74,12 +75,96 @@ static esp_err_t read_entry(zip::archive_t* archive, const char* name, char** da
     return ESP_OK;
 }
 
+static char ascii_codepoint(uint32_t codepoint)
+{
+    if (codepoint >= 0x20U && codepoint <= 0x7eU)
+        return static_cast<char>(codepoint);
+    if (codepoint == 0x00d0U || codepoint == 0x0110U)
+        return 'D';
+    if (codepoint == 0x00f0U || codepoint == 0x0111U)
+        return 'd';
+    if (codepoint == 0x01a0U)
+        return 'O';
+    if (codepoint == 0x01a1U)
+        return 'o';
+    if (codepoint == 0x01afU)
+        return 'U';
+    if (codepoint == 0x01b0U)
+        return 'u';
+    if ((codepoint >= 0x00c0U && codepoint <= 0x00d6U) ||
+        (codepoint >= 0x0100U && codepoint <= 0x024fU && (codepoint & 1U) == 0) ||
+        (codepoint >= 0x1ea0U && codepoint <= 0x1ef9U && (codepoint & 1U) == 0))
+    {
+        if (codepoint <= 0x00c5U || (codepoint >= 0x0100U && codepoint <= 0x0105U) ||
+            (codepoint >= 0x1ea0U && codepoint <= 0x1eb7U))
+            return 'A';
+        if (codepoint <= 0x00cbU || (codepoint >= 0x0118U && codepoint <= 0x011bU) ||
+            (codepoint >= 0x1eb8U && codepoint <= 0x1ec7U))
+            return 'E';
+        if (codepoint <= 0x00cfU || (codepoint >= 0x0128U && codepoint <= 0x012fU) ||
+            (codepoint >= 0x1ec8U && codepoint <= 0x1ecbU))
+            return 'I';
+        if (codepoint <= 0x00d6U || (codepoint >= 0x014cU && codepoint <= 0x0151U) ||
+            (codepoint >= 0x1eccU && codepoint <= 0x1ee3U))
+            return 'O';
+        return 'U';
+    }
+    if ((codepoint >= 0x00e0U && codepoint <= 0x00ffU) ||
+        (codepoint >= 0x0100U && codepoint <= 0x024fU) ||
+        (codepoint >= 0x1ea0U && codepoint <= 0x1effU))
+    {
+        if (codepoint <= 0x00e5U || (codepoint >= 0x0101U && codepoint <= 0x0105U) ||
+            (codepoint >= 0x1ea1U && codepoint <= 0x1eb7U))
+            return 'a';
+        if (codepoint <= 0x00ebU || (codepoint >= 0x0119U && codepoint <= 0x011bU) ||
+            (codepoint >= 0x1eb9U && codepoint <= 0x1ec7U))
+            return 'e';
+        if (codepoint <= 0x00efU || (codepoint >= 0x0129U && codepoint <= 0x012fU) ||
+            (codepoint >= 0x1ec9U && codepoint <= 0x1ecbU))
+            return 'i';
+        if (codepoint <= 0x00f6U || (codepoint >= 0x014dU && codepoint <= 0x0151U) ||
+            (codepoint >= 0x1ecdU && codepoint <= 0x1ee3U))
+            return 'o';
+        return 'u';
+    }
+    return '?';
+}
+
 static void copy_text(char* destination, const char* source, size_t length)
 {
-    if (length >= book_text_length)
-        length = book_text_length - 1;
-    memcpy(destination, source, length);
-    destination[length] = '\0';
+    size_t output_length = 0;
+    size_t input = 0;
+    while (input < length && output_length + 1 < book_text_length)
+    {
+        uint32_t codepoint = 0;
+        size_t consumed = 1;
+        const uint8_t first = static_cast<uint8_t>(source[input]);
+        if (first < 0x80U)
+        {
+            codepoint = first;
+        }
+        else if ((first & 0xe0U) == 0xc0U && input + 1 < length)
+        {
+            codepoint = static_cast<uint32_t>(first & 0x1fU) << 6;
+            codepoint |= static_cast<uint8_t>(source[input + 1]) & 0x3fU;
+            consumed = 2;
+        }
+        else if ((first & 0xf0U) == 0xe0U && input + 2 < length)
+        {
+            codepoint = static_cast<uint32_t>(first & 0x0fU) << 12;
+            codepoint |= static_cast<uint32_t>(static_cast<uint8_t>(source[input + 1]) & 0x3fU)
+                         << 6;
+            codepoint |= static_cast<uint8_t>(source[input + 2]) & 0x3fU;
+            consumed = 3;
+        }
+        else
+        {
+            codepoint = '?';
+        }
+        destination[output_length++] = ascii_codepoint(codepoint);
+        input += consumed;
+    }
+    destination[output_length] = '\0';
 }
 
 static void trim_copy(char* destination, const char* source, size_t length)
@@ -96,7 +181,8 @@ static void trim_copy(char* destination, const char* source, size_t length)
 
 static void append_text(document_t* document, const char* source, size_t length, bool* last_space)
 {
-    for (size_t index = 0; index < length && document->length + 1 < document_text_length; ++index)
+    size_t index = 0;
+    while (index < length && document->length + 1 < document_text_length)
     {
         char value = source[index];
         if (value == '&')
@@ -117,8 +203,95 @@ static void append_text(document_t* document, const char* source, size_t length,
                     value = '\'';
                 else
                     value = ' ';
-                index = static_cast<size_t>(end - source);
+                index = static_cast<size_t>(end - source) + 1;
             }
+        }
+        else if (static_cast<uint8_t>(value) >= 0x80U)
+        {
+            const uint8_t first = static_cast<uint8_t>(value);
+            uint32_t codepoint = 0;
+            size_t consumed = 1;
+            if ((first & 0xe0U) == 0xc0U && index + 1 < length)
+            {
+                codepoint = static_cast<uint32_t>(first & 0x1fU) << 6;
+                codepoint |= static_cast<uint8_t>(source[index + 1]) & 0x3fU;
+                consumed = 2;
+            }
+            else if ((first & 0xf0U) == 0xe0U && index + 2 < length)
+            {
+                codepoint = static_cast<uint32_t>(first & 0x0fU) << 12;
+                codepoint |= static_cast<uint32_t>(static_cast<uint8_t>(source[index + 1]) & 0x3fU)
+                             << 6;
+                codepoint |= static_cast<uint8_t>(source[index + 2]) & 0x3fU;
+                consumed = 3;
+            }
+            value = '?';
+            if ((codepoint >= 0x00c0U && codepoint <= 0x00ffU) ||
+                (codepoint >= 0x0100U && codepoint <= 0x024fU) ||
+                (codepoint >= 0x1ea0U && codepoint <= 0x1effU))
+            {
+                if (codepoint == 0x00d0U || codepoint == 0x0110U)
+                    value = 'D';
+                else if (codepoint == 0x00f0U || codepoint == 0x0111U)
+                    value = 'd';
+                else if ((codepoint >= 0x00c0U && codepoint <= 0x00c5U) ||
+                         (codepoint >= 0x0100U && codepoint <= 0x0105U) ||
+                         (codepoint >= 0x1ea0U && codepoint <= 0x1eb7U))
+                    value = 'A';
+                else if ((codepoint >= 0x00e0U && codepoint <= 0x00e5U) ||
+                         (codepoint >= 0x0101U && codepoint <= 0x0106U) ||
+                         (codepoint >= 0x1ea1U && codepoint <= 0x1eb7U))
+                    value = 'a';
+                else if ((codepoint >= 0x00c8U && codepoint <= 0x00cbU) ||
+                         (codepoint >= 0x0118U && codepoint <= 0x011bU) ||
+                         (codepoint >= 0x1eb8U && codepoint <= 0x1ec7U))
+                    value = 'E';
+                else if ((codepoint >= 0x00e8U && codepoint <= 0x00ebU) ||
+                         (codepoint >= 0x0119U && codepoint <= 0x011cU) ||
+                         (codepoint >= 0x1eb9U && codepoint <= 0x1ec7U))
+                    value = 'e';
+                else if ((codepoint >= 0x00ccU && codepoint <= 0x00cfU) ||
+                         (codepoint >= 0x0128U && codepoint <= 0x012fU) ||
+                         (codepoint >= 0x1ec8U && codepoint <= 0x1ecbU))
+                    value = 'I';
+                else if ((codepoint >= 0x00ecU && codepoint <= 0x00efU) ||
+                         (codepoint >= 0x0129U && codepoint <= 0x0130U) ||
+                         (codepoint >= 0x1ec9U && codepoint <= 0x1ecbU))
+                    value = 'i';
+                else if ((codepoint >= 0x00d2U && codepoint <= 0x00d6U) ||
+                         (codepoint >= 0x014cU && codepoint <= 0x0151U) ||
+                         (codepoint >= 0x1eccU && codepoint <= 0x1ee3U))
+                    value = 'O';
+                else if ((codepoint >= 0x00f2U && codepoint <= 0x00f6U) ||
+                         (codepoint >= 0x014dU && codepoint <= 0x0152U) ||
+                         (codepoint >= 0x1ecdU && codepoint <= 0x1ee3U))
+                    value = 'o';
+                else if ((codepoint >= 0x00d9U && codepoint <= 0x00dcU) ||
+                         (codepoint >= 0x0168U && codepoint <= 0x016fU) ||
+                         (codepoint >= 0x1ee4U && codepoint <= 0x1ef1U))
+                    value = 'U';
+                else if ((codepoint >= 0x00f9U && codepoint <= 0x00fcU) ||
+                         (codepoint >= 0x0169U && codepoint <= 0x0170U) ||
+                         (codepoint >= 0x1ee5U && codepoint <= 0x1ef1U))
+                    value = 'u';
+                else if (codepoint >= 0x00ddU && codepoint <= 0x00deU)
+                    value = 'Y';
+                else if (codepoint >= 0x00fdU && codepoint <= 0x00ffU)
+                    value = 'y';
+                else if (codepoint == 0x01a0U)
+                    value = 'O';
+                else if (codepoint == 0x01a1U)
+                    value = 'o';
+                else if (codepoint == 0x01afU)
+                    value = 'U';
+                else if (codepoint == 0x01b0U)
+                    value = 'u';
+            }
+            index += consumed;
+        }
+        else
+        {
+            ++index;
         }
         if (isspace(static_cast<unsigned char>(value)))
         {
