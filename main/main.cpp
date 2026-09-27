@@ -90,6 +90,33 @@ static bool load_spine(const char* path, const epub::book_t* book, uint8_t spine
     return false;
 }
 
+#if XREADER_SIMULATE_NAVIGATION
+static void send_simulated_event(QueueHandle_t events, input::event_t event)
+{
+    xQueueSend(events, &event, 0);
+    vTaskDelay(pdMS_TO_TICKS(1200));
+}
+
+static void simulate_navigation_task(void* argument)
+{
+    QueueHandle_t events = static_cast<QueueHandle_t>(argument);
+    vTaskDelay(pdMS_TO_TICKS(2500));
+    send_simulated_event(events, {input::event_rotary_clockwise, 0, 0});
+    send_simulated_event(events, {input::event_rotary_clockwise, 0, 0});
+    send_simulated_event(events, {input::event_rotary_clockwise, 0, 0});
+    ESP_LOGI(tag, "simulated Home -> Settings focus");
+    send_simulated_event(events, {input::event_button_up, 0, 0});
+    ESP_LOGI(tag, "simulated Settings -> Home");
+    send_simulated_event(events, {input::event_rotary_counterclockwise, 0, 0});
+    send_simulated_event(events, {input::event_rotary_counterclockwise, 0, 0});
+    send_simulated_event(events, {input::event_button_up, 0, 0});
+    ESP_LOGI(tag, "simulated Home -> Library");
+    send_simulated_event(events, {input::event_touch_up, 480, 160});
+    ESP_LOGI(tag, "simulated Library -> Reading");
+    vTaskDelete(nullptr);
+}
+#endif
+
 static void run()
 {
     esp_err_t error = storage::persistence::init();
@@ -235,6 +262,9 @@ static void run()
         board::m5paper::power_off();
         return;
     }
+#if XREADER_SIMULATE_NAVIGATION
+    xTaskCreate(simulate_navigation_task, "xreader_nav_sim", 2048, events, 3, nullptr);
+#endif
     bool open_reader = events == nullptr || touch.device == nullptr;
     bool in_library = false;
     bool in_settings = false;

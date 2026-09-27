@@ -46,3 +46,7 @@ target_compile_options(${COMPONENT_LIB} PRIVATE
     -Wshadow
     -Wno-error=missing-field-initializers
 )
+
+if(XREADER_SIMULATE_NAVIGATION)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE XREADER_SIMULATE_NAVIGATION=1)
+endif()
