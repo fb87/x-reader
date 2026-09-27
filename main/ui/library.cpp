@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 
 #include "gfx/font.hpp"
+#include "ui/chrome.hpp"
 
 namespace xreader
 {
@@ -197,36 +198,35 @@ void draw_library(gfx::framebuffer_t* framebuffer, bool storage_mounted, const c
         return;
     }
 
-    gfx::clear(framebuffer, 0x00);
-    gfx::draw_rect(framebuffer, 0, 0, framebuffer->width, framebuffer->height, 0x0f);
-    gfx::draw_text(framebuffer, 24, 20, "XREADER", 3, 0x0f);
-    gfx::fill_rect(framebuffer, 24, 76, framebuffer->width - 48, 2, 0x0f);
+    gfx::clear(framebuffer, 0x0f);
+    chrome::draw_status_bar(framebuffer, "LIBRARY", "SD");
+    chrome::draw_indication_bar(framebuffer, "SELECT", "OPEN", "ROTARY");
 
     if (!storage_mounted)
     {
-        gfx::draw_text(framebuffer, 40, 130, "NO SD CARD", 3, 0x0f);
+        gfx::draw_text(framebuffer, 40, 130, "NO SD CARD", 3, 0x00);
         return;
     }
 
     book_list_t books = {};
     if (mount_path == nullptr)
     {
-        gfx::draw_text(framebuffer, 40, 130, "SD ERROR", 3, 0x0f);
+        gfx::draw_text(framebuffer, 40, 130, "SD ERROR", 3, 0x00);
         return;
     }
     scan_directory(mount_path, &books, 0);
     sort_books(&books);
     if (books.count == 0)
     {
-        gfx::draw_text(framebuffer, 40, 130, "NO EPUB BOOKS", 3, 0x0f);
+        gfx::draw_text(framebuffer, 40, 130, "NO EPUB BOOKS", 3, 0x00);
         return;
     }
 
-    gfx::draw_text(framebuffer, 40, 106, "BOOKS", 2, 0x0f);
+    gfx::draw_text(framebuffer, 40, 70, "BOOKS", 2, 0x00);
     for (uint8_t index = 0; index < books.count; ++index)
     {
-        const uint16_t y = static_cast<uint16_t>(150 + index * 42);
-        gfx::draw_text(framebuffer, 40, y, books.titles[index], 2, 0x0f);
+        const uint16_t y = static_cast<uint16_t>(108 + index * 42);
+        gfx::draw_text(framebuffer, 40, y, books.titles[index], 2, 0x00);
         gfx::fill_rect(framebuffer, 40, y + 24, framebuffer->width - 80, 1, 0x04);
     }
 }

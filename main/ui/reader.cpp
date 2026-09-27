@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "gfx/font.hpp"
+#include "ui/chrome.hpp"
 
 namespace xreader
 {
@@ -65,8 +66,7 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
     if (framebuffer == nullptr || book == nullptr || document == nullptr)
         return;
     gfx::clear(framebuffer, 0x0f);
-    gfx::draw_text(framebuffer, 24, 18, book->title, 2, 0x00);
-    gfx::fill_rect(framebuffer, 24, 52, static_cast<uint16_t>(framebuffer->width - 48), 2, 0x00);
+    chrome::draw_status_bar(framebuffer, book->title, "READING");
     const size_t start = page_start(document, page);
     size_t offset = start;
     uint16_t line = 0;
@@ -82,7 +82,7 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
         }
         char glyph[2] = {value, '\0'};
         gfx::draw_text(framebuffer, static_cast<uint16_t>(28 + column * 16),
-                       static_cast<uint16_t>(76 + line * 28), glyph, 2, 0x00);
+                       static_cast<uint16_t>(58 + line * 28), glyph, 2, 0x00);
         if (++column >= characters_per_line)
         {
             column = 0;
@@ -92,8 +92,7 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
     char footer[32] = {};
     snprintf(footer, sizeof(footer), "%u / %u", static_cast<unsigned>(page + 1),
              static_cast<unsigned>(page_count));
-    gfx::draw_text(framebuffer, framebuffer->width - 130, framebuffer->height - 28, footer, 1,
-                   0x00);
+    chrome::draw_indication_bar(framebuffer, "< PREV", footer, "NEXT >");
 }
 
 } // namespace ui
