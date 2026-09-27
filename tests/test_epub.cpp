@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "epub/book.hpp"
 #include "epub/image.hpp"
 #include "epub/inflate.hpp"
 #include "epub/xml.hpp"
@@ -19,6 +20,82 @@ static void append_u32(uint8_t* data, size_t* size, uint32_t value)
 {
     append_u16(data, size, static_cast<uint16_t>(value));
     append_u16(data, size, static_cast<uint16_t>(value >> 16));
+}
+
+struct zip_fixture_entry_t
+{
+    const char* name;
+    const char* data;
+};
+
+static void append_bytes(uint8_t* data, size_t* size, const void* source, size_t length)
+{
+    memcpy(data + *size, source, length);
+    *size += length;
+}
+
+static void write_stored_zip(const char* path, const zip_fixture_entry_t* entries, size_t count)
+{
+    uint8_t data[8192] = {};
+    uint32_t offsets[8] = {};
+    uint32_t sizes[8] = {};
+    size_t size = 0;
+    for (size_t index = 0; index < count; ++index)
+    {
+        const uint16_t name_length = static_cast<uint16_t>(strlen(entries[index].name));
+        const uint32_t content_size = static_cast<uint32_t>(strlen(entries[index].data));
+        offsets[index] = static_cast<uint32_t>(size);
+        sizes[index] = content_size;
+        append_u32(data, &size, 0x04034b50);
+        append_u16(data, &size, 20);
+        append_u16(data, &size, 0);
+        append_u16(data, &size, 0);
+        append_u16(data, &size, 0);
+        append_u16(data, &size, 0);
+        append_u32(data, &size, 0);
+        append_u32(data, &size, content_size);
+        append_u32(data, &size, content_size);
+        append_u16(data, &size, name_length);
+        append_u16(data, &size, 0);
+        append_bytes(data, &size, entries[index].name, name_length);
+        append_bytes(data, &size, entries[index].data, content_size);
+    }
+    const uint32_t central_offset = static_cast<uint32_t>(size);
+    for (size_t index = 0; index < count; ++index)
+    {
+        const uint16_t name_length = static_cast<uint16_t>(strlen(entries[index].name));
+        append_u32(data, &size, 0x02014b50);
+        append_u16(data, &size, 20);
+        append_u16(data, &size, 20);
+        append_u16(data, &size, 0);
+        append_u16(data, &size, 0);
+        append_u16(data, &size, 0);
+        append_u16(data, &size, 0);
+        append_u32(data, &size, 0);
+        append_u32(data, &size, sizes[index]);
+        append_u32(data, &size, sizes[index]);
+        append_u16(data, &size, name_length);
+        append_u16(data, &size, 0);
+        append_u16(data, &size, 0);
+        append_u16(data, &size, 0);
+        append_u16(data, &size, 0);
+        append_u32(data, &size, 0);
+        append_u32(data, &size, offsets[index]);
+        append_bytes(data, &size, entries[index].name, name_length);
+    }
+    const uint32_t central_size = static_cast<uint32_t>(size) - central_offset;
+    append_u32(data, &size, 0x06054b50);
+    append_u16(data, &size, 0);
+    append_u16(data, &size, 0);
+    append_u16(data, &size, static_cast<uint16_t>(count));
+    append_u16(data, &size, static_cast<uint16_t>(count));
+    append_u32(data, &size, central_size);
+    append_u32(data, &size, central_offset);
+    append_u16(data, &size, 0);
+    FILE* file = fopen(path, "wb");
+    assert(file != nullptr);
+    assert(fwrite(data, 1, size, file) == size);
+    fclose(file);
 }
 
 int main()
@@ -130,6 +207,30 @@ int main()
     assert(xreader::epub::xml::next(&reader, &token) == ESP_OK);
     assert(token.type == xreader::epub::xml::token_text);
     assert(token.value_length == 4);
+
+    const zip_fixture_entry_t epub_entries[] = {
+        {"META-INF/container.xml", "<container><rootfiles><rootfile "
+                                   "full-path=\"OEBPS/content.opf\"/></rootfiles></container>"},
+        {"OEBPS/content.opf",
+         "<package><metadata><dc:title>Fixture</dc:title><dc:creator>Author</dc:creator></metadata>"
+         "<manifest><item id=\"one\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>"
+         "<item id=\"two\" href=\"ch2.xhtml\" media-type=\"application/xhtml+xml\"/></manifest>"
+         "<spine><itemref idref=\"one\"/><itemref idref=\"two\"/></spine></package>"},
+        {"OEBPS/ch1.xhtml", "<html><body><p>Chapter one.</p></body></html>"},
+        {"OEBPS/ch2.xhtml", "<html><body><p>Chapter two.</p></body></html>"},
+    };
+    const char* epub_path = "/tmp/xreader-test.epub";
+    write_stored_zip(epub_path, epub_entries, sizeof(epub_entries) / sizeof(epub_entries[0]));
+    xreader::epub::book_t book = {};
+    xreader::epub::document_t document = {};
+    assert(xreader::epub::load_metadata(epub_path, &book) == ESP_OK);
+    assert(book.spine_count == 2);
+    assert(strcmp(book.spine[0].href, "ch1.xhtml") == 0);
+    assert(strcmp(book.spine[1].href, "ch2.xhtml") == 0);
+    assert(xreader::epub::load_document(epub_path, &book, 0, &document) == ESP_OK);
+    assert(strstr(document.text, "Chapter one") != nullptr);
+    assert(xreader::epub::load_document(epub_path, &book, 1, &document) == ESP_OK);
+    assert(strstr(document.text, "Chapter two") != nullptr);
 
     using xreader::ui::navigation_rotary_clockwise;
     using xreader::ui::navigation_rotary_counterclockwise;

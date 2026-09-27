@@ -179,6 +179,17 @@ static void trim_copy(char* destination, const char* source, size_t length)
     copy_text(destination, source, length);
 }
 
+static void copy_field(char* destination, const char* source, size_t capacity)
+{
+    if (capacity == 0)
+        return;
+    size_t length = strlen(source);
+    if (length >= capacity)
+        length = capacity - 1;
+    memcpy(destination, source, length);
+    destination[length] = '\0';
+}
+
 static void append_text(document_t* document, const char* source, size_t length, bool* last_space)
 {
     size_t index = 0;
@@ -309,7 +320,7 @@ static void append_text(document_t* document, const char* source, size_t length,
 
 static void directory_name(const char* path, char* output)
 {
-    strncpy(output, path, book_text_length - 1);
+    copy_field(output, path, book_text_length);
     char* slash = strrchr(output, '/');
     if (slash != nullptr)
         slash[1] = '\0';
@@ -434,8 +445,7 @@ esp_err_t load_metadata(const char* path, book_t* book)
         zip::close(&archive);
         return ESP_ERR_INVALID_SIZE;
     }
-    strncpy(book->opf_path, normalized_rootfile, book_text_length - 1);
-    book->opf_path[book_text_length - 1] = '\0';
+    copy_field(book->opf_path, normalized_rootfile, book_text_length);
 
     char* opf = nullptr;
     size_t opf_size = 0;
@@ -497,16 +507,16 @@ esp_err_t load_metadata(const char* path, book_t* book)
             if (book->spine_count < book_spine_length && spine_id[0] != '\0')
             {
                 const uint8_t index = book->spine_count++;
-                strncpy(book->spine[index].id, spine_id, book_text_length - 1);
+                copy_field(book->spine[index].id, spine_id, book_text_length);
                 for (uint8_t item = 0; item < book_spine_length; ++item)
                 {
                     if (strcmp(item_ids + item * book_text_length, spine_id) == 0)
                     {
-                        strncpy(book->spine[index].href, item_hrefs + item * book_text_length,
-                                book_text_length - 1);
+                        copy_field(book->spine[index].href, item_hrefs + item * book_text_length,
+                                   book_text_length);
                         if (index == 0)
-                            strncpy(book->first_document, item_hrefs + item * book_text_length,
-                                    book_text_length - 1);
+                            copy_field(book->first_document, item_hrefs + item * book_text_length,
+                                       book_text_length);
                         break;
                     }
                 }
@@ -523,13 +533,13 @@ esp_err_t load_metadata(const char* path, book_t* book)
             {
                 if (attribute(&token, "media-type", media_type, sizeof(media_type)) &&
                     strcmp(media_type, "application/x-dtbncx+xml") == 0)
-                    strncpy(toc_href, href, sizeof(toc_href) - 1);
+                    copy_field(toc_href, href, sizeof(toc_href));
                 for (uint8_t item = 0; item < book_spine_length; ++item)
                 {
                     if (item_ids[item * book_text_length] == '\0')
                     {
-                        strncpy(item_ids + item * book_text_length, id, book_text_length - 1);
-                        strncpy(item_hrefs + item * book_text_length, href, book_text_length - 1);
+                        copy_field(item_ids + item * book_text_length, id, book_text_length);
+                        copy_field(item_hrefs + item * book_text_length, href, book_text_length);
                         break;
                     }
                 }
@@ -542,10 +552,10 @@ esp_err_t load_metadata(const char* path, book_t* book)
         {
             if (strcmp(item_ids + item * book_text_length, book->spine[spine].id) == 0)
             {
-                strncpy(book->spine[spine].href, item_hrefs + item * book_text_length,
-                        book_text_length - 1);
+                copy_field(book->spine[spine].href, item_hrefs + item * book_text_length,
+                           book_text_length);
                 if (spine == 0)
-                    strncpy(book->first_document, book->spine[spine].href, book_text_length - 1);
+                    copy_field(book->first_document, book->spine[spine].href, book_text_length);
                 break;
             }
         }
@@ -579,8 +589,8 @@ esp_err_t load_metadata(const char* path, book_t* book)
                             if (fragment != nullptr)
                                 *fragment = '\0';
                             const uint8_t index = book->toc_count++;
-                            strncpy(book->toc[index].title, title, book_text_length - 1);
-                            strncpy(book->toc[index].href, src, book_text_length - 1);
+                            copy_field(book->toc[index].title, title, book_text_length);
+                            copy_field(book->toc[index].href, src, book_text_length);
                             book->toc[index].spine_index = 0;
                             for (uint8_t spine = 0; spine < book->spine_count; ++spine)
                             {

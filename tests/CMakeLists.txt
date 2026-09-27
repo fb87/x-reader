@@ -5,6 +5,7 @@ add_executable(xreader_epub_tests
     test_epub.cpp
     ../main/epub/inflate.cpp
     ../main/epub/image.cpp
+    ../main/epub/book.cpp
     ../main/epub/xml.cpp
     ../main/epub/zip.cpp
     ../main/gfx/framebuffer.cpp
