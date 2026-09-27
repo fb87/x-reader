@@ -24,18 +24,18 @@ static bool attribute(const xml::token_t* token, const char* key, char* output, 
     const size_t key_length = strlen(key);
     while (start < end)
     {
-        while (start < end && (*start == ' ' || *start == '\t' || *start == '\n'))
+        while (start < end && isspace(static_cast<unsigned char>(*start)))
             ++start;
         if (start + key_length > end || memcmp(start, key, key_length) != 0 ||
             (start + key_length < end && start[key_length] != '=' &&
              !isspace(static_cast<unsigned char>(start[key_length]))))
         {
-            while (start < end && *start != ' ' && *start != '\t' && *start != '\n')
+            while (start < end && !isspace(static_cast<unsigned char>(*start)))
                 ++start;
             continue;
         }
         start += key_length;
-        while (start < end && (*start == ' ' || *start == '='))
+        while (start < end && (isspace(static_cast<unsigned char>(*start)) || *start == '='))
             ++start;
         if (start >= end || (*start != '\'' && *start != '"'))
             return false;
@@ -490,9 +490,10 @@ esp_err_t load_metadata(const char* path, book_t* book)
             if (in_creator && book->author[0] == '\0')
                 trim_copy(book->author, token.value, token.value_length);
         }
-        if (token.type == xml::token_empty && xml::name_is(&token, "itemref"))
+        if ((token.type == xml::token_empty || token.type == xml::token_start) &&
+            xml::name_is(&token, "itemref"))
         {
-            attribute(&token, "idref", spine_id, sizeof(spine_id));
+            attribute(&token, "idref", spine_id, book_text_length);
             if (book->spine_count < book_spine_length && spine_id[0] != '\0')
             {
                 const uint8_t index = book->spine_count++;
@@ -511,7 +512,8 @@ esp_err_t load_metadata(const char* path, book_t* book)
                 }
             }
         }
-        if (token.type == xml::token_empty && xml::name_is(&token, "item"))
+        if ((token.type == xml::token_empty || token.type == xml::token_start) &&
+            xml::name_is(&token, "item"))
         {
             char id[book_text_length] = {};
             char href[book_text_length] = {};
@@ -531,6 +533,20 @@ esp_err_t load_metadata(const char* path, book_t* book)
                         break;
                     }
                 }
+            }
+        }
+    }
+    for (uint8_t spine = 0; spine < book->spine_count; ++spine)
+    {
+        for (uint8_t item = 0; item < book_spine_length; ++item)
+        {
+            if (strcmp(item_ids + item * book_text_length, book->spine[spine].id) == 0)
+            {
+                strncpy(book->spine[spine].href, item_hrefs + item * book_text_length,
+                        book_text_length - 1);
+                if (spine == 0)
+                    strncpy(book->first_document, book->spine[spine].href, book_text_length - 1);
+                break;
             }
         }
     }

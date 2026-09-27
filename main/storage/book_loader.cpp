@@ -45,15 +45,21 @@ static void task(void* argument)
         context->result = epub::load_metadata(context->path, context->book);
         if (context->result == ESP_OK)
         {
-            ESP_LOGI(tag, "loaded title='%s' author='%s' spine='%u'", context->book->title,
-                     context->book->author, context->book->spine_count);
+            ESP_LOGI(tag, "loaded title='%s' author='%s' spine='%d'", context->book->title,
+                     context->book->author, static_cast<int>(context->book->spine_count));
             context->document = static_cast<epub::document_t*>(
                 heap_caps_calloc(1, sizeof(epub::document_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
             if (context->document == nullptr)
                 context->result = ESP_ERR_NO_MEM;
             else
+            {
                 context->result =
                     epub::load_document(context->path, context->book, 0, context->document);
+                if (context->result != ESP_OK)
+                    ESP_LOGW(tag, "document load failed: directory='%s' href='%s': %s",
+                             context->book->opf_directory, context->book->spine[0].href,
+                             esp_err_to_name(context->result));
+            }
         }
         else
         {
