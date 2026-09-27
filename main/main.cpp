@@ -71,6 +71,21 @@ static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_
     return transfer_dirty(framebuffer, display);
 }
 
+static bool load_spine(const char* path, const epub::book_t* book, uint8_t spine_index,
+                       epub::book_t* loaded_book, epub::document_t* document)
+{
+    if (storage::book_loader::start_document(path, book, spine_index) != ESP_OK)
+        return false;
+    esp_err_t result = ESP_ERR_INVALID_STATE;
+    for (uint32_t wait_ms = 0; wait_ms < 15000; wait_ms += 50)
+    {
+        if (storage::book_loader::poll(loaded_book, document, &result))
+            return result == ESP_OK;
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    return false;
+}
+
 static void run()
 {
     esp_err_t error = storage::persistence::init();
@@ -204,7 +219,8 @@ static void run()
         board::m5paper::power_off();
         return;
     }
-    const uint8_t total_pages = ui::page_count(document);
+    uint8_t spine_index = 0;
+    uint8_t total_pages = ui::page_count(document);
     uint32_t saved_page = 0;
     storage::persistence::load_page_for_book(book_path, &saved_page);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
@@ -233,14 +249,35 @@ static void run()
         {
             navigation_event = true;
         }
-        const int8_t delta = navigation_event
-                                 ? ui::page_delta(navigation_input, event.x, display_config.width,
-                                                 page, total_pages)
-                                 : 0;
+        const int8_t delta =
+            navigation_event
+                ? ui::page_delta(navigation_input, event.x, display_config.width, page, total_pages)
+                : 0;
         const bool changed = delta != 0;
         if (changed)
         {
-            page = static_cast<uint8_t>(static_cast<int16_t>(page) + delta);
+            if (delta > 0 && page + 1 >= total_pages && spine_index + 1 < book->spine_count)
+            {
+                if (!load_spine(book_path, book, static_cast<uint8_t>(spine_index + 1), book,
+                                document))
+                    continue;
+                ++spine_index;
+                page = 0;
+                total_pages = ui::page_count(document);
+            }
+            else if (delta < 0 && page == 0 && spine_index > 0)
+            {
+                if (!load_spine(book_path, book, static_cast<uint8_t>(spine_index - 1), book,
+                                document))
+                    continue;
+                --spine_index;
+                total_pages = ui::page_count(document);
+                page = static_cast<uint8_t>(total_pages - 1);
+            }
+            else
+            {
+                page = static_cast<uint8_t>(static_cast<int16_t>(page) + delta);
+            }
             storage::persistence::save_page_for_book(book_path, page);
             show(&framebuffer, &display, book, document, page, total_pages);
         }
