@@ -79,7 +79,10 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
                                    : static_cast<uint16_t>(scale == 1 ? 20 : 28);
     const size_t columns = scale == 1 ? 112 : characters_per_line;
     const size_t lines_per_screen = scale == 1 ? 20 : lines_per_page;
-    gfx::clear(framebuffer, 0x0f);
+    gfx::fill_rect(framebuffer, 0, chrome::status_height, framebuffer->width,
+                   static_cast<uint16_t>(framebuffer->height - chrome::status_height -
+                                         chrome::indication_height),
+                   0x0f);
     chrome::draw_status_bar(framebuffer, book->title, "READING");
     const size_t start = page_start(document, page, settings);
     size_t offset = start;

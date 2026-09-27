@@ -12,6 +12,7 @@ struct reader_settings_t
 {
     uint8_t text_scale;
     uint8_t line_spacing;
+    uint8_t refresh_mode;
 };
 
 void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
