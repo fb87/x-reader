@@ -15,25 +15,29 @@ def codepoints():
 
 
 def render(font, codepoint):
-    image = Image.new("L", (16, 16), 0)
+    image = Image.new("L", (24, 20), 0)
     draw = ImageDraw.Draw(image)
-    draw.text((0, 13), chr(codepoint), font=font, fill=255, anchor="ls", stroke_width=0)
+    draw.text((0, 16), chr(codepoint), font=font, fill=255, anchor="ls", stroke_width=0)
     pixels = []
     right = 1
-    for y in range(16):
+    for y in range(20):
         row = 0
-        for x in range(16):
+        for x in range(24):
             if image.getpixel((x, y)) >= 128:
-                row |= 1 << (15 - x)
+                row |= 1 << (23 - x)
                 right = max(right, x + 1)
-        pixels.extend((row >> 8, row & 0xFF))
-    return min(16, right), pixels
+        pixels.extend((row >> 16, (row >> 8) & 0xFF, row & 0xFF))
+    return min(24, right), pixels
 
 
 def main():
     if len(sys.argv) != 3:
         raise SystemExit("usage: generate_unicode_font.py FONT OUTPUT")
-    font = ImageFont.truetype(sys.argv[1], 16)
+    font = ImageFont.truetype(sys.argv[1], 20)
+    try:
+        font.set_variation_by_name("Bold")
+    except AttributeError:
+        pass
     output = Path(sys.argv[2])
     lines = [
         "#include <stdint.h>",

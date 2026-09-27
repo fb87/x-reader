@@ -74,13 +74,14 @@ static const unicode_glyph_t* unicode_glyph(uint32_t codepoint)
 static void draw_unicode_glyph(framebuffer_t* framebuffer, uint16_t x, uint16_t y,
                                const unicode_glyph_t* glyph, uint8_t scale, uint8_t value)
 {
-    for (uint8_t row = 0; row < 16; ++row)
+    for (uint8_t row = 0; row < 20; ++row)
     {
-        const uint16_t bits =
-            static_cast<uint16_t>(glyph->bitmap[row * 2] << 8) | glyph->bitmap[row * 2 + 1];
+        const uint32_t bits = (static_cast<uint32_t>(glyph->bitmap[row * 3]) << 16) |
+                              (static_cast<uint32_t>(glyph->bitmap[row * 3 + 1]) << 8) |
+                              glyph->bitmap[row * 3 + 2];
         for (uint8_t column = 0; column < glyph->width; ++column)
         {
-            if ((bits & (1U << (15 - column))) != 0)
+            if ((bits & (1U << (23 - column))) != 0)
                 fill_rect(framebuffer, static_cast<uint16_t>(x + column * scale),
                           static_cast<uint16_t>(y + row * scale), scale, scale, value);
         }

@@ -99,8 +99,8 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
         return;
     const uint8_t scale = settings != nullptr && settings->text_scale == 1 ? 1 : 2;
     const uint16_t line_step = settings != nullptr && settings->line_spacing != 0
-                                   ? static_cast<uint16_t>(scale == 1 ? 24 : 32)
-                                   : static_cast<uint16_t>(scale == 1 ? 20 : 28);
+                                   ? static_cast<uint16_t>(scale == 1 ? 24 : 48)
+                                   : static_cast<uint16_t>(scale == 1 ? 20 : 44);
     const size_t columns = scale == 1 ? 112 : characters_per_line;
     const size_t lines_per_screen = scale == 1 ? 20 : lines_per_page;
     gfx::fill_rect(framebuffer, 0, chrome::status_height, framebuffer->width,

@@ -7,7 +7,7 @@ struct unicode_glyph_t
 {
     uint32_t codepoint;
     uint8_t width;
-    uint8_t bitmap[32];
+    uint8_t bitmap[60];
 };
 
 extern const unicode_glyph_t unicode_glyphs[];
