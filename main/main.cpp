@@ -18,6 +18,7 @@
 #include "storage/persistence.hpp"
 #include "storage/sdcard/sdcard.hpp"
 #include "ui/hardware_test.hpp"
+#include "ui/home.hpp"
 #include "ui/library.hpp"
 #include "ui/navigation.hpp"
 #include "ui/reader.hpp"
@@ -154,7 +155,8 @@ static void run()
         return;
     }
 
-    ui::draw_library(&framebuffer, sd_card.mounted, sd_config.mount_path);
+    ui::home_action_t home_focus = ui::home_continue_reading;
+    ui::draw_home(&framebuffer, sd_card.mounted, nullptr, home_focus);
     error = transfer_dirty(&framebuffer, &display);
     if (error != ESP_OK)
     {
@@ -163,7 +165,7 @@ static void run()
         board::m5paper::power_off();
         return;
     }
-    ESP_LOGI(tag, "Library display update complete");
+    ESP_LOGI(tag, "Home display update complete");
 
     QueueHandle_t events = xQueueCreate(8, sizeof(input::event_t));
     if (events != nullptr && touch.device != nullptr)
@@ -218,6 +220,68 @@ static void run()
         gfx::destroy(&framebuffer);
         board::m5paper::power_off();
         return;
+    }
+    ui::draw_home(&framebuffer, sd_card.mounted, book->title, home_focus);
+    error = transfer_dirty(&framebuffer, &display);
+    if (error != ESP_OK)
+    {
+        ESP_LOGE(tag, "Home display refresh failed: %s", esp_err_to_name(error));
+        heap_caps_free(book);
+        heap_caps_free(document);
+        gfx::destroy(&framebuffer);
+        board::m5paper::power_off();
+        return;
+    }
+    bool open_reader = events == nullptr || touch.device == nullptr;
+    while (!open_reader)
+    {
+        input::event_t event = {};
+        if (xQueueReceive(events, &event, pdMS_TO_TICKS(600000)) != pdTRUE)
+        {
+            board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
+            continue;
+        }
+        bool redraw = false;
+        if (event.type == input::event_rotary_clockwise)
+        {
+            home_focus = static_cast<ui::home_action_t>((static_cast<uint8_t>(home_focus) + 1) %
+                                                        ui::home_action_count);
+            redraw = true;
+        }
+        else if (event.type == input::event_rotary_counterclockwise)
+        {
+            home_focus = static_cast<ui::home_action_t>(
+                (static_cast<uint8_t>(home_focus) + ui::home_action_count - 1) %
+                ui::home_action_count);
+            redraw = true;
+        }
+        else if (event.type == input::event_touch_up)
+        {
+            ui::home_action_t touched = home_focus;
+            if (ui::home_touch_action(event.y, &touched))
+            {
+                home_focus = touched;
+                redraw = true;
+                if (touched == ui::home_continue_reading || touched == ui::home_library ||
+                    touched == ui::home_recent_books)
+                    open_reader = true;
+                else if (touched == ui::home_sleep)
+                    board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
+            }
+        }
+        else if (event.type == input::event_button_up)
+        {
+            if (home_focus == ui::home_continue_reading || home_focus == ui::home_library ||
+                home_focus == ui::home_recent_books)
+                open_reader = true;
+            else if (home_focus == ui::home_sleep)
+                board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
+        }
+        if (redraw && !open_reader)
+        {
+            ui::draw_home(&framebuffer, sd_card.mounted, book->title, home_focus);
+            transfer_dirty(&framebuffer, &display);
+        }
     }
     uint8_t spine_index = 0;
     uint8_t total_pages = ui::page_count(document);

@@ -20,6 +20,7 @@ idf_component_register(
         "ui/library.cpp"
         "ui/navigation.cpp"
         "ui/chrome.cpp"
+        "ui/home.cpp"
         "ui/reader.cpp"
         "ui/hardware_test.cpp"
     INCLUDE_DIRS
