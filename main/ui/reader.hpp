@@ -8,9 +8,16 @@ namespace xreader
 namespace ui
 {
 
+struct reader_settings_t
+{
+    uint8_t text_scale;
+    uint8_t line_spacing;
+};
+
 void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
-                 const epub::document_t* document, uint8_t page, uint8_t page_count);
-uint8_t page_count(const epub::document_t* document);
+                 const epub::document_t* document, uint8_t page, uint8_t page_count,
+                 const reader_settings_t* settings);
+uint8_t page_count(const epub::document_t* document, const reader_settings_t* settings);
 
 } // namespace ui
 } // namespace xreader

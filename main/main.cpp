@@ -69,9 +69,9 @@ static esp_err_t transfer_dirty(gfx::framebuffer_t* framebuffer,
 
 static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* display,
                       const epub::book_t* book, const epub::document_t* document, uint8_t page,
-                      uint8_t page_count)
+                      uint8_t page_count, const ui::reader_settings_t* settings)
 {
-    ui::draw_reader(framebuffer, book, document, page, page_count);
+    ui::draw_reader(framebuffer, book, document, page, page_count, settings);
     return transfer_dirty(framebuffer, display);
 }
 
@@ -88,6 +88,22 @@ static bool load_spine(const char* path, const epub::book_t* book, uint8_t spine
         vTaskDelay(pdMS_TO_TICKS(50));
     }
     return false;
+}
+
+static void cycle_setting(storage::persistence::settings_t* settings, ui::quick_setting_t setting)
+{
+    if (settings == nullptr)
+        return;
+    if (setting == ui::quick_setting_text_size)
+        settings->text_scale = settings->text_scale == 1 ? 2 : 1;
+    else if (setting == ui::quick_setting_line_spacing)
+        settings->line_spacing = settings->line_spacing == 0 ? 1 : 0;
+    else if (setting == ui::quick_setting_refresh_mode)
+        settings->refresh_mode = settings->refresh_mode == 0 ? 1 : 0;
+    else if (setting == ui::quick_setting_sleep_timeout)
+        settings->sleep_timeout_minutes = settings->sleep_timeout_minutes == 30
+                                              ? 60
+                                              : (settings->sleep_timeout_minutes == 60 ? 120 : 30);
 }
 
 #if XREADER_SIMULATE_NAVIGATION
@@ -122,6 +138,9 @@ static void run()
     esp_err_t error = storage::persistence::init();
     if (error != ESP_OK)
         ESP_LOGW(tag, "NVS initialization failed: %s", esp_err_to_name(error));
+    storage::persistence::settings_t settings = {};
+    storage::persistence::default_settings(&settings);
+    storage::persistence::load_settings(&settings);
     error = board::m5paper::power_on();
     if (error != ESP_OK)
     {
@@ -382,8 +401,12 @@ static void run()
             transfer_dirty(&framebuffer, &display);
         }
     }
+    ui::reader_settings_t reader_settings = {
+        .text_scale = settings.text_scale,
+        .line_spacing = settings.line_spacing,
+    };
     uint8_t spine_index = 0;
-    uint8_t total_pages = ui::page_count(document);
+    uint8_t total_pages = ui::page_count(document, &reader_settings);
     uint32_t saved_spine = 0;
     uint32_t saved_page = 0;
     storage::persistence::load_position_for_book(book_path, &saved_spine, &saved_page);
@@ -393,11 +416,17 @@ static void run()
     {
         spine_index = 0;
     }
-    total_pages = ui::page_count(document);
+    total_pages = ui::page_count(document, &reader_settings);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
-    show(&framebuffer, &display, book, document, page, total_pages);
+    show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
     bool quick_settings = false;
     ui::quick_setting_t quick_focus = ui::quick_setting_text_size;
+    ui::quick_settings_values_t quick_values = {
+        .text_scale = settings.text_scale,
+        .line_spacing = settings.line_spacing,
+        .refresh_mode = settings.refresh_mode,
+        .sleep_timeout_minutes = settings.sleep_timeout_minutes,
+    };
     while (events != nullptr && touch.device != nullptr)
     {
         input::event_t event = {};
@@ -411,8 +440,19 @@ static void run()
             bool redraw_overlay = false;
             if (event.type == input::event_button_up)
             {
+                cycle_setting(&settings, quick_focus);
+                storage::persistence::save_settings(&settings);
+                reader_settings.text_scale = settings.text_scale;
+                reader_settings.line_spacing = settings.line_spacing;
+                quick_values.text_scale = settings.text_scale;
+                quick_values.line_spacing = settings.line_spacing;
+                quick_values.refresh_mode = settings.refresh_mode;
+                quick_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
+                total_pages = ui::page_count(document, &reader_settings);
+                if (page >= total_pages)
+                    page = static_cast<uint8_t>(total_pages - 1);
                 quick_settings = false;
-                show(&framebuffer, &display, book, document, page, total_pages);
+                show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
                 continue;
             }
             if (event.type == input::event_rotary_clockwise)
@@ -431,17 +471,31 @@ static void run()
             else if (event.type == input::event_touch_up)
             {
                 if (ui::quick_settings_touch(event.x, event.y, &quick_focus))
+                {
+                    cycle_setting(&settings, quick_focus);
+                    storage::persistence::save_settings(&settings);
+                    reader_settings.text_scale = settings.text_scale;
+                    reader_settings.line_spacing = settings.line_spacing;
+                    quick_values.text_scale = settings.text_scale;
+                    quick_values.line_spacing = settings.line_spacing;
+                    quick_values.refresh_mode = settings.refresh_mode;
+                    quick_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
+                    total_pages = ui::page_count(document, &reader_settings);
+                    if (page >= total_pages)
+                        page = static_cast<uint8_t>(total_pages - 1);
                     redraw_overlay = true;
+                }
                 else
                 {
                     quick_settings = false;
-                    show(&framebuffer, &display, book, document, page, total_pages);
+                    show(&framebuffer, &display, book, document, page, total_pages,
+                         &reader_settings);
                     continue;
                 }
             }
             if (redraw_overlay)
             {
-                ui::draw_quick_settings(&framebuffer, quick_focus);
+                ui::draw_quick_settings(&framebuffer, quick_focus, &quick_values);
                 transfer_dirty(&framebuffer, &display);
             }
             continue;
@@ -452,7 +506,7 @@ static void run()
              event.x > display_config.width / 3 && event.x < display_config.width * 2 / 3))
         {
             quick_settings = true;
-            ui::draw_quick_settings(&framebuffer, quick_focus);
+            ui::draw_quick_settings(&framebuffer, quick_focus, &quick_values);
             transfer_dirty(&framebuffer, &display);
             continue;
         }
@@ -486,7 +540,7 @@ static void run()
                     continue;
                 ++spine_index;
                 page = 0;
-                total_pages = ui::page_count(document);
+                total_pages = ui::page_count(document, &reader_settings);
             }
             else if (result == ui::navigation_chapter_backward)
             {
@@ -494,7 +548,7 @@ static void run()
                                 document))
                     continue;
                 --spine_index;
-                total_pages = ui::page_count(document);
+                total_pages = ui::page_count(document, &reader_settings);
                 page = static_cast<uint8_t>(total_pages - 1);
             }
             else
@@ -505,7 +559,7 @@ static void run()
                                                  : static_cast<int16_t>(-1)));
             }
             storage::persistence::save_position_for_book(book_path, spine_index, page);
-            show(&framebuffer, &display, book, document, page, total_pages);
+            show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
         }
     }
 }

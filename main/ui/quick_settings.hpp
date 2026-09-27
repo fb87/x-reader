@@ -18,7 +18,16 @@ enum quick_setting_t : uint8_t
     quick_setting_count,
 };
 
-void draw_quick_settings(gfx::framebuffer_t* framebuffer, quick_setting_t focus);
+struct quick_settings_values_t
+{
+    uint8_t text_scale;
+    uint8_t line_spacing;
+    uint8_t refresh_mode;
+    uint32_t sleep_timeout_minutes;
+};
+
+void draw_quick_settings(gfx::framebuffer_t* framebuffer, quick_setting_t focus,
+                         const quick_settings_values_t* values);
 bool quick_settings_touch(uint16_t x, uint16_t y, quick_setting_t* setting);
 
 } // namespace ui

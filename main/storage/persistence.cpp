@@ -17,6 +17,10 @@ namespace
 {
 static constexpr const char* namespace_name = "reader";
 static constexpr const char* page_key = "page";
+static constexpr const char* text_scale_key = "text_scale";
+static constexpr const char* line_spacing_key = "line_space";
+static constexpr const char* refresh_mode_key = "refresh";
+static constexpr const char* sleep_timeout_key = "sleep_min";
 static char cached_path[512] = {};
 static uint32_t cached_spine = 0;
 static uint32_t cached_page = 0;
@@ -54,6 +58,63 @@ esp_err_t init()
         if (error == ESP_OK)
             error = nvs_flash_init();
     }
+    return error;
+}
+
+void default_settings(settings_t* settings)
+{
+    if (settings == nullptr)
+        return;
+    settings->text_scale = 2;
+    settings->line_spacing = 0;
+    settings->refresh_mode = 0;
+    settings->sleep_timeout_minutes = 60;
+}
+
+esp_err_t load_settings(settings_t* settings)
+{
+    if (settings == nullptr)
+        return ESP_ERR_INVALID_ARG;
+    default_settings(settings);
+    nvs_handle_t handle = 0;
+    esp_err_t error = nvs_open(namespace_name, NVS_READONLY, &handle);
+    if (error != ESP_OK)
+        return error;
+    uint8_t text_scale = 0;
+    uint8_t line_spacing = 0;
+    uint8_t refresh_mode = 0;
+    uint32_t sleep_timeout = 0;
+    if (nvs_get_u8(handle, text_scale_key, &text_scale) == ESP_OK &&
+        (text_scale == 1 || text_scale == 2))
+        settings->text_scale = text_scale;
+    if (nvs_get_u8(handle, line_spacing_key, &line_spacing) == ESP_OK && line_spacing <= 1)
+        settings->line_spacing = line_spacing;
+    if (nvs_get_u8(handle, refresh_mode_key, &refresh_mode) == ESP_OK && refresh_mode <= 1)
+        settings->refresh_mode = refresh_mode;
+    if (nvs_get_u32(handle, sleep_timeout_key, &sleep_timeout) == ESP_OK && sleep_timeout > 0)
+        settings->sleep_timeout_minutes = sleep_timeout;
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+esp_err_t save_settings(const settings_t* settings)
+{
+    if (settings == nullptr)
+        return ESP_ERR_INVALID_ARG;
+    nvs_handle_t handle = 0;
+    esp_err_t error = nvs_open(namespace_name, NVS_READWRITE, &handle);
+    if (error != ESP_OK)
+        return error;
+    error = nvs_set_u8(handle, text_scale_key, settings->text_scale);
+    if (error == ESP_OK)
+        error = nvs_set_u8(handle, line_spacing_key, settings->line_spacing);
+    if (error == ESP_OK)
+        error = nvs_set_u8(handle, refresh_mode_key, settings->refresh_mode);
+    if (error == ESP_OK)
+        error = nvs_set_u32(handle, sleep_timeout_key, settings->sleep_timeout_minutes);
+    if (error == ESP_OK)
+        error = nvs_commit(handle);
+    nvs_close(handle);
     return error;
 }
 
