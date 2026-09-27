@@ -20,6 +20,7 @@ struct task_context_t
     bool button_state;
     bool touch_active;
     uint16_t touch_x;
+    uint16_t touch_y;
 };
 
 static task_context_t task_context = {};
@@ -76,15 +77,16 @@ static void poll_touch(task_context_t* context)
     {
         if (context->touch_active)
         {
-            send(context, {event_touch_up, context->touch_x, 0});
+            send(context, {event_touch_up, context->touch_x, context->touch_y});
             context->touch_active = false;
         }
         return;
     }
 
-    send(context, {context->touch_active ? event_touch_move : event_touch_down, state.points[0].x,
-                   state.points[0].y});
+    if (!context->touch_active)
+        send(context, {event_touch_down, state.points[0].x, state.points[0].y});
     context->touch_x = state.points[0].x;
+    context->touch_y = state.points[0].y;
     context->touch_active = true;
 }
 
@@ -132,6 +134,7 @@ esp_err_t start(const config_t* config, QueueHandle_t events)
     task_context.rotary_quarters = 0;
     task_context.touch_active = false;
     task_context.touch_x = 0;
+    task_context.touch_y = 0;
 
     if (xTaskCreate(task, "xreader_input", 4096, &task_context, 5, nullptr) != pdPASS)
     {
