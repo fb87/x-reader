@@ -7,6 +7,7 @@
 #include "epub/xml.hpp"
 #include "epub/zip.hpp"
 #include "gfx/framebuffer.hpp"
+#include "ui/navigation.hpp"
 
 static void append_u16(uint8_t* data, size_t* size, uint16_t value)
 {
@@ -126,5 +127,16 @@ int main()
     assert(xreader::epub::xml::next(&reader, &token) == ESP_OK);
     assert(token.type == xreader::epub::xml::token_text);
     assert(token.value_length == 4);
+
+    using xreader::ui::navigation_rotary_clockwise;
+    using xreader::ui::navigation_rotary_counterclockwise;
+    using xreader::ui::navigation_touch_up;
+    assert(xreader::ui::page_delta(navigation_touch_up, 721, 960, 0, 3) == 1);
+    assert(xreader::ui::page_delta(navigation_touch_up, 240, 960, 1, 3) == -1);
+    assert(xreader::ui::page_delta(navigation_touch_up, 480, 960, 1, 3) == -1);
+    assert(xreader::ui::page_delta(navigation_rotary_clockwise, 0, 960, 0, 3) == 1);
+    assert(xreader::ui::page_delta(navigation_rotary_counterclockwise, 0, 960, 2, 3) == -1);
+    assert(xreader::ui::page_delta(navigation_touch_up, 721, 960, 2, 3) == 0);
+    assert(xreader::ui::page_delta(navigation_touch_up, 240, 960, 0, 3) == 0);
     return 0;
 }

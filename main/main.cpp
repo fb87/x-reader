@@ -19,6 +19,7 @@
 #include "storage/sdcard/sdcard.hpp"
 #include "ui/hardware_test.hpp"
 #include "ui/library.hpp"
+#include "ui/navigation.hpp"
 #include "ui/reader.hpp"
 
 namespace xreader
@@ -216,27 +217,30 @@ static void run()
             board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
             continue;
         }
-        bool changed = false;
-        if (event.type == input::event_rotary_clockwise ||
-            (event.type == input::event_touch_up && event.x > display_config.width / 2))
+        bool navigation_event = false;
+        ui::navigation_input_t navigation_input = ui::navigation_touch_up;
+        if (event.type == input::event_rotary_clockwise)
         {
-            if (page + 1 < total_pages)
-            {
-                ++page;
-                changed = true;
-            }
+            navigation_input = ui::navigation_rotary_clockwise;
+            navigation_event = true;
         }
-        else if (event.type == input::event_rotary_counterclockwise ||
-                 (event.type == input::event_touch_up && event.x <= display_config.width / 2))
+        else if (event.type == input::event_rotary_counterclockwise)
         {
-            if (page > 0)
-            {
-                --page;
-                changed = true;
-            }
+            navigation_input = ui::navigation_rotary_counterclockwise;
+            navigation_event = true;
         }
+        else if (event.type == input::event_touch_up)
+        {
+            navigation_event = true;
+        }
+        const int8_t delta = navigation_event
+                                 ? ui::page_delta(navigation_input, event.x, display_config.width,
+                                                 page, total_pages)
+                                 : 0;
+        const bool changed = delta != 0;
         if (changed)
         {
+            page = static_cast<uint8_t>(static_cast<int16_t>(page) + delta);
             storage::persistence::save_page_for_book(book_path, page);
             show(&framebuffer, &display, book, document, page, total_pages);
         }
