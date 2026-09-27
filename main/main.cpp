@@ -249,14 +249,14 @@ static void run()
         {
             navigation_event = true;
         }
-        const int8_t delta =
+        const ui::navigation_result_t result =
             navigation_event
-                ? ui::page_delta(navigation_input, event.x, display_config.width, page, total_pages)
-                : 0;
-        const bool changed = delta != 0;
-        if (changed)
+                ? ui::navigation_result(navigation_input, event.x, display_config.width, page,
+                                        total_pages, spine_index, book->spine_count)
+                : ui::navigation_none;
+        if (result != ui::navigation_none)
         {
-            if (delta > 0 && page + 1 >= total_pages && spine_index + 1 < book->spine_count)
+            if (result == ui::navigation_chapter_forward)
             {
                 if (!load_spine(book_path, book, static_cast<uint8_t>(spine_index + 1), book,
                                 document))
@@ -265,7 +265,7 @@ static void run()
                 page = 0;
                 total_pages = ui::page_count(document);
             }
-            else if (delta < 0 && page == 0 && spine_index > 0)
+            else if (result == ui::navigation_chapter_backward)
             {
                 if (!load_spine(book_path, book, static_cast<uint8_t>(spine_index - 1), book,
                                 document))
@@ -276,7 +276,10 @@ static void run()
             }
             else
             {
-                page = static_cast<uint8_t>(static_cast<int16_t>(page) + delta);
+                page = static_cast<uint8_t>(static_cast<int16_t>(page) +
+                                            (result == ui::navigation_page_forward
+                                                 ? static_cast<int16_t>(1)
+                                                 : static_cast<int16_t>(-1)));
             }
             storage::persistence::save_page_for_book(book_path, page);
             show(&framebuffer, &display, book, document, page, total_pages);

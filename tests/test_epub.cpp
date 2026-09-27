@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "epub/inflate.hpp"
 #include "epub/image.hpp"
+#include "epub/inflate.hpp"
 #include "epub/xml.hpp"
 #include "epub/zip.hpp"
 #include "gfx/framebuffer.hpp"
@@ -24,16 +24,18 @@ static void append_u32(uint8_t* data, size_t* size, uint32_t value)
 int main()
 {
     const uint8_t png[] = {
-        0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a,
-        0, 0, 0, 13, 'I', 'H', 'D', 'R', 0, 0, 0, 2, 0, 0, 0, 1, 8, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 14, 'I', 'D', 'A', 'T', 0x78, 0x01, 0x01, 0x03, 0x00, 0xfc, 0xff, 0x00, 0x00,
-        0xff, 0x00, 0x01, 0x01, 0x00, 0, 0, 0, 0, 'I', 'E', 'N', 'D', 0, 0, 0, 0,
+        0x89, 'P',  'N',  'G',  0x0d, 0x0a, 0x1a, 0x0a, 0,    0,    0,    13,   'I',  'H',
+        'D',  'R',  0,    0,    0,    2,    0,    0,    0,    1,    8,    0,    0,    0,
+        0,    0,    0,    0,    0,    0,    0,    0,    14,   'I',  'D',  'A',  'T',  0x78,
+        0x01, 0x01, 0x03, 0x00, 0xfc, 0xff, 0x00, 0x00, 0xff, 0x00, 0x01, 0x01, 0x00, 0,
+        0,    0,    0,    'I',  'E',  'N',  'D',  0,    0,    0,    0,
     };
     xreader::epub::image::info_t image_info = {};
     assert(xreader::epub::image::inspect(png, sizeof(png), &image_info) == ESP_OK);
     assert(image_info.width == 2 && image_info.height == 1 && image_info.supported);
     uint8_t image_pixels[1] = {};
-    assert(xreader::epub::image::decode_mono(png, sizeof(png), image_pixels, sizeof(image_pixels)) == ESP_OK);
+    assert(xreader::epub::image::decode_mono(png, sizeof(png), image_pixels,
+                                             sizeof(image_pixels)) == ESP_OK);
     assert(image_pixels[0] == 0xf0);
 
     xreader::gfx::framebuffer_t framebuffer = {};
@@ -41,7 +43,8 @@ int main()
     for (uint16_t x = 0; x < 8; ++x)
         xreader::gfx::set_pixel(&framebuffer, x, 0, static_cast<uint8_t>(x));
     uint8_t region[4] = {};
-    assert(xreader::gfx::copy_region_4bpp(&framebuffer, 2, 0, 4, 1, region, sizeof(region)) == ESP_OK);
+    assert(xreader::gfx::copy_region_4bpp(&framebuffer, 2, 0, 4, 1, region, sizeof(region)) ==
+           ESP_OK);
     assert(region[0] == 0x23 && region[1] == 0x45);
     xreader::gfx::destroy(&framebuffer);
 
@@ -138,5 +141,13 @@ int main()
     assert(xreader::ui::page_delta(navigation_rotary_counterclockwise, 0, 960, 2, 3) == -1);
     assert(xreader::ui::page_delta(navigation_touch_up, 721, 960, 2, 3) == 0);
     assert(xreader::ui::page_delta(navigation_touch_up, 240, 960, 0, 3) == 0);
+    assert(xreader::ui::navigation_result(navigation_touch_up, 721, 960, 0, 2, 0, 3) ==
+           xreader::ui::navigation_page_forward);
+    assert(xreader::ui::navigation_result(navigation_touch_up, 721, 960, 1, 2, 0, 3) ==
+           xreader::ui::navigation_chapter_forward);
+    assert(xreader::ui::navigation_result(navigation_touch_up, 240, 960, 0, 2, 1, 3) ==
+           xreader::ui::navigation_chapter_backward);
+    assert(xreader::ui::navigation_result(navigation_touch_up, 240, 960, 0, 2, 0, 3) ==
+           xreader::ui::navigation_none);
     return 0;
 }
