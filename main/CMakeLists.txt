@@ -12,6 +12,7 @@ idf_component_register(
         "epub/image.cpp"
         "gfx/framebuffer.cpp"
         "gfx/font.cpp"
+        "gfx/unicode_font.cpp"
         "gfx/m5epd_font16.c"
         "input/input.cpp"
         "storage/sdcard/sdcard.cpp"

@@ -126,6 +126,25 @@ int main()
     assert(region[0] == 0x23 && region[1] == 0x45);
     xreader::gfx::destroy(&framebuffer);
 
+    xreader::gfx::framebuffer_t double_buffer = {};
+    assert(xreader::gfx::create(&double_buffer, 8, 2) == ESP_OK);
+    xreader::gfx::clear(&double_buffer, 0x0f);
+    assert(xreader::gfx::present(&double_buffer) == ESP_OK);
+    uint16_t dirty_x = 0;
+    uint16_t dirty_y = 0;
+    uint16_t dirty_width = 0;
+    uint16_t dirty_height = 0;
+    assert(
+        xreader::gfx::take_dirty(&double_buffer, &dirty_x, &dirty_y, &dirty_width, &dirty_height));
+    assert(
+        !xreader::gfx::take_dirty(&double_buffer, &dirty_x, &dirty_y, &dirty_width, &dirty_height));
+    xreader::gfx::set_pixel(&double_buffer, 3, 1, 0x00);
+    assert(xreader::gfx::present(&double_buffer) == ESP_OK);
+    assert(
+        xreader::gfx::take_dirty(&double_buffer, &dirty_x, &dirty_y, &dirty_width, &dirty_height));
+    assert(dirty_x == 2 && dirty_y == 1 && dirty_width == 2 && dirty_height == 1);
+    xreader::gfx::destroy(&double_buffer);
+
     uint8_t zip_data[128] = {};
     size_t zip_size = 0;
     append_u32(zip_data, &zip_size, 0x04034b50);

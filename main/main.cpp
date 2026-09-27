@@ -47,6 +47,9 @@ static esp_err_t
 transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* display,
                drivers::it8951e::refresh_mode_t refresh_mode = drivers::it8951e::refresh_gc16)
 {
+    esp_err_t error = gfx::present(framebuffer);
+    if (error != ESP_OK)
+        return error;
     uint16_t dirty_x = 0;
     uint16_t dirty_y = 0;
     uint16_t dirty_width = 0;
@@ -70,8 +73,8 @@ transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* disp
         static_cast<uint8_t*>(heap_caps_malloc(transfer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (transfer == nullptr)
         return ESP_ERR_NO_MEM;
-    esp_err_t error = gfx::copy_region_4bpp(framebuffer, dirty_x, dirty_y, dirty_width,
-                                            dirty_height, transfer, transfer_size);
+    error = gfx::copy_region_4bpp(framebuffer, dirty_x, dirty_y, dirty_width, dirty_height,
+                                  transfer, transfer_size);
     if (error == ESP_OK)
         error = drivers::it8951e::write_image_4bpp(display, transfer, dirty_x, dirty_y, dirty_width,
                                                    dirty_height);

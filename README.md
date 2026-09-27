@@ -32,6 +32,7 @@ Hardware drivers and the EPUB implementation have not been added yet.
 - [Hardware](docs/hardware.md)
 - [Coding rules](docs/coding-rules.md)
 - [Development workflow](docs/development.md)
+- [Fonts](docs/fonts.md)
 - [Milestones](docs/milestones.md)
 
 ## Initial Commands
