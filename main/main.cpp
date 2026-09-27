@@ -35,6 +35,14 @@ namespace app
 
 static const char* const tag = "xreader";
 
+#if XREADER_DIAGNOSTICS
+#define XR_LOGI(...) ESP_LOGI(tag, __VA_ARGS__)
+#define XR_TIME_US() esp_timer_get_time()
+#else
+#define XR_LOGI(...)
+#define XR_TIME_US() 0
+#endif
+
 static esp_err_t
 transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* display,
                drivers::it8951e::refresh_mode_t refresh_mode = drivers::it8951e::refresh_gc16)
@@ -54,10 +62,10 @@ transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* disp
     if ((dirty_width & 3U) != 0)
         return ESP_ERR_INVALID_SIZE;
     const size_t transfer_size = gfx::size(dirty_width, dirty_height);
-    const int64_t transfer_start = esp_timer_get_time();
-    ESP_LOGI(tag, "graphics dirty x=%u y=%u w=%u h=%u mode=%u", static_cast<unsigned>(dirty_x),
-             static_cast<unsigned>(dirty_y), static_cast<unsigned>(dirty_width),
-             static_cast<unsigned>(dirty_height), static_cast<unsigned>(refresh_mode));
+    [[maybe_unused]] const int64_t transfer_start = XR_TIME_US();
+    XR_LOGI("graphics dirty x=%u y=%u w=%u h=%u mode=%u", static_cast<unsigned>(dirty_x),
+            static_cast<unsigned>(dirty_y), static_cast<unsigned>(dirty_width),
+            static_cast<unsigned>(dirty_height), static_cast<unsigned>(refresh_mode));
     uint8_t* transfer =
         static_cast<uint8_t*>(heap_caps_malloc(transfer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (transfer == nullptr)
@@ -71,8 +79,8 @@ transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* disp
         error = drivers::it8951e::refresh(display, dirty_x, dirty_y, dirty_width, dirty_height,
                                           refresh_mode);
     heap_caps_free(transfer);
-    ESP_LOGI(tag, "graphics transfer done error=%s elapsed_us=%lld", esp_err_to_name(error),
-             static_cast<long long>(esp_timer_get_time() - transfer_start));
+    XR_LOGI("graphics transfer done error=%s elapsed_us=%lld", esp_err_to_name(error),
+            static_cast<long long>(XR_TIME_US() - transfer_start));
     return error;
 }
 
@@ -80,12 +88,11 @@ static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_
                       const epub::book_t* book, const epub::document_t* document, uint8_t page,
                       uint8_t page_count, const ui::reader_settings_t* settings)
 {
-    const int64_t draw_start = esp_timer_get_time();
-    ESP_LOGI(tag, "draw start page=%u/%u", static_cast<unsigned>(page + 1),
-             static_cast<unsigned>(page_count));
+    [[maybe_unused]] const int64_t draw_start = XR_TIME_US();
+    XR_LOGI("draw start page=%u/%u", static_cast<unsigned>(page + 1),
+            static_cast<unsigned>(page_count));
     ui::draw_reader(framebuffer, book, document, page, page_count, settings);
-    ESP_LOGI(tag, "draw done elapsed_us=%lld",
-             static_cast<long long>(esp_timer_get_time() - draw_start));
+    XR_LOGI("draw done elapsed_us=%lld", static_cast<long long>(XR_TIME_US() - draw_start));
     const drivers::it8951e::refresh_mode_t refresh_mode =
         settings != nullptr && settings->refresh_mode != 0 ? drivers::it8951e::refresh_du
                                                            : drivers::it8951e::refresh_gc16;
@@ -321,9 +328,9 @@ static void run()
             board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
             continue;
         }
-        ESP_LOGI(tag, "screen input type=%u x=%u y=%u screen=%u", static_cast<unsigned>(event.type),
-                 static_cast<unsigned>(event.x), static_cast<unsigned>(event.y),
-                 static_cast<unsigned>(screen_state.screen));
+        XR_LOGI("screen input type=%u x=%u y=%u screen=%u", static_cast<unsigned>(event.type),
+                static_cast<unsigned>(event.x), static_cast<unsigned>(event.y),
+                static_cast<unsigned>(screen_state.screen));
         ui::logical_event_t logical_event = {};
         logical_event.x = event.x;
         logical_event.y = event.y;
@@ -340,8 +347,8 @@ static void run()
         const ui::screen_command_t command =
             ui::dispatch(&screen_state, &logical_event, display_config.width, display_config.height,
                          0, 1, 0, book->spine_count);
-        ESP_LOGI(tag, "screen command=%u screen=%u", static_cast<unsigned>(command),
-                 static_cast<unsigned>(screen_state.screen));
+        XR_LOGI("screen command=%u screen=%u", static_cast<unsigned>(command),
+                static_cast<unsigned>(screen_state.screen));
         if (command == ui::screen_command_open_reader)
             open_reader = true;
         else if (command == ui::screen_command_sleep)
@@ -417,9 +424,9 @@ static void run()
             board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
             continue;
         }
-        ESP_LOGI(tag, "reader input type=%u x=%u y=%u screen=%u", static_cast<unsigned>(event.type),
-                 static_cast<unsigned>(event.x), static_cast<unsigned>(event.y),
-                 static_cast<unsigned>(screen_state.screen));
+        XR_LOGI("reader input type=%u x=%u y=%u screen=%u", static_cast<unsigned>(event.type),
+                static_cast<unsigned>(event.x), static_cast<unsigned>(event.y),
+                static_cast<unsigned>(screen_state.screen));
         ui::logical_event_t logical_event = {};
         logical_event.x = event.x;
         logical_event.y = event.y;
@@ -436,8 +443,8 @@ static void run()
         const ui::screen_command_t command =
             ui::dispatch(&screen_state, &logical_event, display_config.width, display_config.height,
                          page, total_pages, spine_index, book->spine_count);
-        ESP_LOGI(tag, "reader command=%u screen=%u", static_cast<unsigned>(command),
-                 static_cast<unsigned>(screen_state.screen));
+        XR_LOGI("reader command=%u screen=%u", static_cast<unsigned>(command),
+                static_cast<unsigned>(screen_state.screen));
         if (command == ui::screen_command_open_quick_settings)
         {
             ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values);

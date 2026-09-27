@@ -13,6 +13,7 @@ namespace
 {
 
 static constexpr uint8_t debounce_samples = 5;
+#if XREADER_DIAGNOSTICS
 static const char* const tag = "input";
 
 static const char* event_name(event_type_t type)
@@ -35,6 +36,7 @@ static const char* event_name(event_type_t type)
         return "unknown";
     }
 }
+#endif
 
 static void touch_coordinates(const config_t* config, uint16_t raw_x, uint16_t raw_y, uint16_t* x,
                               uint16_t* y)
@@ -73,8 +75,10 @@ static task_context_t task_context = {};
 static void send(task_context_t* context, event_t event)
 {
     xQueueSend(context->events, &event, 0);
+#if XREADER_DIAGNOSTICS
     ESP_LOGI(tag, "emit %s x=%u y=%u", event_name(event.type), static_cast<unsigned>(event.x),
              static_cast<unsigned>(event.y));
+#endif
 }
 
 static void poll_rotary(task_context_t* context)

@@ -51,3 +51,7 @@ target_compile_options(${COMPONENT_LIB} PRIVATE
 if(XREADER_SIMULATE_NAVIGATION)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE XREADER_SIMULATE_NAVIGATION=1)
 endif()
+
+if(XREADER_DIAGNOSTICS)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE XREADER_DIAGNOSTICS=1)
+endif()
