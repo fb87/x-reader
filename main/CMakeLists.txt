@@ -23,6 +23,7 @@ idf_component_register(
         "ui/home.cpp"
         "ui/settings.cpp"
         "ui/quick_settings.cpp"
+        "ui/screen.cpp"
         "ui/reader.cpp"
         "ui/hardware_test.cpp"
     INCLUDE_DIRS

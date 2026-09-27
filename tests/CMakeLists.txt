@@ -10,6 +10,7 @@ add_executable(xreader_epub_tests
     ../main/epub/zip.cpp
     ../main/gfx/framebuffer.cpp
     ../main/ui/navigation.cpp
+    ../main/ui/screen.cpp
 )
 target_include_directories(xreader_epub_tests PRIVATE . ../main)
 target_compile_features(xreader_epub_tests PRIVATE cxx_std_17)

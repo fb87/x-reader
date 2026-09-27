@@ -24,6 +24,7 @@
 #include "ui/navigation.hpp"
 #include "ui/quick_settings.hpp"
 #include "ui/reader.hpp"
+#include "ui/screen.hpp"
 #include "ui/settings.hpp"
 
 namespace xreader
@@ -210,8 +211,9 @@ static void run()
         return;
     }
 
-    ui::home_action_t home_focus = ui::home_continue_reading;
-    ui::draw_home(&framebuffer, sd_card.mounted, nullptr, home_focus);
+    ui::screen_state_t screen_state = {};
+    ui::initialize(&screen_state);
+    ui::draw_home(&framebuffer, sd_card.mounted, nullptr, screen_state.home_focus);
     error = transfer_dirty(&framebuffer, &display);
     if (error != ESP_OK)
     {
@@ -276,7 +278,7 @@ static void run()
         board::m5paper::power_off();
         return;
     }
-    ui::draw_home(&framebuffer, sd_card.mounted, book->title, home_focus);
+    ui::draw_home(&framebuffer, sd_card.mounted, book->title, screen_state.home_focus);
     error = transfer_dirty(&framebuffer, &display);
     if (error != ESP_OK)
     {
@@ -291,9 +293,6 @@ static void run()
     xTaskCreate(simulate_navigation_task, "xreader_nav_sim", 2048, events, 3, nullptr);
 #endif
     bool open_reader = events == nullptr || touch.device == nullptr;
-    bool in_library = false;
-    bool in_settings = false;
-    ui::settings_item_t settings_focus = ui::settings_text_size;
     while (!open_reader)
     {
         input::event_t event = {};
@@ -302,134 +301,60 @@ static void run()
             board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
             continue;
         }
-        bool redraw = false;
-        if (in_settings)
-        {
-            if (event.type == input::event_rotary_clockwise)
-            {
-                settings_focus = static_cast<ui::settings_item_t>(
-                    (static_cast<uint8_t>(settings_focus) + 1) % ui::settings_item_count);
-                redraw = true;
-            }
-            else if (event.type == input::event_rotary_counterclockwise)
-            {
-                settings_focus = static_cast<ui::settings_item_t>(
-                    (static_cast<uint8_t>(settings_focus) + ui::settings_item_count - 1) %
-                    ui::settings_item_count);
-                redraw = true;
-            }
-            else if (event.type == input::event_button_up)
-            {
-                if (settings_focus == ui::settings_back)
-                    in_settings = false;
-                else
-                {
-                    cycle_setting(&settings, static_cast<ui::quick_setting_t>(settings_focus));
-                    storage::persistence::save_settings(&settings);
-                    settings_values.text_scale = settings.text_scale;
-                    settings_values.line_spacing = settings.line_spacing;
-                    settings_values.refresh_mode = settings.refresh_mode;
-                    settings_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
-                }
-                redraw = true;
-            }
-            else if (event.type == input::event_touch_up)
-            {
-                if (event.y < ui::chrome::status_height)
-                    in_settings = false;
-                else if (ui::settings_touch_item(event.y, &settings_focus))
-                {
-                    if (settings_focus == ui::settings_back)
-                        in_settings = false;
-                    else
-                    {
-                        cycle_setting(&settings, static_cast<ui::quick_setting_t>(settings_focus));
-                        storage::persistence::save_settings(&settings);
-                        settings_values.text_scale = settings.text_scale;
-                        settings_values.line_spacing = settings.line_spacing;
-                        settings_values.refresh_mode = settings.refresh_mode;
-                        settings_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
-                    }
-                }
-                redraw = true;
-            }
-            if (redraw)
-            {
-                if (in_settings)
-                    ui::draw_settings(&framebuffer, settings_focus, &settings_values);
-                else
-                    ui::draw_home(&framebuffer, sd_card.mounted, book->title, home_focus);
-                transfer_dirty(&framebuffer, &display);
-            }
-            continue;
-        }
-        if (in_library)
-        {
-            if (event.type == input::event_button_up || event.type == input::event_touch_up)
-                open_reader = true;
-            continue;
-        }
-        if (event.type == input::event_rotary_clockwise)
-        {
-            home_focus = static_cast<ui::home_action_t>((static_cast<uint8_t>(home_focus) + 1) %
-                                                        ui::home_action_count);
-            redraw = true;
-        }
+        ui::logical_event_t logical_event = {};
+        logical_event.x = event.x;
+        logical_event.y = event.y;
+        if (event.type == input::event_touch_up)
+            logical_event.type = ui::logical_touch_up;
+        else if (event.type == input::event_rotary_clockwise)
+            logical_event.type = ui::logical_rotary_clockwise;
         else if (event.type == input::event_rotary_counterclockwise)
-        {
-            home_focus = static_cast<ui::home_action_t>(
-                (static_cast<uint8_t>(home_focus) + ui::home_action_count - 1) %
-                ui::home_action_count);
-            redraw = true;
-        }
-        else if (event.type == input::event_touch_up)
-        {
-            ui::home_action_t touched = home_focus;
-            if (ui::home_touch_action(event.y, &touched))
-            {
-                home_focus = touched;
-                redraw = true;
-                if (touched == ui::home_continue_reading || touched == ui::home_recent_books)
-                    open_reader = true;
-                else if (touched == ui::home_library)
-                {
-                    in_library = true;
-                    ui::draw_library(&framebuffer, sd_card.mounted, sd_config.mount_path);
-                    transfer_dirty(&framebuffer, &display);
-                }
-                else if (touched == ui::home_settings)
-                {
-                    in_settings = true;
-                    ui::draw_settings(&framebuffer, settings_focus, &settings_values);
-                    transfer_dirty(&framebuffer, &display);
-                }
-                else if (touched == ui::home_sleep)
-                    board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
-            }
-        }
+            logical_event.type = ui::logical_rotary_counterclockwise;
         else if (event.type == input::event_button_up)
+            logical_event.type = ui::logical_button_up;
+        else
+            continue;
+        const ui::screen_command_t command =
+            ui::dispatch(&screen_state, &logical_event, display_config.width, display_config.height,
+                         0, 1, 0, book->spine_count);
+        if (command == ui::screen_command_open_reader)
+            open_reader = true;
+        else if (command == ui::screen_command_sleep)
+            board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
+        else if (command == ui::screen_command_show_library)
         {
-            if (home_focus == ui::home_continue_reading || home_focus == ui::home_recent_books)
-                open_reader = true;
-            else if (home_focus == ui::home_library)
-            {
-                in_library = true;
-                ui::draw_library(&framebuffer, sd_card.mounted, sd_config.mount_path);
-                transfer_dirty(&framebuffer, &display);
-            }
-            else if (home_focus == ui::home_settings)
-            {
-                in_settings = true;
-                ui::draw_settings(&framebuffer, settings_focus, &settings_values);
-                transfer_dirty(&framebuffer, &display);
-            }
-            else if (home_focus == ui::home_sleep)
-                board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
-        }
-        if (redraw && !open_reader)
-        {
-            ui::draw_home(&framebuffer, sd_card.mounted, book->title, home_focus);
+            ui::draw_library(&framebuffer, sd_card.mounted, sd_config.mount_path);
             transfer_dirty(&framebuffer, &display);
+        }
+        else if (command == ui::screen_command_show_settings ||
+                 (screen_state.screen == ui::screen_settings &&
+                  command == ui::screen_command_redraw))
+        {
+            ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
+            transfer_dirty(&framebuffer, &display);
+        }
+        else if (command == ui::screen_command_show_home)
+        {
+            ui::draw_home(&framebuffer, sd_card.mounted, book->title, screen_state.home_focus);
+            transfer_dirty(&framebuffer, &display);
+        }
+        else if (command == ui::screen_command_edit_setting)
+        {
+            if (screen_state.settings_focus != ui::settings_back)
+            {
+                cycle_setting(&settings,
+                              static_cast<ui::quick_setting_t>(screen_state.settings_focus));
+                storage::persistence::save_settings(&settings);
+                settings_values.text_scale = settings.text_scale;
+                settings_values.line_spacing = settings.line_spacing;
+                settings_values.refresh_mode = settings.refresh_mode;
+                settings_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
+            }
+            if (screen_state.screen == ui::screen_settings)
+            {
+                ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
+                transfer_dirty(&framebuffer, &display);
+            }
         }
     }
     ui::reader_settings_t reader_settings = {
@@ -449,9 +374,8 @@ static void run()
     }
     total_pages = ui::page_count(document, &reader_settings);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
+    screen_state.screen = ui::screen_reader;
     show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
-    bool quick_settings = false;
-    ui::quick_setting_t quick_focus = ui::quick_setting_text_size;
     ui::quick_settings_values_t quick_values = {
         .text_scale = settings.text_scale,
         .line_spacing = settings.line_spacing,
@@ -466,105 +390,59 @@ static void run()
             board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
             continue;
         }
-        if (quick_settings)
-        {
-            bool redraw_overlay = false;
-            if (event.type == input::event_button_up)
-            {
-                cycle_setting(&settings, quick_focus);
-                storage::persistence::save_settings(&settings);
-                reader_settings.text_scale = settings.text_scale;
-                reader_settings.line_spacing = settings.line_spacing;
-                quick_values.text_scale = settings.text_scale;
-                quick_values.line_spacing = settings.line_spacing;
-                quick_values.refresh_mode = settings.refresh_mode;
-                quick_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
-                total_pages = ui::page_count(document, &reader_settings);
-                if (page >= total_pages)
-                    page = static_cast<uint8_t>(total_pages - 1);
-                quick_settings = false;
-                show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
-                continue;
-            }
-            if (event.type == input::event_rotary_clockwise)
-            {
-                quick_focus = static_cast<ui::quick_setting_t>(
-                    (static_cast<uint8_t>(quick_focus) + 1) % ui::quick_setting_count);
-                redraw_overlay = true;
-            }
-            else if (event.type == input::event_rotary_counterclockwise)
-            {
-                quick_focus = static_cast<ui::quick_setting_t>(
-                    (static_cast<uint8_t>(quick_focus) + ui::quick_setting_count - 1) %
-                    ui::quick_setting_count);
-                redraw_overlay = true;
-            }
-            else if (event.type == input::event_touch_up)
-            {
-                if (ui::quick_settings_touch(event.x, event.y, &quick_focus))
-                {
-                    cycle_setting(&settings, quick_focus);
-                    storage::persistence::save_settings(&settings);
-                    reader_settings.text_scale = settings.text_scale;
-                    reader_settings.line_spacing = settings.line_spacing;
-                    quick_values.text_scale = settings.text_scale;
-                    quick_values.line_spacing = settings.line_spacing;
-                    quick_values.refresh_mode = settings.refresh_mode;
-                    quick_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
-                    total_pages = ui::page_count(document, &reader_settings);
-                    if (page >= total_pages)
-                        page = static_cast<uint8_t>(total_pages - 1);
-                    redraw_overlay = true;
-                }
-                else
-                {
-                    quick_settings = false;
-                    show(&framebuffer, &display, book, document, page, total_pages,
-                         &reader_settings);
-                    continue;
-                }
-            }
-            if (redraw_overlay)
-            {
-                ui::draw_quick_settings(&framebuffer, quick_focus, &quick_values);
-                transfer_dirty(&framebuffer, &display);
-            }
+        ui::logical_event_t logical_event = {};
+        logical_event.x = event.x;
+        logical_event.y = event.y;
+        if (event.type == input::event_touch_up)
+            logical_event.type = ui::logical_touch_up;
+        else if (event.type == input::event_rotary_clockwise)
+            logical_event.type = ui::logical_rotary_clockwise;
+        else if (event.type == input::event_rotary_counterclockwise)
+            logical_event.type = ui::logical_rotary_counterclockwise;
+        else if (event.type == input::event_button_up)
+            logical_event.type = ui::logical_button_up;
+        else
             continue;
-        }
-        if (event.type == input::event_button_up ||
-            (event.type == input::event_touch_up &&
-             event.y >= display_config.height - ui::chrome::indication_height &&
-             event.x > display_config.width / 3 && event.x < display_config.width * 2 / 3))
+        const ui::screen_command_t command =
+            ui::dispatch(&screen_state, &logical_event, display_config.width, display_config.height,
+                         page, total_pages, spine_index, book->spine_count);
+        if (command == ui::screen_command_open_quick_settings)
         {
-            quick_settings = true;
-            ui::draw_quick_settings(&framebuffer, quick_focus, &quick_values);
+            ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values);
             transfer_dirty(&framebuffer, &display);
             continue;
         }
-        bool navigation_event = false;
-        ui::navigation_input_t navigation_input = ui::navigation_touch_up;
-        if (event.type == input::event_rotary_clockwise)
+        if (command == ui::screen_command_close_quick_settings)
         {
-            navigation_input = ui::navigation_rotary_clockwise;
-            navigation_event = true;
+            show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+            continue;
         }
-        else if (event.type == input::event_rotary_counterclockwise)
+        if (command == ui::screen_command_edit_setting)
         {
-            navigation_input = ui::navigation_rotary_counterclockwise;
-            navigation_event = true;
+            cycle_setting(&settings, screen_state.quick_focus);
+            storage::persistence::save_settings(&settings);
+            reader_settings.text_scale = settings.text_scale;
+            reader_settings.line_spacing = settings.line_spacing;
+            quick_values.text_scale = settings.text_scale;
+            quick_values.line_spacing = settings.line_spacing;
+            quick_values.refresh_mode = settings.refresh_mode;
+            quick_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
+            total_pages = ui::page_count(document, &reader_settings);
+            if (page >= total_pages)
+                page = static_cast<uint8_t>(total_pages - 1);
+            if (screen_state.screen == ui::screen_quick_settings)
+                ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values);
+            else
+                show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+            transfer_dirty(&framebuffer, &display);
+            continue;
         }
-        else if (event.type == input::event_touch_up)
+        if (command == ui::screen_command_page_forward ||
+            command == ui::screen_command_page_backward ||
+            command == ui::screen_command_chapter_forward ||
+            command == ui::screen_command_chapter_backward)
         {
-            navigation_event = true;
-        }
-        const ui::navigation_result_t result =
-            navigation_event
-                ? ui::navigation_result(navigation_input, event.x, display_config.width, page,
-                                        total_pages, spine_index, book->spine_count)
-                : ui::navigation_none;
-        if (result != ui::navigation_none)
-        {
-            if (result == ui::navigation_chapter_forward)
+            if (command == ui::screen_command_chapter_forward)
             {
                 if (!load_spine(book_path, book, static_cast<uint8_t>(spine_index + 1), book,
                                 document))
@@ -573,7 +451,7 @@ static void run()
                 page = 0;
                 total_pages = ui::page_count(document, &reader_settings);
             }
-            else if (result == ui::navigation_chapter_backward)
+            else if (command == ui::screen_command_chapter_backward)
             {
                 if (!load_spine(book_path, book, static_cast<uint8_t>(spine_index - 1), book,
                                 document))
@@ -585,7 +463,7 @@ static void run()
             else
             {
                 page = static_cast<uint8_t>(static_cast<int16_t>(page) +
-                                            (result == ui::navigation_page_forward
+                                            (command == ui::screen_command_page_forward
                                                  ? static_cast<int16_t>(1)
                                                  : static_cast<int16_t>(-1)));
             }

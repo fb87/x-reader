@@ -9,6 +9,7 @@
 #include "epub/zip.hpp"
 #include "gfx/framebuffer.hpp"
 #include "ui/navigation.hpp"
+#include "ui/screen.hpp"
 
 static void append_u16(uint8_t* data, size_t* size, uint16_t value)
 {
@@ -250,5 +251,22 @@ int main()
            xreader::ui::navigation_chapter_backward);
     assert(xreader::ui::navigation_result(navigation_touch_up, 240, 960, 0, 2, 0, 3) ==
            xreader::ui::navigation_none);
+    xreader::ui::screen_state_t screen = {};
+    const xreader::ui::logical_event_t rotate_right = {xreader::ui::logical_rotary_clockwise, 0, 0};
+    const xreader::ui::logical_event_t press = {xreader::ui::logical_button_up, 0, 0};
+    xreader::ui::initialize(&screen);
+    assert(screen.screen == xreader::ui::screen_home);
+    assert(xreader::ui::dispatch(&screen, &rotate_right, 960, 540, 0, 1, 0, 2) ==
+           xreader::ui::screen_command_redraw);
+    assert(screen.home_focus == xreader::ui::home_library);
+    assert(xreader::ui::dispatch(&screen, &press, 960, 540, 0, 1, 0, 2) ==
+           xreader::ui::screen_command_show_library);
+    assert(screen.screen == xreader::ui::screen_library);
+    assert(xreader::ui::dispatch(&screen, &press, 960, 540, 0, 1, 0, 2) ==
+           xreader::ui::screen_command_open_reader);
+    assert(screen.screen == xreader::ui::screen_reader);
+    assert(xreader::ui::dispatch(&screen, &press, 960, 540, 0, 1, 0, 2) ==
+           xreader::ui::screen_command_open_quick_settings);
+    assert(screen.screen == xreader::ui::screen_quick_settings);
     return 0;
 }
