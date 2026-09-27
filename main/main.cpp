@@ -34,8 +34,9 @@ namespace app
 
 static const char* const tag = "xreader";
 
-static esp_err_t transfer_dirty(gfx::framebuffer_t* framebuffer,
-                                drivers::it8951e::device_t* display)
+static esp_err_t
+transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* display,
+               drivers::it8951e::refresh_mode_t refresh_mode = drivers::it8951e::refresh_gc16)
 {
     uint16_t dirty_x = 0;
     uint16_t dirty_y = 0;
@@ -63,7 +64,7 @@ static esp_err_t transfer_dirty(gfx::framebuffer_t* framebuffer,
                                                    dirty_height);
     if (error == ESP_OK)
         error = drivers::it8951e::refresh(display, dirty_x, dirty_y, dirty_width, dirty_height,
-                                          drivers::it8951e::refresh_gc16);
+                                          refresh_mode);
     heap_caps_free(transfer);
     return error;
 }
@@ -73,7 +74,10 @@ static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_
                       uint8_t page_count, const ui::reader_settings_t* settings)
 {
     ui::draw_reader(framebuffer, book, document, page, page_count, settings);
-    return transfer_dirty(framebuffer, display);
+    const drivers::it8951e::refresh_mode_t refresh_mode =
+        settings != nullptr && settings->refresh_mode != 0 ? drivers::it8951e::refresh_du
+                                                           : drivers::it8951e::refresh_gc16;
+    return transfer_dirty(framebuffer, display, refresh_mode);
 }
 
 static bool load_spine(const char* path, const epub::book_t* book, uint8_t spine_index,
@@ -360,6 +364,7 @@ static void run()
     ui::reader_settings_t reader_settings = {
         .text_scale = settings.text_scale,
         .line_spacing = settings.line_spacing,
+        .refresh_mode = settings.refresh_mode,
     };
     uint8_t spine_index = 0;
     uint8_t total_pages = ui::page_count(document, &reader_settings);
@@ -423,6 +428,7 @@ static void run()
             storage::persistence::save_settings(&settings);
             reader_settings.text_scale = settings.text_scale;
             reader_settings.line_spacing = settings.line_spacing;
+            reader_settings.refresh_mode = settings.refresh_mode;
             quick_values.text_scale = settings.text_scale;
             quick_values.line_spacing = settings.line_spacing;
             quick_values.refresh_mode = settings.refresh_mode;
