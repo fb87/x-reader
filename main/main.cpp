@@ -17,11 +17,13 @@
 #include "storage/book_loader.hpp"
 #include "storage/persistence.hpp"
 #include "storage/sdcard/sdcard.hpp"
+#include "ui/chrome.hpp"
 #include "ui/hardware_test.hpp"
 #include "ui/home.hpp"
 #include "ui/library.hpp"
 #include "ui/navigation.hpp"
 #include "ui/reader.hpp"
+#include "ui/settings.hpp"
 
 namespace xreader
 {
@@ -233,6 +235,9 @@ static void run()
         return;
     }
     bool open_reader = events == nullptr || touch.device == nullptr;
+    bool in_library = false;
+    bool in_settings = false;
+    ui::settings_item_t settings_focus = ui::settings_text_size;
     while (!open_reader)
     {
         input::event_t event = {};
@@ -242,6 +247,47 @@ static void run()
             continue;
         }
         bool redraw = false;
+        if (in_settings)
+        {
+            if (event.type == input::event_rotary_clockwise)
+            {
+                settings_focus = static_cast<ui::settings_item_t>(
+                    (static_cast<uint8_t>(settings_focus) + 1) % ui::settings_item_count);
+                redraw = true;
+            }
+            else if (event.type == input::event_rotary_counterclockwise)
+            {
+                settings_focus = static_cast<ui::settings_item_t>(
+                    (static_cast<uint8_t>(settings_focus) + ui::settings_item_count - 1) %
+                    ui::settings_item_count);
+                redraw = true;
+            }
+            else if (event.type == input::event_button_up)
+            {
+                in_settings = false;
+                redraw = true;
+            }
+            else if (event.type == input::event_touch_up && event.y < ui::chrome::status_height)
+            {
+                in_settings = false;
+                redraw = true;
+            }
+            if (redraw)
+            {
+                if (in_settings)
+                    ui::draw_settings(&framebuffer, settings_focus);
+                else
+                    ui::draw_home(&framebuffer, sd_card.mounted, book->title, home_focus);
+                transfer_dirty(&framebuffer, &display);
+            }
+            continue;
+        }
+        if (in_library)
+        {
+            if (event.type == input::event_button_up || event.type == input::event_touch_up)
+                open_reader = true;
+            continue;
+        }
         if (event.type == input::event_rotary_clockwise)
         {
             home_focus = static_cast<ui::home_action_t>((static_cast<uint8_t>(home_focus) + 1) %
@@ -262,18 +308,40 @@ static void run()
             {
                 home_focus = touched;
                 redraw = true;
-                if (touched == ui::home_continue_reading || touched == ui::home_library ||
-                    touched == ui::home_recent_books)
+                if (touched == ui::home_continue_reading || touched == ui::home_recent_books)
                     open_reader = true;
+                else if (touched == ui::home_library)
+                {
+                    in_library = true;
+                    ui::draw_library(&framebuffer, sd_card.mounted, sd_config.mount_path);
+                    transfer_dirty(&framebuffer, &display);
+                }
+                else if (touched == ui::home_settings)
+                {
+                    in_settings = true;
+                    ui::draw_settings(&framebuffer, settings_focus);
+                    transfer_dirty(&framebuffer, &display);
+                }
                 else if (touched == ui::home_sleep)
                     board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
             }
         }
         else if (event.type == input::event_button_up)
         {
-            if (home_focus == ui::home_continue_reading || home_focus == ui::home_library ||
-                home_focus == ui::home_recent_books)
+            if (home_focus == ui::home_continue_reading || home_focus == ui::home_recent_books)
                 open_reader = true;
+            else if (home_focus == ui::home_library)
+            {
+                in_library = true;
+                ui::draw_library(&framebuffer, sd_card.mounted, sd_config.mount_path);
+                transfer_dirty(&framebuffer, &display);
+            }
+            else if (home_focus == ui::home_settings)
+            {
+                in_settings = true;
+                ui::draw_settings(&framebuffer, settings_focus);
+                transfer_dirty(&framebuffer, &display);
+            }
             else if (home_focus == ui::home_sleep)
                 board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
         }
