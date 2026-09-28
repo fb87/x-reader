@@ -13,8 +13,9 @@ namespace ui
 
 namespace
 {
-static constexpr size_t characters_per_line = 56;
 static constexpr size_t lines_per_page = 14;
+static constexpr uint16_t text_left = 28;
+static constexpr uint16_t text_width = 904;
 static size_t next_codepoint(const char* text, size_t length, size_t offset, uint32_t* codepoint)
 {
     size_t consumed = gfx::decode_utf8(text + offset, codepoint);
@@ -39,28 +40,53 @@ static size_t next_codepoint(const char* text, size_t length, size_t offset, uin
     }
     return consumed;
 }
+static uint16_t next_glyph_width(const char* text, size_t length, size_t offset, uint8_t scale,
+                                 size_t* consumed, uint32_t* codepoint)
+{
+    *consumed = next_codepoint(text, length, offset, codepoint);
+    char glyph[12] = {};
+    const size_t glyph_size = *consumed < sizeof(glyph) - 1 ? *consumed : sizeof(glyph) - 1;
+    memcpy(glyph, text + offset, glyph_size);
+    return gfx::measure_text(glyph, scale);
+}
+static size_t next_page_offset(const epub::document_t* document, size_t offset,
+                               const reader_settings_t* settings)
+{
+    const uint8_t scale = settings != nullptr && settings->text_scale == 1 ? 1 : 2;
+    const size_t lines_per_screen = scale == 1 ? 20 : lines_per_page;
+    size_t lines = 0;
+    uint16_t x = 0;
+    while (offset < document->length && lines < lines_per_screen)
+    {
+        uint32_t codepoint = 0;
+        size_t consumed = 0;
+        const uint16_t width = next_glyph_width(document->text, document->length, offset, scale,
+                                                &consumed, &codepoint);
+        if (codepoint == '\n')
+        {
+            ++lines;
+            x = 0;
+            offset += consumed;
+            continue;
+        }
+        if (x > 0 && x + width > text_width)
+        {
+            ++lines;
+            x = 0;
+            if (lines >= lines_per_screen)
+                break;
+        }
+        x = static_cast<uint16_t>(x + width);
+        offset += consumed;
+    }
+    return offset;
+}
 static size_t page_start(const epub::document_t* document, uint8_t page,
                          const reader_settings_t* settings)
 {
-    const uint8_t scale = settings != nullptr && settings->text_scale == 1 ? 1 : 2;
-    const size_t columns = scale == 1 ? 112 : characters_per_line;
-    const size_t lines_per_screen = scale == 1 ? 20 : lines_per_page;
     size_t offset = 0;
     for (uint8_t current = 0; current < page && offset < document->length; ++current)
-    {
-        size_t lines = 0;
-        size_t column = 0;
-        while (offset < document->length && lines < lines_per_screen)
-        {
-            uint32_t codepoint = 0;
-            offset += next_codepoint(document->text, document->length, offset, &codepoint);
-            if (codepoint == '\n' || ++column >= columns)
-            {
-                column = 0;
-                ++lines;
-            }
-        }
-    }
+        offset = next_page_offset(document, offset, settings);
     return offset;
 }
 } // namespace
@@ -69,25 +95,11 @@ uint8_t page_count(const epub::document_t* document, const reader_settings_t* se
 {
     if (document == nullptr || document->length == 0)
         return 1;
-    const uint8_t scale = settings != nullptr && settings->text_scale == 1 ? 1 : 2;
-    const size_t columns = scale == 1 ? 112 : characters_per_line;
-    const size_t lines_per_screen = scale == 1 ? 20 : lines_per_page;
     size_t offset = 0;
     uint16_t pages = 0;
     while (offset < document->length && pages < 255)
     {
-        size_t lines = 0;
-        size_t column = 0;
-        while (offset < document->length && lines < lines_per_screen)
-        {
-            uint32_t codepoint = 0;
-            offset += next_codepoint(document->text, document->length, offset, &codepoint);
-            if (codepoint == '\n' || ++column >= columns)
-            {
-                column = 0;
-                ++lines;
-            }
-        }
+        offset = next_page_offset(document, offset, settings);
         ++pages;
     }
     return static_cast<uint8_t>(pages == 0 ? 1 : pages);
@@ -103,7 +115,6 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
     const uint16_t line_step = settings != nullptr && settings->line_spacing != 0
                                    ? static_cast<uint16_t>(scale == 1 ? 24 : 48)
                                    : static_cast<uint16_t>(scale == 1 ? 20 : 44);
-    const size_t columns = scale == 1 ? 112 : characters_per_line;
     const size_t lines_per_screen = scale == 1 ? 20 : lines_per_page;
     gfx::fill_rect(framebuffer, 0, chrome::status_height, framebuffer->width,
                    static_cast<uint16_t>(framebuffer->height - chrome::status_height -
@@ -113,30 +124,34 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
     const size_t start = page_start(document, page, settings);
     size_t offset = start;
     uint16_t line = 0;
-    uint16_t column = 0;
+    uint16_t x = 0;
     while (offset < document->length && line < lines_per_screen)
     {
         uint32_t codepoint = 0;
-        const size_t consumed =
-            next_codepoint(document->text, document->length, offset, &codepoint);
+        size_t consumed = 0;
+        const uint16_t width = next_glyph_width(document->text, document->length, offset, scale,
+                                                &consumed, &codepoint);
         if (codepoint == '\n')
         {
             ++line;
-            column = 0;
+            x = 0;
             offset += consumed;
             continue;
         }
-        char glyph[4] = {};
+        if (x > 0 && x + width > text_width)
+        {
+            ++line;
+            x = 0;
+            if (line >= lines_per_screen)
+                break;
+        }
+        char glyph[12] = {};
         const size_t glyph_size = consumed < sizeof(glyph) - 1 ? consumed : sizeof(glyph) - 1;
         memcpy(glyph, document->text + offset, glyph_size);
-        gfx::draw_text(framebuffer, static_cast<uint16_t>(28 + column * (scale == 1 ? 9 : 16)),
+        gfx::draw_text(framebuffer, static_cast<uint16_t>(text_left + x),
                        static_cast<uint16_t>(58 + line * line_step), glyph, scale, 0x00);
+        x = static_cast<uint16_t>(x + width);
         offset += consumed;
-        if (++column >= columns)
-        {
-            column = 0;
-            ++line;
-        }
     }
     char footer[32] = {};
     snprintf(footer, sizeof(footer), "%u / %u", static_cast<unsigned>(page + 1),

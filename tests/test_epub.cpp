@@ -135,6 +135,8 @@ int main()
         }
         assert(found);
     }
+    assert(xreader::gfx::measure_text("title", 1) == 22);
+    assert(xreader::gfx::measure_text("title", 2) == 44);
     uint32_t composed = 0;
     size_t consumed_codepoints = 0;
     assert(xreader::gfx::compose_unicode('o', 0x031bU, 'n', &composed, &consumed_codepoints));

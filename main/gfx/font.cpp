@@ -146,7 +146,7 @@ bool compose_unicode(uint32_t first, uint32_t second, uint32_t third, uint32_t* 
 uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const char* text,
                    uint8_t scale, uint8_t value)
 {
-    if (framebuffer == nullptr || text == nullptr || scale == 0)
+    if (text == nullptr || scale == 0)
         return 0;
     uint16_t cursor = x;
     while (*text != '\0')
@@ -182,13 +182,15 @@ uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const cha
             const unicode_glyph_t* glyph = unicode_glyph(codepoint);
             if (glyph != nullptr)
             {
-                draw_unicode_glyph(framebuffer, cursor, y, glyph, scale, value);
+                if (framebuffer != nullptr)
+                    draw_unicode_glyph(framebuffer, cursor, y, glyph, scale, value);
                 cursor = static_cast<uint16_t>(cursor + glyph->advance * scale);
             }
             else
             {
                 const char character = codepoint <= 0x7fU ? static_cast<char>(codepoint) : '?';
-                draw_glyph(framebuffer, cursor, y, character, scale, value);
+                if (framebuffer != nullptr)
+                    draw_glyph(framebuffer, cursor, y, character, scale, value);
                 cursor = static_cast<uint16_t>(cursor + (glyph_width(character) + 1) * scale);
             }
             text += consumed;
@@ -197,6 +199,11 @@ uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const cha
         ++text;
     }
     return cursor - x;
+}
+
+uint16_t measure_text(const char* text, uint8_t scale)
+{
+    return draw_text(nullptr, 0, 0, text, scale, 0);
 }
 
 } // namespace gfx
