@@ -3,6 +3,7 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -144,23 +145,43 @@ static esp_err_t write_pixel_data(device_t* device, const uint8_t* pixels, size_
     {
         return ESP_ERR_INVALID_SIZE;
     }
-    for (size_t offset = 0; offset < size; offset += 2)
+    // Keep the command preamble and pixel words in one transaction per DMA chunk.
+    static constexpr size_t preamble_size = 2;
+    static constexpr size_t payload_size = (transfer_chunk_size - preamble_size) & ~1U;
+    uint8_t* transfer = static_cast<uint8_t*>(
+        heap_caps_malloc(transfer_chunk_size, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    if (transfer == nullptr)
     {
-        const uint8_t transfer[4] = {
-            0x00,
-            0x00,
-            static_cast<uint8_t>(~pixels[offset]),
-            static_cast<uint8_t>(~pixels[offset + 1]),
-        };
-        const esp_err_t error = transmit(device, transfer, nullptr, sizeof(transfer));
-        if (error != ESP_OK)
-        {
-            return error;
-        }
-        if ((offset & 0x1ffU) == 0 && device->watchdog_user != nullptr)
-            (void)esp_task_wdt_reset_user(device->watchdog_user);
+        return ESP_ERR_NO_MEM;
     }
-    return ESP_OK;
+    transfer[0] = 0x00;
+    transfer[1] = 0x00;
+    const int64_t start = esp_timer_get_time();
+    size_t chunks = 0;
+    esp_err_t error = ESP_OK;
+    for (size_t offset = 0; offset < size && error == ESP_OK;)
+    {
+        const size_t remaining = size - offset;
+        const size_t chunk = remaining < payload_size ? remaining : payload_size;
+        for (size_t index = 0; index < chunk; ++index)
+        {
+            transfer[preamble_size + index] = static_cast<uint8_t>(~pixels[offset + index]);
+        }
+        error = wait_ready(device);
+        if (error == ESP_OK)
+            error = transmit(device, transfer, nullptr, preamble_size + chunk);
+        offset += chunk;
+        ++chunks;
+        if (device->watchdog_user != nullptr)
+        {
+            (void)esp_task_wdt_reset_user(device->watchdog_user);
+        }
+    }
+    const int64_t elapsed_us = esp_timer_get_time() - start;
+    ESP_LOGI(tag, "pixel upload: %u bytes in %u chunks, %lld ms", static_cast<unsigned>(size),
+             static_cast<unsigned>(chunks), static_cast<long long>(elapsed_us / 1000));
+    heap_caps_free(transfer);
+    return error;
 }
 
 } // namespace

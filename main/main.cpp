@@ -258,7 +258,7 @@ static void run()
             .rotary_press_pin = board::m5paper::rotary_press_pin,
             .rotary_left_pin = board::m5paper::rotary_left_pin,
             .touch = &touch,
-            .poll_interval_ms = 30,
+            .poll_interval_ms = 10,
             .touch_width = board::m5paper::display_height,
             .touch_height = board::m5paper::display_width,
             .touch_rotation = 1,
@@ -513,8 +513,8 @@ static void run()
                                                  ? static_cast<int16_t>(1)
                                                  : static_cast<int16_t>(-1)));
             }
-            storage::persistence::save_position_for_book(book_path, spine_index, page);
             show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+            storage::persistence::save_position_for_book(book_path, spine_index, page);
             input::flush(events);
         }
     }

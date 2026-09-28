@@ -64,8 +64,6 @@ struct task_context_t
     bool button_candidate;
     uint8_t button_stable_samples;
     bool touch_active;
-    bool touch_candidate;
-    uint8_t touch_stable_samples;
     uint16_t touch_x;
     uint16_t touch_y;
 };
@@ -148,15 +146,7 @@ static void poll_touch(task_context_t* context)
         touch_coordinates(&context->config, state.points[0].x, state.points[0].y, &context->touch_x,
                           &context->touch_y);
     }
-    if (active != context->touch_candidate)
-    {
-        context->touch_candidate = active;
-        context->touch_stable_samples = 0;
-        return;
-    }
-    if (context->touch_stable_samples < debounce_samples)
-        ++context->touch_stable_samples;
-    if (context->touch_stable_samples < debounce_samples || active == context->touch_active)
+    if (active == context->touch_active)
         return;
     context->touch_active = active;
     send(context, {active ? event_touch_down : event_touch_up, context->touch_x, context->touch_y});
@@ -208,8 +198,6 @@ esp_err_t start(const config_t* config, QueueHandle_t events)
     task_context.button_stable_samples = debounce_samples;
     task_context.rotary_quarters = 0;
     task_context.touch_active = false;
-    task_context.touch_candidate = false;
-    task_context.touch_stable_samples = debounce_samples;
     task_context.touch_x = 0;
     task_context.touch_y = 0;
 
@@ -227,9 +215,8 @@ void flush(QueueHandle_t events)
     xQueueReset(events);
     task_context.rotary_quarters = 0;
     task_context.rotary_cooldown_samples = 0;
-    task_context.touch_active = false;
-    task_context.touch_candidate = false;
-    task_context.touch_stable_samples = debounce_samples;
+    // Keep the physical touch state across queue flushes. Resetting it while a
+    // finger is still down can synthesize a second touch_down on the next report.
     task_context.button_candidate = gpio_get_level(task_context.config.rotary_press_pin) == 0;
     task_context.button_state = task_context.button_candidate;
     task_context.button_stable_samples = debounce_samples;
