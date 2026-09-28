@@ -54,3 +54,13 @@ idf.py flash monitor
 The exact ESP-IDF setup is intentionally documented in
 `docs/development.md`; the `nixos-26.05` package set does not currently
 provide a complete native ESP-IDF toolchain package.
+
+## Visual redesign update
+
+The UI layer now contains a visible e-paper-oriented redesign rather than only structural framework changes:
+- card-based Home screen
+- book-card Library rows with focus treatment
+- two-column Settings rows
+- centered Reader Menu / Quick Settings panel
+- light status chrome and segmented bottom action bar
+- responsive geometry retained for 800x480 and 960x540 targets

@@ -208,23 +208,59 @@ static const char* basename_from_path(const char* path)
     return result;
 }
 
+static void draw_book_icon(gfx::framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t w,
+                           uint16_t h, bool selected)
+{
+    const uint8_t fg = selected ? 0x0f : 0x00;
+    gfx::draw_rect(framebuffer, x, y, w, h, fg);
+    if (w > 12 && h > 12)
+    {
+        gfx::fill_rect(framebuffer, static_cast<uint16_t>(x + 7U), y, 1, h, fg);
+        gfx::fill_rect(framebuffer, static_cast<uint16_t>(x + 13U), static_cast<uint16_t>(y + 9U),
+                       static_cast<uint16_t>(w > 20 ? w - 18U : 2U), 1, fg);
+        gfx::fill_rect(framebuffer, static_cast<uint16_t>(x + 13U), static_cast<uint16_t>(y + 15U),
+                       static_cast<uint16_t>(w > 24 ? w - 22U : 2U), 1, fg);
+    }
+}
+
+static layout::rect_t library_area(layout::viewport_t vp)
+{
+    const layout::metrics_t m = layout::metrics(vp);
+    return layout::inset(layout::content(vp), m.margin);
+}
+
 static void draw_library_rows(gfx::framebuffer_t* framebuffer, const char* const* titles,
                               uint8_t count, uint8_t focus_index)
 {
     const layout::viewport_t vp = {framebuffer->width, framebuffer->height};
     const layout::metrics_t m = layout::metrics(vp);
-    const layout::rect_t area = layout::inset(layout::content(vp), m.margin);
-    for (uint8_t index = 0; index < count; ++index)
+    const layout::rect_t area = library_area(vp);
+    const uint8_t visible = count > 6 ? 6 : count;
+    for (uint8_t index = 0; index < visible; ++index)
     {
-        const layout::rect_t item = layout::row(area, index, count, m.row_height, m.gap);
+        const layout::rect_t item =
+            layout::row(area, index, visible, static_cast<uint16_t>(m.row_height + 8U), m.gap);
         const bool selected = index == static_cast<uint8_t>(focus_index % count);
         if (selected)
             gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height, 0x00);
         else
-            gfx::draw_rect(framebuffer, item.x, item.y, item.width, item.height, 0x04);
-        gfx::draw_text(framebuffer, static_cast<uint16_t>(item.x + m.panel_padding),
-                       static_cast<uint16_t>(item.y + (item.height - 16U) / 2U), titles[index], 1,
+            gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height, 0x0f);
+        gfx::draw_rect(framebuffer, item.x, item.y, item.width, item.height,
+                       selected ? 0x00 : 0x0a);
+
+        const uint16_t icon_h =
+            item.height > 16 ? static_cast<uint16_t>(item.height - 16U) : item.height;
+        const uint16_t icon_w = static_cast<uint16_t>(icon_h * 3U / 4U);
+        draw_book_icon(framebuffer, static_cast<uint16_t>(item.x + 12U),
+                       static_cast<uint16_t>(item.y + (item.height - icon_h) / 2U), icon_w, icon_h,
+                       selected);
+
+        const uint16_t text_x = static_cast<uint16_t>(item.x + 24U + icon_w);
+        gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 11U), titles[index], 1,
                        selected ? 0x0f : 0x00);
+        if (item.height >= 46)
+            gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 31U), "EPUB", 1,
+                           selected ? 0x0c : 0x07);
     }
 }
 } // namespace
@@ -306,8 +342,9 @@ bool library_touch_index(uint16_t display_width, uint16_t display_height, uint16
         return false;
     const layout::viewport_t vp = {display_width, display_height};
     const layout::metrics_t m = layout::metrics(vp);
-    return focus::hit_rows(layout::inset(layout::content(vp), m.margin), count, m.row_height, m.gap,
-                           x, y, index);
+    const uint8_t visible = count > 6 ? 6 : count;
+    return focus::hit_rows(library_area(vp), visible, static_cast<uint16_t>(m.row_height + 8U),
+                           m.gap, x, y, index);
 }
 
 bool find_first_book(const char* mount_path, char* path, size_t capacity)

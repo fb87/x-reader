@@ -3,7 +3,6 @@
 #include "gfx/font.hpp"
 #include "ui/chrome.hpp"
 #include "ui/layout/layout.hpp"
-#include "ui/navigation/focus.hpp"
 
 namespace xreader
 {
@@ -13,20 +12,53 @@ namespace ui
 namespace
 {
 static const char* const menu_labels[home_action_count] = {
-    "CONTINUE READING", "LIBRARY", "RECENT BOOKS", "SETTINGS", "SLEEP",
+    "CONTINUE", "LIBRARY", "RECENT", "SETTINGS", "SLEEP",
 };
 
-static layout::rect_t menu_area(layout::viewport_t vp)
+static layout::rect_t continue_card(layout::viewport_t vp)
 {
     const layout::metrics_t m = layout::metrics(vp);
     layout::rect_t body = layout::inset(layout::content(vp), m.margin);
-    const uint16_t heading = m.display_class == layout::display_compact ? 58 : 78;
-    if (body.height > heading)
-    {
-        body.y = static_cast<uint16_t>(body.y + heading);
-        body.height = static_cast<uint16_t>(body.height - heading);
-    }
-    return body;
+    const uint16_t height = m.display_class == layout::display_compact ? 92 : 112;
+    return {body.x, body.y, body.width, height};
+}
+
+static layout::rect_t action_card(layout::viewport_t vp, uint8_t index)
+{
+    const layout::metrics_t m = layout::metrics(vp);
+    layout::rect_t body = layout::inset(layout::content(vp), m.margin);
+    const layout::rect_t hero = continue_card(vp);
+    const uint16_t gap = m.gap;
+    const uint16_t top = static_cast<uint16_t>(hero.y + hero.height + gap);
+    const uint16_t available_h =
+        body.y + body.height > top ? static_cast<uint16_t>(body.y + body.height - top) : 0;
+    const uint16_t column_gap = gap;
+    const uint16_t row_gap = gap;
+    const uint16_t card_w = body.width > column_gap
+                                ? static_cast<uint16_t>((body.width - column_gap) / 2U)
+                                : body.width;
+    const uint16_t card_h =
+        available_h > row_gap ? static_cast<uint16_t>((available_h - row_gap) / 2U) : available_h;
+    const uint8_t local = static_cast<uint8_t>(index - 1U);
+    const uint8_t row = static_cast<uint8_t>(local / 2U);
+    const uint8_t col = static_cast<uint8_t>(local % 2U);
+    return {static_cast<uint16_t>(body.x + col * (card_w + column_gap)),
+            static_cast<uint16_t>(top + row * (card_h + row_gap)), card_w, card_h};
+}
+
+static void draw_card(gfx::framebuffer_t* framebuffer, layout::rect_t card, const char* title,
+                      const char* subtitle, bool selected)
+{
+    const uint8_t bg = selected ? 0x00 : 0x0f;
+    const uint8_t fg = selected ? 0x0f : 0x00;
+    gfx::fill_rect(framebuffer, card.x, card.y, card.width, card.height, bg);
+    gfx::draw_rect(framebuffer, card.x, card.y, card.width, card.height, selected ? 0x00 : 0x07);
+    const uint16_t pad = 16;
+    gfx::draw_text(framebuffer, static_cast<uint16_t>(card.x + pad),
+                   static_cast<uint16_t>(card.y + 14), title, 1, fg);
+    if (subtitle != nullptr && subtitle[0] != '\0' && card.height >= 54)
+        gfx::draw_text(framebuffer, static_cast<uint16_t>(card.x + pad),
+                       static_cast<uint16_t>(card.y + 38), subtitle, 1, selected ? 0x0d : 0x06);
 }
 } // namespace
 
@@ -36,33 +68,25 @@ void draw_home(gfx::framebuffer_t* framebuffer, bool storage_mounted, const char
     if (framebuffer == nullptr)
         return;
     const layout::viewport_t vp = {framebuffer->width, framebuffer->height};
-    const layout::metrics_t m = layout::metrics(vp);
     gfx::clear(framebuffer, 0x0f);
-    chrome::draw_status_bar(framebuffer, "HOME", storage_mounted ? "SD" : "NO SD");
+    chrome::draw_status_bar(framebuffer, "X-READER", storage_mounted ? "SD READY" : "NO SD");
 
-    const layout::rect_t body = layout::inset(layout::content(vp), m.margin);
-    const uint8_t heading_scale = m.display_class == layout::display_compact ? 1 : 2;
-    gfx::draw_text(framebuffer, body.x, static_cast<uint16_t>(body.y + 8), "WELCOME TO XREADER",
-                   heading_scale, 0x00);
-    gfx::draw_text(
-        framebuffer, body.x, static_cast<uint16_t>(body.y + (heading_scale == 1 ? 30 : 38)),
-        book_title == nullptr || book_title[0] == '\0' ? "LOADING BOOK..." : book_title, 1, 0x04);
+    const layout::rect_t hero = continue_card(vp);
+    draw_card(framebuffer, hero, "CONTINUE READING",
+              book_title == nullptr || book_title[0] == '\0' ? "No book opened" : book_title,
+              focus == home_continue_reading);
 
-    const layout::rect_t menu = menu_area(vp);
-    for (uint8_t index = 0; index < home_action_count; ++index)
+    for (uint8_t index = 1; index < home_action_count; ++index)
     {
-        const layout::rect_t item =
-            layout::row(menu, index, home_action_count, m.row_height, m.gap);
-        const bool selected = index == static_cast<uint8_t>(focus);
-        if (selected)
-            gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height, 0x00);
-        else
-            gfx::draw_rect(framebuffer, item.x, item.y, item.width, item.height, 0x04);
-        const uint16_t text_y = static_cast<uint16_t>(item.y + (item.height - 16U) / 2U);
-        gfx::draw_text(framebuffer, static_cast<uint16_t>(item.x + m.panel_padding), text_y,
-                       menu_labels[index], 1, selected ? 0x0f : 0x00);
+        const layout::rect_t card = action_card(vp, index);
+        const char* subtitle = index == home_library        ? "Browse your books"
+                               : index == home_recent_books ? "Recently opened"
+                               : index == home_settings     ? "Reader preferences"
+                                                            : "Suspend device";
+        draw_card(framebuffer, card, menu_labels[index], subtitle,
+                  index == static_cast<uint8_t>(focus));
     }
-    chrome::draw_indication_bar(framebuffer, "UP/DOWN", "SELECT", "BACK");
+    chrome::draw_indication_bar(framebuffer, "MOVE", "OPEN", "BACK");
 }
 
 bool home_touch_action(uint16_t display_width, uint16_t display_height, uint16_t x, uint16_t y,
@@ -71,12 +95,20 @@ bool home_touch_action(uint16_t display_width, uint16_t display_height, uint16_t
     if (action == nullptr)
         return false;
     const layout::viewport_t vp = {display_width, display_height};
-    const layout::metrics_t m = layout::metrics(vp);
-    uint8_t index = 0;
-    if (!focus::hit_rows(menu_area(vp), home_action_count, m.row_height, m.gap, x, y, &index))
-        return false;
-    *action = static_cast<home_action_t>(index);
-    return true;
+    if (layout::contains(continue_card(vp), x, y))
+    {
+        *action = home_continue_reading;
+        return true;
+    }
+    for (uint8_t index = 1; index < home_action_count; ++index)
+    {
+        if (layout::contains(action_card(vp, index), x, y))
+        {
+            *action = static_cast<home_action_t>(index);
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace ui

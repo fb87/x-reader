@@ -247,7 +247,14 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
     char footer[32] = {};
     snprintf(footer, sizeof(footer), "%u / %u", static_cast<unsigned>(page + 1),
              static_cast<unsigned>(page_count));
-    chrome::draw_indication_bar(framebuffer, "< PREV", footer, "NEXT >");
+    chrome::draw_indication_bar(framebuffer, "< PREV", "MENU", "NEXT >");
+    const uint16_t footer_width = gfx::measure_text(footer, 1);
+    const uint16_t footer_y =
+        static_cast<uint16_t>(framebuffer->height - layout::metrics(vp).footer_height - 20U);
+    const uint16_t footer_x = framebuffer->width > footer_width
+                                  ? static_cast<uint16_t>((framebuffer->width - footer_width) / 2U)
+                                  : 0;
+    gfx::draw_text(framebuffer, footer_x, footer_y, footer, 1, 0x06);
 }
 
 } // namespace ui
