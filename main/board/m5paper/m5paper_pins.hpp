@@ -29,9 +29,9 @@ static constexpr gpio_num_t rotary_right_pin = GPIO_NUM_39;
 static constexpr gpio_num_t rotary_press_pin = GPIO_NUM_38;
 static constexpr gpio_num_t rotary_left_pin = GPIO_NUM_37;
 
-static constexpr uint16_t display_width = 960;
-static constexpr uint16_t display_height = 540;
-static constexpr uint8_t display_rotation = 0;
+static constexpr uint16_t display_width = 540;
+static constexpr uint16_t display_height = 960;
+static constexpr uint8_t display_rotation = 1;
 
 } // namespace m5paper
 } // namespace board

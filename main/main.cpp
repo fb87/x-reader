@@ -260,9 +260,9 @@ static void run()
             .rotary_left_pin = board::m5paper::rotary_left_pin,
             .touch = &touch,
             .poll_interval_ms = 10,
-            .touch_width = board::m5paper::display_height,
-            .touch_height = board::m5paper::display_width,
-            .touch_rotation = 1,
+            .touch_width = board::m5paper::display_width,
+            .touch_height = board::m5paper::display_height,
+            .touch_rotation = 0,
         };
         input::start(&input_config, events);
     }
