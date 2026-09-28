@@ -13,9 +13,34 @@ namespace ui
 
 namespace
 {
-static constexpr size_t lines_per_page = 14;
 static constexpr uint16_t text_left = 28;
 static constexpr uint16_t text_width = 904;
+static constexpr uint16_t display_height = 540;
+static constexpr uint16_t minimum_vertical_margin = 16;
+struct reader_layout_t
+{
+    uint8_t scale;
+    uint16_t line_step;
+    uint16_t text_top;
+    size_t lines_per_screen;
+};
+static reader_layout_t reader_layout(const reader_settings_t* settings)
+{
+    reader_layout_t layout = {};
+    layout.scale = settings != nullptr && settings->text_scale == 1 ? 1 : 2;
+    layout.line_step = settings != nullptr && settings->line_spacing != 0
+                           ? static_cast<uint16_t>(layout.scale == 1 ? 24 : 48)
+                           : static_cast<uint16_t>(layout.scale == 1 ? 20 : 44);
+    const uint16_t body_height = display_height - chrome::status_height - chrome::indication_height;
+    const uint16_t glyph_height = static_cast<uint16_t>(20 * layout.scale);
+    const uint16_t usable_height = static_cast<uint16_t>(body_height - 2 * minimum_vertical_margin);
+    layout.lines_per_screen = 1 + (usable_height - glyph_height) / layout.line_step;
+    const uint16_t text_height =
+        static_cast<uint16_t>(glyph_height + (layout.lines_per_screen - 1) * layout.line_step);
+    layout.text_top =
+        static_cast<uint16_t>(chrome::status_height + (body_height - text_height) / 2);
+    return layout;
+}
 static size_t next_codepoint(const char* text, size_t length, size_t offset, uint32_t* codepoint)
 {
     size_t consumed = gfx::decode_utf8(text + offset, codepoint);
@@ -52,16 +77,15 @@ static uint16_t next_glyph_width(const char* text, size_t length, size_t offset,
 static size_t next_page_offset(const epub::document_t* document, size_t offset,
                                const reader_settings_t* settings)
 {
-    const uint8_t scale = settings != nullptr && settings->text_scale == 1 ? 1 : 2;
-    const size_t lines_per_screen = scale == 1 ? 20 : lines_per_page;
+    const reader_layout_t layout = reader_layout(settings);
     size_t lines = 0;
     uint16_t x = 0;
-    while (offset < document->length && lines < lines_per_screen)
+    while (offset < document->length && lines < layout.lines_per_screen)
     {
         uint32_t codepoint = 0;
         size_t consumed = 0;
-        const uint16_t width = next_glyph_width(document->text, document->length, offset, scale,
-                                                &consumed, &codepoint);
+        const uint16_t width = next_glyph_width(document->text, document->length, offset,
+                                                layout.scale, &consumed, &codepoint);
         if (codepoint == '\n')
         {
             ++lines;
@@ -73,7 +97,7 @@ static size_t next_page_offset(const epub::document_t* document, size_t offset,
         {
             ++lines;
             x = 0;
-            if (lines >= lines_per_screen)
+            if (lines >= layout.lines_per_screen)
                 break;
         }
         x = static_cast<uint16_t>(x + width);
@@ -111,11 +135,7 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
 {
     if (framebuffer == nullptr || book == nullptr || document == nullptr)
         return;
-    const uint8_t scale = settings != nullptr && settings->text_scale == 1 ? 1 : 2;
-    const uint16_t line_step = settings != nullptr && settings->line_spacing != 0
-                                   ? static_cast<uint16_t>(scale == 1 ? 24 : 48)
-                                   : static_cast<uint16_t>(scale == 1 ? 20 : 44);
-    const size_t lines_per_screen = scale == 1 ? 20 : lines_per_page;
+    const reader_layout_t layout = reader_layout(settings);
     gfx::fill_rect(framebuffer, 0, chrome::status_height, framebuffer->width,
                    static_cast<uint16_t>(framebuffer->height - chrome::status_height -
                                          chrome::indication_height),
@@ -125,12 +145,12 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
     size_t offset = start;
     uint16_t line = 0;
     uint16_t x = 0;
-    while (offset < document->length && line < lines_per_screen)
+    while (offset < document->length && line < layout.lines_per_screen)
     {
         uint32_t codepoint = 0;
         size_t consumed = 0;
-        const uint16_t width = next_glyph_width(document->text, document->length, offset, scale,
-                                                &consumed, &codepoint);
+        const uint16_t width = next_glyph_width(document->text, document->length, offset,
+                                                layout.scale, &consumed, &codepoint);
         if (codepoint == '\n')
         {
             ++line;
@@ -142,14 +162,15 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
         {
             ++line;
             x = 0;
-            if (line >= lines_per_screen)
+            if (line >= layout.lines_per_screen)
                 break;
         }
         char glyph[12] = {};
         const size_t glyph_size = consumed < sizeof(glyph) - 1 ? consumed : sizeof(glyph) - 1;
         memcpy(glyph, document->text + offset, glyph_size);
         gfx::draw_text(framebuffer, static_cast<uint16_t>(text_left + x),
-                       static_cast<uint16_t>(58 + line * line_step), glyph, scale, 0x00);
+                       static_cast<uint16_t>(layout.text_top + line * layout.line_step), glyph,
+                       layout.scale, 0x00);
         x = static_cast<uint16_t>(x + width);
         offset += consumed;
     }
