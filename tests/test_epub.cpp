@@ -117,10 +117,10 @@ int main()
             assert(found);
         }
     }
-    const uint8_t expected_narrow_widths[][2] = {
-        {' ', 3}, {'i', 4}, {'l', 4}, {'r', 6}, {'t', 5},
+    const uint8_t expected_narrow_metrics[][3] = {
+        {' ', 1, 3}, {'i', 3, 3}, {'l', 3, 3}, {'r', 6, 5}, {'t', 5, 4},
     };
-    for (const auto& expected : expected_narrow_widths)
+    for (const auto& expected : expected_narrow_metrics)
     {
         bool found = false;
         for (size_t index = 0; index < unicode_glyph_count; ++index)
@@ -128,6 +128,7 @@ int main()
             if (unicode_glyphs[index].codepoint == expected[0])
             {
                 assert(unicode_glyphs[index].width == expected[1]);
+                assert(unicode_glyphs[index].advance == expected[2]);
                 found = true;
                 break;
             }

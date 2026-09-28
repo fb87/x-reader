@@ -7,6 +7,7 @@ struct unicode_glyph_t
 {
     uint32_t codepoint;
     uint8_t width;
+    uint8_t advance;
     uint8_t bitmap[60];
 };
 

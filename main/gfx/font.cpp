@@ -183,7 +183,7 @@ uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const cha
             if (glyph != nullptr)
             {
                 draw_unicode_glyph(framebuffer, cursor, y, glyph, scale, value);
-                cursor = static_cast<uint16_t>(cursor + glyph->width * scale);
+                cursor = static_cast<uint16_t>(cursor + glyph->advance * scale);
             }
             else
             {

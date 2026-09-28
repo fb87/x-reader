@@ -34,7 +34,9 @@ def render(font, codepoint):
                 right = max(right, x + 1)
         pixels.extend((row >> 16, (row >> 8) & 0xFF, row & 0xFF))
     advance = round(font.getlength(chr(codepoint)))
-    return min(24, max(right, advance)), pixels
+    if chr(codepoint) in "ilrt":
+        advance -= 1
+    return min(24, right), max(1, advance), pixels
 
 
 def main():
@@ -53,9 +55,9 @@ def main():
         "const unicode_glyph_t unicode_glyphs[] = {",
     ]
     for codepoint in codepoints():
-        width, pixels = render(font, codepoint)
+        width, advance, pixels = render(font, codepoint)
         values = ", ".join(f"0x{value:02x}" for value in pixels)
-        lines.append(f"    {{0x{codepoint:04x}U, {width}, {{{values}}}}},")
+        lines.append(f"    {{0x{codepoint:04x}U, {width}, {advance}, {{{values}}}}},")
     lines.extend(
         [
             "};",
