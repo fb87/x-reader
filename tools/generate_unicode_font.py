@@ -67,16 +67,16 @@ def main():
             "const unicode_composition_t unicode_compositions[] = {",
         ]
     )
+    compositions = []
     for codepoint in codepoints():
         decomposition = unicodedata.normalize("NFD", chr(codepoint))
         if len(decomposition) not in (2, 3):
             continue
         values = [ord(value) for value in decomposition]
         values.append(0)
-        lines.append(
-            f"    {{{values[0]}U, {values[1]}U, {values[2]}U, {codepoint}U, "
-            f"{len(decomposition)}}},"
-        )
+        compositions.append((values[0], values[1], values[2], len(decomposition), codepoint))
+    for first, second, third, length, codepoint in sorted(compositions):
+        lines.append(f"    {{{first}U, {second}U, {third}U, {codepoint}U, {length}}},")
     lines.extend(
         [
             "};",

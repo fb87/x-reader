@@ -61,23 +61,38 @@ static size_t decode_utf8_impl(const char* text, uint32_t* codepoint)
     return 1;
 }
 
-static bool compose_unicode_impl(uint32_t first, uint32_t second, uint32_t third,
-                                 uint32_t* composed, size_t* consumed_codepoints)
+static int compare_composition(const unicode_composition_t* entry, uint32_t first, uint32_t second,
+                               uint32_t third, uint8_t length)
 {
-    if (composed == nullptr || consumed_codepoints == nullptr)
-        return false;
-    for (uint8_t length = 3; length >= 2; --length)
+    if (entry->first != first)
+        return entry->first < first ? -1 : 1;
+    if (entry->second != second)
+        return entry->second < second ? -1 : 1;
+    if (entry->third != third)
+        return entry->third < third ? -1 : 1;
+    if (entry->length != length)
+        return entry->length < length ? -1 : 1;
+    return 0;
+}
+
+static bool find_composition(uint32_t first, uint32_t second, uint32_t third, uint8_t length,
+                             uint32_t* composed)
+{
+    size_t low = 0;
+    size_t high = unicode_composition_count;
+    while (low < high)
     {
-        for (size_t index = 0; index < unicode_composition_count; ++index)
+        const size_t middle = low + (high - low) / 2;
+        const int comparison =
+            compare_composition(&unicode_compositions[middle], first, second, third, length);
+        if (comparison < 0)
+            low = middle + 1;
+        else if (comparison > 0)
+            high = middle;
+        else
         {
-            const unicode_composition_t* entry = &unicode_compositions[index];
-            if (entry->length == length && entry->first == first && entry->second == second &&
-                (length == 2 || entry->third == third))
-            {
-                *composed = entry->composed;
-                *consumed_codepoints = entry->length;
-                return true;
-            }
+            *composed = unicode_compositions[middle].composed;
+            return true;
         }
     }
     return false;
@@ -85,10 +100,18 @@ static bool compose_unicode_impl(uint32_t first, uint32_t second, uint32_t third
 
 static const unicode_glyph_t* unicode_glyph(uint32_t codepoint)
 {
-    for (size_t index = 0; index < unicode_glyph_count; ++index)
+    size_t low = 0;
+    size_t high = unicode_glyph_count;
+    while (low < high)
     {
-        if (unicode_glyphs[index].codepoint == codepoint)
-            return &unicode_glyphs[index];
+        const size_t middle = low + (high - low) / 2;
+        const unicode_glyph_t* glyph = &unicode_glyphs[middle];
+        if (glyph->codepoint < codepoint)
+            low = middle + 1;
+        else if (glyph->codepoint > codepoint)
+            high = middle;
+        else
+            return glyph;
     }
     return nullptr;
 }
@@ -130,6 +153,24 @@ static void draw_glyph(framebuffer_t* framebuffer, uint16_t x, uint16_t y, char 
     }
 }
 
+static bool compose_unicode_impl(uint32_t first, uint32_t second, uint32_t third,
+                                 uint32_t* composed, size_t* consumed_codepoints)
+{
+    if (composed == nullptr || consumed_codepoints == nullptr)
+        return false;
+    if (find_composition(first, second, third, 3, composed))
+    {
+        *consumed_codepoints = 3;
+        return true;
+    }
+    if (find_composition(first, second, 0, 2, composed))
+    {
+        *consumed_codepoints = 2;
+        return true;
+    }
+    return false;
+}
+
 } // namespace
 
 size_t decode_utf8(const char* text, uint32_t* codepoint)
@@ -141,6 +182,30 @@ bool compose_unicode(uint32_t first, uint32_t second, uint32_t third, uint32_t* 
                      size_t* consumed_codepoints)
 {
     return compose_unicode_impl(first, second, third, composed, consumed_codepoints);
+}
+
+uint16_t glyph_advance(uint32_t codepoint, uint8_t scale)
+{
+    const unicode_glyph_t* glyph = unicode_glyph(codepoint);
+    if (glyph != nullptr)
+        return static_cast<uint16_t>(glyph->advance * scale);
+    const char character = codepoint <= 0x7fU ? static_cast<char>(codepoint) : '?';
+    return static_cast<uint16_t>((glyph_width(character) + 1U) * scale);
+}
+
+void draw_codepoint(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint32_t codepoint,
+                    uint8_t scale, uint8_t value)
+{
+    if (framebuffer == nullptr || scale == 0)
+        return;
+    const unicode_glyph_t* glyph = unicode_glyph(codepoint);
+    if (glyph != nullptr)
+    {
+        draw_unicode_glyph(framebuffer, x, y, glyph, scale, value);
+        return;
+    }
+    const char character = codepoint <= 0x7fU ? static_cast<char>(codepoint) : '?';
+    draw_glyph(framebuffer, x, y, character, scale, value);
 }
 
 uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const char* text,
@@ -179,20 +244,9 @@ uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const cha
                 if (consumed_codepoints == 3)
                     consumed += third_bytes;
             }
-            const unicode_glyph_t* glyph = unicode_glyph(codepoint);
-            if (glyph != nullptr)
-            {
-                if (framebuffer != nullptr)
-                    draw_unicode_glyph(framebuffer, cursor, y, glyph, scale, value);
-                cursor = static_cast<uint16_t>(cursor + glyph->advance * scale);
-            }
-            else
-            {
-                const char character = codepoint <= 0x7fU ? static_cast<char>(codepoint) : '?';
-                if (framebuffer != nullptr)
-                    draw_glyph(framebuffer, cursor, y, character, scale, value);
-                cursor = static_cast<uint16_t>(cursor + (glyph_width(character) + 1) * scale);
-            }
+            if (framebuffer != nullptr)
+                draw_codepoint(framebuffer, cursor, y, codepoint, scale, value);
+            cursor = static_cast<uint16_t>(cursor + glyph_advance(codepoint, scale));
             text += consumed;
             continue;
         }
