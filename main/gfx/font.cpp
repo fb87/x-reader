@@ -66,14 +66,18 @@ static bool compose_unicode_impl(uint32_t first, uint32_t second, uint32_t third
 {
     if (composed == nullptr || consumed_codepoints == nullptr)
         return false;
-    for (size_t index = 0; index < unicode_composition_count; ++index)
+    for (uint8_t length = 3; length >= 2; --length)
     {
-        const unicode_composition_t* entry = &unicode_compositions[index];
-        if (entry->first == first && entry->second == second && entry->third == third)
+        for (size_t index = 0; index < unicode_composition_count; ++index)
         {
-            *composed = entry->composed;
-            *consumed_codepoints = entry->length;
-            return true;
+            const unicode_composition_t* entry = &unicode_compositions[index];
+            if (entry->length == length && entry->first == first && entry->second == second &&
+                (length == 2 || entry->third == third))
+            {
+                *composed = entry->composed;
+                *consumed_codepoints = entry->length;
+                return true;
+            }
         }
     }
     return false;
@@ -175,7 +179,7 @@ uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const cha
                 if (consumed_codepoints == 3)
                     consumed += third_bytes;
             }
-            const unicode_glyph_t* glyph = codepoint > 0x7fU ? unicode_glyph(codepoint) : nullptr;
+            const unicode_glyph_t* glyph = unicode_glyph(codepoint);
             if (glyph != nullptr)
             {
                 draw_unicode_glyph(framebuffer, cursor, y, glyph, scale, value);

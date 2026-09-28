@@ -9,16 +9,23 @@ a generated Vietnamese Unicode subset for EPUB titles and body text.
 
 ```sh
 nix-shell -p python313 python313Packages.pillow --run \
-  'python tools/generate_unicode_font.py "$(fc-match -f "%{file}" "DejaVu Sans:style=Bold")" main/gfx/unicode_font.cpp'
+  'python tools/generate_unicode_font.py main/gfx/SmoochSans.ttf main/gfx/unicode_font.cpp'
 ```
 
-The subset covers Latin-1 accented characters, Vietnamese Latin extensions,
-and the Vietnamese precomposed range `U+1EA0` through `U+1EF9`. It is rendered
-as bounded 16-pixel bitmap glyphs for the e-ink framebuffer.
+The generated subset uses Smooch Sans for all text in these ranges:
 
-The source face is DejaVu Sans Bold, licensed under the DejaVu Fonts license:
+- `U+0020-U+007E`
+- `U+00A0-U+00FF`
+- `U+0100-U+017F`
+- `U+0180-U+024F`
+- `U+0300-U+036F`
+- `U+1E00-U+1EFF`
 
-- https://dejavu-fonts.github.io/License.html
+It is rendered as bounded bitmap glyphs for the e-ink framebuffer.
+
+The source face is Smooch Sans Bold, licensed under the SIL Open Font License 1.1:
+
+- `main/gfx/SmoochSans-OFL.txt`
 
 Only the generated bitmap subset is included in firmware; the full font is not
 loaded on the device.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a bounded 16px Vietnamese glyph table from DejaVu Sans."""
+"""Generate the bounded Smooch Sans Latin glyph table."""
 
 import sys
 import unicodedata
@@ -9,10 +9,15 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 def codepoints():
-    values = set(range(0x00C0, 0x0100))
-    values.update((0x0102, 0x0110, 0x0128, 0x0168, 0x01A0, 0x01AF))
-    values.update(range(0x1EA0, 0x1EFA))
-    return sorted(values)
+    ranges = (
+        (0x0020, 0x007E),
+        (0x00A0, 0x00FF),
+        (0x0100, 0x017F),
+        (0x0180, 0x024F),
+        (0x0300, 0x036F),
+        (0x1E00, 0x1EFF),
+    )
+    return [codepoint for first, last in ranges for codepoint in range(first, last + 1)]
 
 
 def render(font, codepoint):

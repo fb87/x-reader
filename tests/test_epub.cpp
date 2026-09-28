@@ -7,7 +7,9 @@
 #include "epub/inflate.hpp"
 #include "epub/xml.hpp"
 #include "epub/zip.hpp"
+#include "gfx/font.hpp"
 #include "gfx/framebuffer.hpp"
+#include "gfx/unicode_font.hpp"
 #include "ui/navigation.hpp"
 #include "ui/screen.hpp"
 
@@ -101,6 +103,27 @@ static void write_stored_zip(const char* path, const zip_fixture_entry_t* entrie
 
 int main()
 {
+    const uint32_t required_glyph_ranges[][2] = {
+        {0x0020U, 0x007eU}, {0x00a0U, 0x00ffU}, {0x0100U, 0x017fU},
+        {0x0180U, 0x024fU}, {0x0300U, 0x036fU}, {0x1e00U, 0x1effU},
+    };
+    for (const auto& range : required_glyph_ranges)
+    {
+        for (uint32_t codepoint = range[0]; codepoint <= range[1]; ++codepoint)
+        {
+            bool found = false;
+            for (size_t index = 0; index < unicode_glyph_count; ++index)
+                found = found || unicode_glyphs[index].codepoint == codepoint;
+            assert(found);
+        }
+    }
+    uint32_t composed = 0;
+    size_t consumed_codepoints = 0;
+    assert(xreader::gfx::compose_unicode('o', 0x031bU, 'n', &composed, &consumed_codepoints));
+    assert(composed == 0x01a1U && consumed_codepoints == 2);
+    assert(xreader::gfx::compose_unicode('a', 0x0306U, 0x0300U, &composed, &consumed_codepoints));
+    assert(composed == 0x1eb1U && consumed_codepoints == 3);
+
     const uint8_t png[] = {
         0x89, 'P',  'N',  'G',  0x0d, 0x0a, 0x1a, 0x0a, 0,    0,    0,    13,   'I',  'H',
         'D',  'R',  0,    0,    0,    2,    0,    0,    0,    1,    8,    0,    0,    0,

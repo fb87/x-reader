@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(xreader_host_tests CXX)
+project(xreader_host_tests C CXX)
 
 add_executable(xreader_epub_tests
     test_epub.cpp
@@ -8,7 +8,10 @@ add_executable(xreader_epub_tests
     ../main/epub/book.cpp
     ../main/epub/xml.cpp
     ../main/epub/zip.cpp
+    ../main/gfx/font.cpp
     ../main/gfx/framebuffer.cpp
+    ../main/gfx/m5epd_font16.c
+    ../main/gfx/unicode_font.cpp
     ../main/ui/navigation.cpp
     ../main/ui/screen.cpp
 )
