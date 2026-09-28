@@ -117,6 +117,23 @@ int main()
             assert(found);
         }
     }
+    const uint8_t expected_narrow_widths[][2] = {
+        {' ', 3}, {'i', 4}, {'l', 4}, {'r', 6}, {'t', 5},
+    };
+    for (const auto& expected : expected_narrow_widths)
+    {
+        bool found = false;
+        for (size_t index = 0; index < unicode_glyph_count; ++index)
+        {
+            if (unicode_glyphs[index].codepoint == expected[0])
+            {
+                assert(unicode_glyphs[index].width == expected[1]);
+                found = true;
+                break;
+            }
+        }
+        assert(found);
+    }
     uint32_t composed = 0;
     size_t consumed_codepoints = 0;
     assert(xreader::gfx::compose_unicode('o', 0x031bU, 'n', &composed, &consumed_codepoints));

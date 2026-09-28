@@ -33,7 +33,8 @@ def render(font, codepoint):
                 row |= 1 << (23 - x)
                 right = max(right, x + 1)
         pixels.extend((row >> 16, (row >> 8) & 0xFF, row & 0xFF))
-    return min(24, right), pixels
+    advance = round(font.getlength(chr(codepoint)))
+    return min(24, max(right, advance)), pixels
 
 
 def main():
