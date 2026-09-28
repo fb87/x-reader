@@ -32,6 +32,7 @@ struct point_t
 
 struct state_t
 {
+    bool ready;
     uint8_t count;
     point_t points[max_points];
 };

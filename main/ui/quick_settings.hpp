@@ -28,7 +28,10 @@ struct quick_settings_values_t
 
 void draw_quick_settings(gfx::framebuffer_t* framebuffer, quick_setting_t focus,
                          const quick_settings_values_t* values);
-bool quick_settings_touch(uint16_t x, uint16_t y, quick_setting_t* setting);
+bool quick_settings_touch(uint16_t display_width, uint16_t display_height, uint16_t x, uint16_t y,
+                          quick_setting_t* setting);
+bool quick_settings_contains(uint16_t display_width, uint16_t display_height, uint16_t x,
+                             uint16_t y);
 
 } // namespace ui
 } // namespace xreader

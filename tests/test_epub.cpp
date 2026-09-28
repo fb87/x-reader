@@ -10,7 +10,9 @@
 #include "gfx/font.hpp"
 #include "gfx/framebuffer.hpp"
 #include "gfx/unicode_font.hpp"
+#include "ui/layout/layout.hpp"
 #include "ui/navigation.hpp"
+#include "ui/reader.hpp"
 #include "ui/screen.hpp"
 
 static void append_u16(uint8_t* data, size_t* size, uint16_t value)
@@ -143,6 +145,29 @@ int main()
     assert(composed == 0x01a1U && consumed_codepoints == 2);
     assert(xreader::gfx::compose_unicode('a', 0x0306U, 0x0300U, &composed, &consumed_codepoints));
     assert(composed == 0x1eb1U && consumed_codepoints == 3);
+    // NFC and canonical NFD Vietnamese must have identical layout metrics.
+    assert(xreader::gfx::measure_text("\xe1\xba\xaf", 1) ==
+           xreader::gfx::measure_text("a\xcc\x86\xcc\x81", 1)); // ắ
+    assert(xreader::gfx::measure_text("\xe1\xbb\xa9", 1) ==
+           xreader::gfx::measure_text("u\xcc\x9b\xcc\x81", 1)); // ứ
+
+    // Pagination is built once and page starts are cached. Verify stable page count and
+    // rendering for a multi-page Vietnamese document.
+    xreader::epub::document_t paged_document = {};
+    const char* sample_line =
+        "Tiếng Việt thử nghiệm: Trường, người, đường, những, nước và chương. ";
+    while (paged_document.length + strlen(sample_line) + 2 < sizeof(paged_document.text))
+    {
+        memcpy(paged_document.text + paged_document.length, sample_line, strlen(sample_line));
+        paged_document.length += strlen(sample_line);
+        paged_document.text[paged_document.length++] = '\n';
+    }
+    paged_document.text[paged_document.length] = '\0';
+    xreader::ui::reader_settings_t reader_settings = {2, 0, 0};
+    const uint8_t cached_pages =
+        xreader::ui::page_count(&paged_document, &reader_settings, 960, 540);
+    assert(cached_pages > 1);
+    assert(xreader::ui::page_count(&paged_document, &reader_settings, 960, 540) == cached_pages);
 
     const uint8_t png[] = {
         0x89, 'P',  'N',  'G',  0x0d, 0x0a, 0x1a, 0x0a, 0,    0,    0,    13,   'I',  'H',
@@ -295,40 +320,77 @@ int main()
     assert(xreader::epub::load_document(epub_path, &book, 1, &document) == ESP_OK);
     assert(strstr(document.text, "Chapter two") != nullptr);
 
-    using xreader::ui::navigation_rotary_clockwise;
-    using xreader::ui::navigation_rotary_counterclockwise;
-    using xreader::ui::navigation_touch_up;
-    assert(xreader::ui::page_delta(navigation_touch_up, 721, 960, 0, 3) == 1);
-    assert(xreader::ui::page_delta(navigation_touch_up, 240, 960, 1, 3) == -1);
-    assert(xreader::ui::page_delta(navigation_touch_up, 480, 960, 1, 3) == -1);
-    assert(xreader::ui::page_delta(navigation_rotary_clockwise, 0, 960, 0, 3) == 1);
-    assert(xreader::ui::page_delta(navigation_rotary_counterclockwise, 0, 960, 2, 3) == -1);
-    assert(xreader::ui::page_delta(navigation_touch_up, 721, 960, 2, 3) == 0);
-    assert(xreader::ui::page_delta(navigation_touch_up, 240, 960, 0, 3) == 0);
-    assert(xreader::ui::navigation_result(navigation_touch_up, 721, 960, 0, 2, 0, 3) ==
+    const xreader::input::action_event_t pointer_right = {xreader::input::action_pointer, 721, 0};
+    const xreader::input::action_event_t pointer_left = {xreader::input::action_pointer, 240, 0};
+    const xreader::input::action_event_t next_action = {xreader::input::action_right, 0, 0};
+    const xreader::input::action_event_t prev_action = {xreader::input::action_left, 0, 0};
+    assert(xreader::ui::page_delta(&pointer_right, 960, 0, 3) == 1);
+    assert(xreader::ui::page_delta(&pointer_left, 960, 1, 3) == -1);
+    assert(xreader::ui::page_delta(&next_action, 960, 0, 3) == 1);
+    assert(xreader::ui::page_delta(&prev_action, 960, 2, 3) == -1);
+    assert(xreader::ui::page_delta(&pointer_right, 960, 2, 3) == 0);
+    assert(xreader::ui::page_delta(&pointer_left, 960, 0, 3) == 0);
+    assert(xreader::ui::navigation_result(&pointer_right, 960, 0, 2, 0, 3) ==
            xreader::ui::navigation_page_forward);
-    assert(xreader::ui::navigation_result(navigation_touch_up, 721, 960, 1, 2, 0, 3) ==
+    assert(xreader::ui::navigation_result(&pointer_right, 960, 1, 2, 0, 3) ==
            xreader::ui::navigation_chapter_forward);
-    assert(xreader::ui::navigation_result(navigation_touch_up, 240, 960, 0, 2, 1, 3) ==
+    assert(xreader::ui::navigation_result(&pointer_left, 960, 0, 2, 1, 3) ==
            xreader::ui::navigation_chapter_backward);
-    assert(xreader::ui::navigation_result(navigation_touch_up, 240, 960, 0, 2, 0, 3) ==
+    assert(xreader::ui::navigation_result(&pointer_left, 960, 0, 2, 0, 3) ==
            xreader::ui::navigation_none);
+
+    // Responsive metrics must distinguish XTeink-class 800x480 and M5Paper-class 960x540.
+    const auto compact_metrics = xreader::ui::layout::metrics({800, 480});
+    const auto medium_metrics = xreader::ui::layout::metrics({960, 540});
+    assert(compact_metrics.display_class == xreader::ui::layout::display_compact);
+    assert(medium_metrics.display_class == xreader::ui::layout::display_medium);
+    assert(compact_metrics.margin < medium_metrics.margin);
+    const auto compact_content = xreader::ui::layout::content({800, 480});
+    const auto medium_content = xreader::ui::layout::content({960, 540});
+    assert(compact_content.width == 800 && medium_content.width == 960);
+    assert(compact_content.height < medium_content.height);
+
+    // Pagination responds to viewport size instead of assuming 960x540.
+    const uint8_t compact_pages =
+        xreader::ui::page_count(&paged_document, &reader_settings, 800, 480);
+    const uint8_t medium_pages =
+        xreader::ui::page_count(&paged_document, &reader_settings, 960, 540);
+    assert(compact_pages >= medium_pages);
+
     xreader::ui::screen_state_t screen = {};
-    const xreader::ui::logical_event_t rotate_right = {xreader::ui::logical_rotary_clockwise, 0, 0};
-    const xreader::ui::logical_event_t press = {xreader::ui::logical_button_up, 0, 0};
+    const xreader::input::action_event_t down = {xreader::input::action_down, 0, 0};
+    const xreader::input::action_event_t select = {xreader::input::action_select, 0, 0};
+    const xreader::input::action_event_t back = {xreader::input::action_back, 0, 0};
+    const xreader::ui::screen_context_t screen_context = {
+        .viewport = {960, 540},
+        .library_count = 3,
+        .page = 0,
+        .page_count = 1,
+        .spine_index = 0,
+        .spine_count = 2,
+    };
     xreader::ui::initialize(&screen);
     assert(screen.screen == xreader::ui::screen_home);
-    assert(xreader::ui::dispatch(&screen, &rotate_right, 960, 540, 0, 1, 0, 2) ==
+    assert(xreader::ui::dispatch(&screen, &down, &screen_context) ==
            xreader::ui::screen_command_redraw);
     assert(screen.home_focus == xreader::ui::home_library);
-    assert(xreader::ui::dispatch(&screen, &press, 960, 540, 0, 1, 0, 2) ==
+    assert(xreader::ui::dispatch(&screen, &select, &screen_context) ==
            xreader::ui::screen_command_show_library);
     assert(screen.screen == xreader::ui::screen_library);
-    assert(xreader::ui::dispatch(&screen, &press, 960, 540, 0, 1, 0, 2) ==
-           xreader::ui::screen_command_open_reader);
-    assert(screen.screen == xreader::ui::screen_reader);
-    assert(xreader::ui::dispatch(&screen, &press, 960, 540, 0, 1, 0, 2) ==
+    assert(xreader::ui::dispatch(&screen, &down, &screen_context) ==
+           xreader::ui::screen_command_redraw);
+    assert(screen.library_focus == 1);
+    assert(xreader::ui::dispatch(&screen, &back, &screen_context) ==
+           xreader::ui::screen_command_show_home);
+    assert(screen.screen == xreader::ui::screen_home);
+
+    // Reader supports physical directional/select/back actions.
+    screen.screen = xreader::ui::screen_reader;
+    assert(xreader::ui::dispatch(&screen, &select, &screen_context) ==
            xreader::ui::screen_command_open_quick_settings);
     assert(screen.screen == xreader::ui::screen_quick_settings);
+    assert(xreader::ui::dispatch(&screen, &back, &screen_context) ==
+           xreader::ui::screen_command_close_quick_settings);
+    assert(screen.screen == xreader::ui::screen_reader);
     return 0;
 }

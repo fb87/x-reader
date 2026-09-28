@@ -12,6 +12,22 @@ namespace xreader
 namespace input
 {
 
+enum key_t : uint8_t
+{
+    key_none,
+    key_up,
+    key_down,
+    key_left,
+    key_right,
+    key_select,
+    key_back,
+    key_menu,
+    key_page_next,
+    key_page_prev,
+    key_home,
+    key_power,
+};
+
 enum event_type_t : uint8_t
 {
     event_touch_down,
@@ -21,6 +37,8 @@ enum event_type_t : uint8_t
     event_rotary_counterclockwise,
     event_button_down,
     event_button_up,
+    event_key_down,
+    event_key_up,
 };
 
 struct event_t
@@ -28,6 +46,7 @@ struct event_t
     event_type_t type;
     uint16_t x;
     uint16_t y;
+    key_t key = key_none;
 };
 
 struct config_t
@@ -43,6 +62,7 @@ struct config_t
 };
 
 esp_err_t start(const config_t* config, QueueHandle_t events);
+bool enqueue_key(QueueHandle_t events, key_t key, bool pressed);
 void flush(QueueHandle_t events);
 
 } // namespace input

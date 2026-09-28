@@ -171,6 +171,25 @@ esp_err_t copy_region_4bpp(const framebuffer_t* framebuffer, uint16_t x, uint16_
         y >= framebuffer->height || width > framebuffer->width - x ||
         height > framebuffer->height - y || output_size < size(width, height))
         return ESP_ERR_INVALID_ARG;
+
+    // transfer_dirty() always aligns x/width to four pixels. In that common case
+    // the packed 4-bpp bytes can be copied a row at a time instead of unpacking
+    // and repacking every pixel.
+    if ((x & 1U) == 0 && (width & 1U) == 0)
+    {
+        const size_t source_stride = (static_cast<size_t>(framebuffer->width) + 1U) / 2U;
+        const size_t row_bytes = static_cast<size_t>(width) / 2U;
+        const size_t source_byte_x = static_cast<size_t>(x) / 2U;
+        for (uint16_t row = 0; row < height; ++row)
+        {
+            memcpy(output + static_cast<size_t>(row) * row_bytes,
+                   framebuffer->pixels + static_cast<size_t>(y + row) * source_stride +
+                       source_byte_x,
+                   row_bytes);
+        }
+        return ESP_OK;
+    }
+
     memset(output, 0, size(width, height));
     for (uint16_t row = 0; row < height; ++row)
     {
@@ -195,20 +214,49 @@ esp_err_t copy_region_4bpp(const framebuffer_t* framebuffer, uint16_t x, uint16_
 void fill_rect(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height,
                uint8_t value)
 {
-    if (framebuffer == nullptr || x >= framebuffer->width || y >= framebuffer->height)
-    {
+    if (framebuffer == nullptr || framebuffer->pixels == nullptr || x >= framebuffer->width ||
+        y >= framebuffer->height || width == 0 || height == 0)
         return;
-    }
 
-    const uint16_t right = (width > framebuffer->width - x) ? framebuffer->width : x + width;
-    const uint16_t bottom = (height > framebuffer->height - y) ? framebuffer->height : y + height;
+    const uint16_t right = width > framebuffer->width - x ? framebuffer->width
+                                                           : static_cast<uint16_t>(x + width);
+    const uint16_t bottom = height > framebuffer->height - y ? framebuffer->height
+                                                              : static_cast<uint16_t>(y + height);
+    const uint8_t nibble = static_cast<uint8_t>(value & 0x0fU);
+    const uint8_t packed = static_cast<uint8_t>((nibble << 4) | nibble);
+    const size_t stride = (static_cast<size_t>(framebuffer->width) + 1U) / 2U;
+
     for (uint16_t pixel_y = y; pixel_y < bottom; ++pixel_y)
     {
-        for (uint16_t pixel_x = x; pixel_x < right; ++pixel_x)
+        uint16_t left = x;
+        uint16_t row_right = right;
+        uint8_t* row = framebuffer->pixels + static_cast<size_t>(pixel_y) * stride;
+
+        if ((left & 1U) != 0)
         {
-            set_pixel(framebuffer, pixel_x, pixel_y, value);
+            const size_t byte = static_cast<size_t>(left) / 2U;
+            row[byte] = static_cast<uint8_t>((row[byte] & 0xf0U) | nibble);
+            ++left;
         }
+        if ((row_right & 1U) != 0 && row_right > left)
+        {
+            --row_right;
+            const size_t byte = static_cast<size_t>(row_right) / 2U;
+            row[byte] = static_cast<uint8_t>((row[byte] & 0x0fU) | (nibble << 4));
+        }
+        if (row_right > left)
+            memset(row + static_cast<size_t>(left) / 2U, packed,
+                   static_cast<size_t>(row_right - left) / 2U);
     }
+
+    if (x < framebuffer->dirty_left)
+        framebuffer->dirty_left = x;
+    if (y < framebuffer->dirty_top)
+        framebuffer->dirty_top = y;
+    if (right > framebuffer->dirty_right)
+        framebuffer->dirty_right = right;
+    if (bottom > framebuffer->dirty_bottom)
+        framebuffer->dirty_bottom = bottom;
 }
 
 void draw_rect(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t width, uint16_t height,

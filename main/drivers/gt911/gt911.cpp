@@ -123,10 +123,17 @@ esp_err_t read(device_t* device, state_t* state)
     memset(state, 0, sizeof(*state));
     uint8_t status = 0;
     esp_err_t error = read_register(device, status_register, &status, sizeof(status));
-    if (error != ESP_OK || (status & 0x80U) == 0)
+    if (error != ESP_OK)
     {
         return error;
     }
+    if ((status & 0x80U) == 0)
+    {
+        // No new GT911 report.  This is not a release event; preserve the current
+        // input state until the controller publishes a fresh sample.
+        return ESP_OK;
+    }
+    state->ready = true;
 
     const uint8_t count = status & 0x0fU;
     if (count > max_points)

@@ -74,9 +74,15 @@ def main():
             continue
         values = [ord(value) for value in decomposition]
         values.append(0)
-        compositions.append((values[0], values[1], values[2], len(decomposition), codepoint))
-    for first, second, third, length, codepoint in sorted(compositions):
-        lines.append(f"    {{{first}U, {second}U, {third}U, {codepoint}U, {length}}},")
+        compositions.append(
+            (values[0], values[1], values[2], len(decomposition), codepoint)
+        )
+    # Runtime lookup uses binary search, so keep the table sorted by its lookup key.
+    compositions.sort(key=lambda item: item[:4])
+    for first, second, third, length, codepoint in compositions:
+        lines.append(
+            f"    {{{first}U, {second}U, {third}U, {codepoint}U, {length}}},"
+        )
     lines.extend(
         [
             "};",

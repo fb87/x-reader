@@ -145,7 +145,11 @@ static esp_err_t write_pixel_data(device_t* device, const uint8_t* pixels, size_
     {
         return ESP_ERR_INVALID_SIZE;
     }
-    // Keep the command preamble and pixel words in one transaction per DMA chunk.
+
+    // IT8951 SPI data writes use one 16-bit 0x0000 preamble followed by a stream of
+    // 16-bit data words while CS remains asserted.  Sending one SPI transaction per
+    // pixel word creates ~130k transactions for a 960x540 4-bpp frame and dominates
+    // page-turn latency.  Batch the stream into DMA-capable chunks instead.
     static constexpr size_t preamble_size = 2;
     static constexpr size_t payload_size = (transfer_chunk_size - preamble_size) & ~1U;
     uint8_t* transfer = static_cast<uint8_t*>(
@@ -154,6 +158,7 @@ static esp_err_t write_pixel_data(device_t* device, const uint8_t* pixels, size_
     {
         return ESP_ERR_NO_MEM;
     }
+
     transfer[0] = 0x00;
     transfer[1] = 0x00;
     const int64_t start = esp_timer_get_time();
@@ -167,9 +172,12 @@ static esp_err_t write_pixel_data(device_t* device, const uint8_t* pixels, size_
         {
             transfer[preamble_size + index] = static_cast<uint8_t>(~pixels[offset + index]);
         }
+
         error = wait_ready(device);
         if (error == ESP_OK)
+        {
             error = transmit(device, transfer, nullptr, preamble_size + chunk);
+        }
         offset += chunk;
         ++chunks;
         if (device->watchdog_user != nullptr)
@@ -177,9 +185,11 @@ static esp_err_t write_pixel_data(device_t* device, const uint8_t* pixels, size_
             (void)esp_task_wdt_reset_user(device->watchdog_user);
         }
     }
+
     const int64_t elapsed_us = esp_timer_get_time() - start;
-    ESP_LOGI(tag, "pixel upload: %u bytes in %u chunks, %lld ms", static_cast<unsigned>(size),
-             static_cast<unsigned>(chunks), static_cast<long long>(elapsed_us / 1000));
+    ESP_LOGI(tag, "pixel upload: %u bytes in %u chunks, %lld ms",
+             static_cast<unsigned>(size), static_cast<unsigned>(chunks),
+             static_cast<long long>(elapsed_us / 1000));
     heap_caps_free(transfer);
     return error;
 }

@@ -66,8 +66,10 @@ for the same book, settings, and viewport.
 
 Owns screen state and user interaction. It renders through `gfx`, requests
 content from `epub` and `layout`, and stores user preferences through
-`storage`. The UI converts touch and physical input into shared logical actions
-and manages the Home, Library, Reading, Settings, and Quick Settings states.
+`storage`. The input mapper converts touch, rotary, and physical key events into shared
+`input::action_t` actions. UI screens consume only those actions and never depend
+on GPIO, ADC, GT911, or board-specific key codes. Focus navigation and responsive
+layout are shared across Home, Library, Reading, Settings, and Quick Settings.
 The shared status and indication bars are UI chrome, not board-specific code.
 
 ### `storage`

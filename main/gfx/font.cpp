@@ -19,7 +19,8 @@ static constexpr uint8_t font_height = 16;
 
 static uint8_t glyph_width(char character)
 {
-    if (character < 32 || character > 127)
+    const uint8_t value = static_cast<uint8_t>(character);
+    if (value < 32U || value > 127U)
     {
         character = '?';
     }
@@ -28,7 +29,8 @@ static uint8_t glyph_width(char character)
 
 static const unsigned char* glyph_data(char character)
 {
-    if (character < 32 || character > 127)
+    const uint8_t value = static_cast<uint8_t>(character);
+    if (value < 32U || value > 127U)
     {
         character = '?';
     }
@@ -61,8 +63,8 @@ static size_t decode_utf8_impl(const char* text, uint32_t* codepoint)
     return 1;
 }
 
-static int compare_composition(const unicode_composition_t* entry, uint32_t first, uint32_t second,
-                               uint32_t third, uint8_t length)
+static int compare_composition(const unicode_composition_t* entry, uint32_t first,
+                               uint32_t second, uint32_t third, uint8_t length)
 {
     if (entry->first != first)
         return entry->first < first ? -1 : 1;
@@ -94,6 +96,24 @@ static bool find_composition(uint32_t first, uint32_t second, uint32_t third, ui
             *composed = unicode_compositions[middle].composed;
             return true;
         }
+    }
+    return false;
+}
+
+static bool compose_unicode_impl(uint32_t first, uint32_t second, uint32_t third,
+                                 uint32_t* composed, size_t* consumed_codepoints)
+{
+    if (composed == nullptr || consumed_codepoints == nullptr)
+        return false;
+    if (find_composition(first, second, third, 3, composed))
+    {
+        *consumed_codepoints = 3;
+        return true;
+    }
+    if (find_composition(first, second, 0, 2, composed))
+    {
+        *consumed_codepoints = 2;
+        return true;
     }
     return false;
 }
@@ -151,24 +171,6 @@ static void draw_glyph(framebuffer_t* framebuffer, uint16_t x, uint16_t y, char 
             }
         }
     }
-}
-
-static bool compose_unicode_impl(uint32_t first, uint32_t second, uint32_t third,
-                                 uint32_t* composed, size_t* consumed_codepoints)
-{
-    if (composed == nullptr || consumed_codepoints == nullptr)
-        return false;
-    if (find_composition(first, second, third, 3, composed))
-    {
-        *consumed_codepoints = 3;
-        return true;
-    }
-    if (find_composition(first, second, 0, 2, composed))
-    {
-        *consumed_codepoints = 2;
-        return true;
-    }
-    return false;
 }
 
 } // namespace

@@ -15,6 +15,7 @@
 #include "epub/book.hpp"
 #include "gfx/framebuffer.hpp"
 #include "input/input.hpp"
+#include "input/mapper.hpp"
 #include "storage/book_loader.hpp"
 #include "storage/persistence.hpp"
 #include "storage/sdcard/sdcard.hpp"
@@ -251,7 +252,7 @@ static void run()
     ESP_LOGI(tag, "Home display update complete");
 
     QueueHandle_t events = xQueueCreate(8, sizeof(input::event_t));
-    if (events != nullptr && touch.device != nullptr)
+    if (events != nullptr)
     {
         const input::config_t input_config = {
             .rotary_right_pin = board::m5paper::rotary_right_pin,
@@ -322,7 +323,7 @@ static void run()
 #if XREADER_SIMULATE_NAVIGATION
     xTaskCreate(simulate_navigation_task, "xreader_nav_sim", 2048, events, 3, nullptr);
 #endif
-    bool open_reader = events == nullptr || touch.device == nullptr;
+    bool open_reader = events == nullptr;
     while (!open_reader)
     {
         input::event_t event = {};
@@ -334,36 +335,42 @@ static void run()
         XR_LOGI("screen input type=%u x=%u y=%u screen=%u", static_cast<unsigned>(event.type),
                 static_cast<unsigned>(event.x), static_cast<unsigned>(event.y),
                 static_cast<unsigned>(screen_state.screen));
-        ui::logical_event_t logical_event = {};
-        logical_event.x = event.x;
-        logical_event.y = event.y;
-        if (event.type == input::event_touch_up)
-            logical_event.type = ui::logical_touch_up;
-        else if (event.type == input::event_rotary_clockwise)
-            logical_event.type = ui::logical_rotary_clockwise;
-        else if (event.type == input::event_rotary_counterclockwise)
-            logical_event.type = ui::logical_rotary_counterclockwise;
-        else if (event.type == input::event_button_up)
-            logical_event.type = ui::logical_button_up;
-        else
+        input::action_event_t action_event = {};
+        if (!input::map_event(&event, &action_event))
             continue;
-        const ui::screen_command_t command =
-            ui::dispatch(&screen_state, &logical_event, display_config.width, display_config.height,
-                         0, 1, 0, book->spine_count);
+        const ui::screen_context_t context = {
+            .viewport = {display_config.width, display_config.height},
+            .library_count = static_cast<uint8_t>(book_count),
+            .page = 0,
+            .page_count = 1,
+            .spine_index = 0,
+            .spine_count = book->spine_count,
+        };
+        const ui::screen_command_t command = ui::dispatch(&screen_state, &action_event, &context);
         XR_LOGI("screen command=%u screen=%u", static_cast<unsigned>(command),
                 static_cast<unsigned>(screen_state.screen));
         if (command == ui::screen_command_open_reader)
             open_reader = true;
         else if (command == ui::screen_command_sleep)
             board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
+        else if (command == ui::screen_command_redraw)
+        {
+            if (screen_state.screen == ui::screen_home)
+                ui::draw_home(&framebuffer, sd_card.mounted, book->title, screen_state.home_focus);
+            else if (screen_state.screen == ui::screen_library)
+                ui::draw_library_list(&framebuffer, sd_card.mounted, book_paths, book_count,
+                                      screen_state.library_focus);
+            else if (screen_state.screen == ui::screen_settings)
+                ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
+            transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
+        }
         else if (command == ui::screen_command_show_library)
         {
-            ui::draw_library(&framebuffer, sd_card.mounted, sd_config.mount_path);
+            ui::draw_library_list(&framebuffer, sd_card.mounted, book_paths, book_count,
+                                  screen_state.library_focus);
             transfer_dirty(&framebuffer, &display);
         }
-        else if (command == ui::screen_command_show_settings ||
-                 (screen_state.screen == ui::screen_settings &&
-                  command == ui::screen_command_redraw))
+        else if (command == ui::screen_command_show_settings)
         {
             ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
             transfer_dirty(&framebuffer, &display);
@@ -398,7 +405,8 @@ static void run()
         .refresh_mode = settings.refresh_mode,
     };
     uint8_t spine_index = 0;
-    uint8_t total_pages = ui::page_count(document, &reader_settings);
+    uint8_t total_pages =
+        ui::page_count(document, &reader_settings, display_config.width, display_config.height);
     uint32_t saved_spine = 0;
     uint32_t saved_page = 0;
     storage::persistence::load_position_for_book(book_path, &saved_spine, &saved_page);
@@ -408,7 +416,8 @@ static void run()
     {
         spine_index = 0;
     }
-    total_pages = ui::page_count(document, &reader_settings);
+    total_pages =
+        ui::page_count(document, &reader_settings, display_config.width, display_config.height);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
     screen_state.screen = ui::screen_reader;
     show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
@@ -419,7 +428,7 @@ static void run()
         .refresh_mode = settings.refresh_mode,
         .sleep_timeout_minutes = settings.sleep_timeout_minutes,
     };
-    while (events != nullptr && touch.device != nullptr)
+    while (events != nullptr)
     {
         input::event_t event = {};
         if (xQueueReceive(events, &event, pdMS_TO_TICKS(600000)) != pdTRUE)
@@ -430,24 +439,64 @@ static void run()
         XR_LOGI("reader input type=%u x=%u y=%u screen=%u", static_cast<unsigned>(event.type),
                 static_cast<unsigned>(event.x), static_cast<unsigned>(event.y),
                 static_cast<unsigned>(screen_state.screen));
-        ui::logical_event_t logical_event = {};
-        logical_event.x = event.x;
-        logical_event.y = event.y;
-        if (event.type == input::event_touch_up)
-            logical_event.type = ui::logical_touch_up;
-        else if (event.type == input::event_rotary_clockwise)
-            logical_event.type = ui::logical_rotary_clockwise;
-        else if (event.type == input::event_rotary_counterclockwise)
-            logical_event.type = ui::logical_rotary_counterclockwise;
-        else if (event.type == input::event_button_up)
-            logical_event.type = ui::logical_button_up;
-        else
+        input::action_event_t action_event = {};
+        if (!input::map_event(&event, &action_event))
             continue;
-        const ui::screen_command_t command =
-            ui::dispatch(&screen_state, &logical_event, display_config.width, display_config.height,
-                         page, total_pages, spine_index, book->spine_count);
+        const ui::screen_context_t context = {
+            .viewport = {display_config.width, display_config.height},
+            .library_count = static_cast<uint8_t>(book_count),
+            .page = page,
+            .page_count = total_pages,
+            .spine_index = spine_index,
+            .spine_count = book->spine_count,
+        };
+        const ui::screen_command_t command = ui::dispatch(&screen_state, &action_event, &context);
         XR_LOGI("reader command=%u screen=%u", static_cast<unsigned>(command),
                 static_cast<unsigned>(screen_state.screen));
+        if (command == ui::screen_command_sleep)
+        {
+            board::m5paper::enter_deep_sleep(1000ULL * 60ULL * 60ULL);
+            continue;
+        }
+        if (command == ui::screen_command_show_home)
+        {
+            ui::draw_home(&framebuffer, sd_card.mounted, book->title, screen_state.home_focus);
+            transfer_dirty(&framebuffer, &display);
+            continue;
+        }
+        if (command == ui::screen_command_show_library)
+        {
+            ui::draw_library_list(&framebuffer, sd_card.mounted, book_paths, book_count,
+                                  screen_state.library_focus);
+            transfer_dirty(&framebuffer, &display);
+            continue;
+        }
+        if (command == ui::screen_command_show_settings)
+        {
+            ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
+            transfer_dirty(&framebuffer, &display);
+            continue;
+        }
+        if (command == ui::screen_command_open_reader)
+        {
+            screen_state.screen = ui::screen_reader;
+            show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+            continue;
+        }
+        if (command == ui::screen_command_redraw)
+        {
+            if (screen_state.screen == ui::screen_home)
+                ui::draw_home(&framebuffer, sd_card.mounted, book->title, screen_state.home_focus);
+            else if (screen_state.screen == ui::screen_library)
+                ui::draw_library_list(&framebuffer, sd_card.mounted, book_paths, book_count,
+                                      screen_state.library_focus);
+            else if (screen_state.screen == ui::screen_settings)
+                ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
+            else if (screen_state.screen == ui::screen_quick_settings)
+                ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values);
+            transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
+            continue;
+        }
         if (command == ui::screen_command_open_quick_settings)
         {
             ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values);
@@ -472,7 +521,8 @@ static void run()
             quick_values.line_spacing = settings.line_spacing;
             quick_values.refresh_mode = settings.refresh_mode;
             quick_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
-            total_pages = ui::page_count(document, &reader_settings);
+            total_pages = ui::page_count(document, &reader_settings, display_config.width,
+                                         display_config.height);
             if (page >= total_pages)
                 page = static_cast<uint8_t>(total_pages - 1);
             if (screen_state.screen == ui::screen_quick_settings)
@@ -495,7 +545,8 @@ static void run()
                     continue;
                 ++spine_index;
                 page = 0;
-                total_pages = ui::page_count(document, &reader_settings);
+                total_pages = ui::page_count(document, &reader_settings, display_config.width,
+                                             display_config.height);
             }
             else if (command == ui::screen_command_chapter_backward)
             {
@@ -503,7 +554,8 @@ static void run()
                                 document))
                     continue;
                 --spine_index;
-                total_pages = ui::page_count(document, &reader_settings);
+                total_pages = ui::page_count(document, &reader_settings, display_config.width,
+                                             display_config.height);
                 page = static_cast<uint8_t>(total_pages - 1);
             }
             else
@@ -513,6 +565,8 @@ static void run()
                                                  ? static_cast<int16_t>(1)
                                                  : static_cast<int16_t>(-1)));
             }
+            // Start rendering/refreshing before committing the reading position to NVS so
+            // flash persistence is not part of the touch-to-display latency.
             show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
             storage::persistence::save_position_for_book(book_path, spine_index, page);
             input::flush(events);

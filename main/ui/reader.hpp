@@ -18,7 +18,8 @@ struct reader_settings_t
 void draw_reader(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
                  const epub::document_t* document, uint8_t page, uint8_t page_count,
                  const reader_settings_t* settings);
-uint8_t page_count(const epub::document_t* document, const reader_settings_t* settings);
+uint8_t page_count(const epub::document_t* document, const reader_settings_t* settings,
+                   uint16_t display_width, uint16_t display_height);
 
 } // namespace ui
 } // namespace xreader

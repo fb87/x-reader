@@ -134,12 +134,17 @@ static void poll_button(task_context_t* context)
 
 static void poll_touch(task_context_t* context)
 {
+    if (context->config.touch == nullptr)
+        return;
     drivers::gt911::state_t state = {};
-    if (drivers::gt911::read(context->config.touch, &state) != ESP_OK)
+    if (drivers::gt911::read(context->config.touch, &state) != ESP_OK || !state.ready)
     {
         return;
     }
 
+    // GT911 already reports debounced touch state.  A release may be published only
+    // once, so waiting for several identical samples adds latency and can lose the
+    // release entirely.  Dispatch each fresh state transition immediately.
     const bool active = state.count > 0;
     if (active)
     {
@@ -147,7 +152,9 @@ static void poll_touch(task_context_t* context)
                           &context->touch_y);
     }
     if (active == context->touch_active)
+    {
         return;
+    }
     context->touch_active = active;
     send(context, {active ? event_touch_down : event_touch_up, context->touch_x, context->touch_y});
 }
@@ -168,8 +175,7 @@ static void task(void* argument)
 
 esp_err_t start(const config_t* config, QueueHandle_t events)
 {
-    if (config == nullptr || config->touch == nullptr || config->poll_interval_ms == 0 ||
-        events == nullptr)
+    if (config == nullptr || config->poll_interval_ms == 0 || events == nullptr)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -206,6 +212,14 @@ esp_err_t start(const config_t* config, QueueHandle_t events)
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;
+}
+
+bool enqueue_key(QueueHandle_t events, key_t key, bool pressed)
+{
+    if (events == nullptr || key == key_none)
+        return false;
+    const event_t event = {pressed ? event_key_down : event_key_up, 0, 0, key};
+    return xQueueSend(events, &event, 0) == pdTRUE;
 }
 
 void flush(QueueHandle_t events)

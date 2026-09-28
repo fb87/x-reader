@@ -4,6 +4,8 @@
 
 #include "gfx/font.hpp"
 #include "ui/chrome.hpp"
+#include "ui/layout/layout.hpp"
+#include "ui/navigation/focus.hpp"
 
 namespace xreader
 {
@@ -12,13 +14,15 @@ namespace ui
 
 namespace
 {
-static constexpr uint16_t item_left = 40;
-static constexpr uint16_t item_top = 90;
-static constexpr uint16_t item_height = 54;
-static constexpr uint16_t item_gap = 8;
 static const char* const item_labels[settings_item_count] = {
     "TEXT SIZE", "LINE SPACING", "REFRESH MODE", "SLEEP TIMEOUT", "BACK",
 };
+
+static layout::rect_t items_area(layout::viewport_t vp)
+{
+    const layout::metrics_t m = layout::metrics(vp);
+    return layout::inset(layout::content(vp), m.margin);
+}
 } // namespace
 
 void draw_settings(gfx::framebuffer_t* framebuffer, settings_item_t focus,
@@ -26,6 +30,8 @@ void draw_settings(gfx::framebuffer_t* framebuffer, settings_item_t focus,
 {
     if (framebuffer == nullptr)
         return;
+    const layout::viewport_t vp = {framebuffer->width, framebuffer->height};
+    const layout::metrics_t m = layout::metrics(vp);
     gfx::clear(framebuffer, 0x0f);
     chrome::draw_status_bar(framebuffer, "SETTINGS", "DEVICE");
     const quick_settings_values_t defaults = {2, 0, 0, 60};
@@ -40,33 +46,36 @@ void draw_settings(gfx::framebuffer_t* framebuffer, settings_item_t focus,
         sleep_value,
         "RETURN",
     };
+    const layout::rect_t area = items_area(vp);
     for (uint8_t index = 0; index < settings_item_count; ++index)
     {
-        const uint16_t y = static_cast<uint16_t>(item_top + index * (item_height + item_gap));
+        const layout::rect_t item =
+            layout::row(area, index, settings_item_count, m.row_height, m.gap);
         const bool selected = index == static_cast<uint8_t>(focus);
         if (selected)
-            gfx::fill_rect(framebuffer, item_left, y, framebuffer->width - item_left * 2,
-                           item_height, 0x00);
-        gfx::draw_text(framebuffer, static_cast<uint16_t>(item_left + 16),
-                       static_cast<uint16_t>(y + 12), item_labels[index], 1,
+            gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height, 0x00);
+        else
+            gfx::draw_rect(framebuffer, item.x, item.y, item.width, item.height, 0x04);
+        gfx::draw_text(framebuffer, static_cast<uint16_t>(item.x + m.panel_padding),
+                       static_cast<uint16_t>(item.y + 7), item_labels[index], 1,
                        selected ? 0x0f : 0x00);
-        gfx::draw_text(framebuffer, static_cast<uint16_t>(item_left + 16),
-                       static_cast<uint16_t>(y + 31), item_values[index], 1,
-                       selected ? 0x0f : 0x04);
-        if (!selected)
-            gfx::draw_rect(framebuffer, item_left, y, framebuffer->width - item_left * 2,
-                           item_height, 0x04);
+        if (item.height >= 38)
+            gfx::draw_text(framebuffer, static_cast<uint16_t>(item.x + m.panel_padding),
+                           static_cast<uint16_t>(item.y + 25), item_values[index], 1,
+                           selected ? 0x0f : 0x04);
     }
-    chrome::draw_indication_bar(framebuffer, "ROTARY", "EDIT", "PRESS");
+    chrome::draw_indication_bar(framebuffer, "UP/DOWN", "SELECT/EDIT", "BACK");
 }
 
-bool settings_touch_item(uint16_t y, settings_item_t* item)
+bool settings_touch_item(uint16_t display_width, uint16_t display_height, uint16_t x, uint16_t y,
+                         settings_item_t* item)
 {
-    if (item == nullptr || y < item_top)
+    if (item == nullptr)
         return false;
-    const uint16_t stride = item_height + item_gap;
-    const uint16_t index = static_cast<uint16_t>((y - item_top) / stride);
-    if (index >= settings_item_count || (y - item_top) % stride >= item_height)
+    const layout::viewport_t vp = {display_width, display_height};
+    const layout::metrics_t m = layout::metrics(vp);
+    uint8_t index = 0;
+    if (!focus::hit_rows(items_area(vp), settings_item_count, m.row_height, m.gap, x, y, &index))
         return false;
     *item = static_cast<settings_item_t>(index);
     return true;

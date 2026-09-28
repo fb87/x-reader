@@ -199,3 +199,45 @@ screen transition must preserve or explicitly discard its overlay state.
 
 All GUI modules must remain compatible with the no-framework, bounded-memory,
 handwritten-code constraints in the project scope.
+
+## Implemented responsive/input framework
+
+The shared GUI framework now has four explicit layers:
+
+```text
+raw device event
+    -> input::map_event()
+    -> input::action_event_t
+    -> ui::dispatch() / focus
+    -> responsive ui::layout geometry
+    -> gfx framebuffer
+```
+
+`input::action_t` is the only navigation vocabulary screens consume. It includes
+up/down/left/right, select, back, menu, page-next/page-prev, home, power, and a
+pointer action. Rotary input maps to up/down + select on the current M5Paper
+backend. Future XTeink button code should publish `event_key_up`/`event_key_down`
+with a board-neutral `key_t`; no screen code should know ADC thresholds or GPIO
+numbers.
+
+Responsive layout uses `ui::layout::viewport_t`, `metrics_t`, and display classes:
+
+- compact: 800x480-class devices such as XTeink X4;
+- medium: 960x540-class devices such as the current M5Paper target;
+- large: future larger panels.
+
+Coordinates used for focus hit-testing are derived from the same layout helpers
+used for drawing. Reader pagination includes viewport width/height in its cache
+key, so changing display geometry changes page breaks deterministically.
+
+Physical-button navigation rules are currently:
+
+- Home/Library/Settings/Quick Settings: Up/Down moves focus.
+- Select activates the focused item.
+- Back returns to the previous primary screen or closes Quick Settings.
+- Reader: Left/Up/Page Previous goes backward; Right/Down/Page Next goes forward.
+- Reader Select/Menu opens Quick Settings.
+- Home and Power actions are globally recognized.
+
+Focus changes should use fast/partial refresh where the display backend supports
+it; page content refresh policy remains separate from input/navigation policy.

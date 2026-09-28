@@ -12,11 +12,19 @@ add_executable(xreader_epub_tests
     ../main/gfx/framebuffer.cpp
     ../main/gfx/m5epd_font16.c
     ../main/gfx/unicode_font.cpp
+    ../main/ui/layout/layout.cpp
+    ../main/ui/navigation/focus.cpp
     ../main/ui/navigation.cpp
+    ../main/ui/home.cpp
+    ../main/ui/library.cpp
+    ../main/ui/settings.cpp
+    ../main/ui/quick_settings.cpp
     ../main/ui/screen.cpp
+    ../main/ui/chrome.cpp
+    ../main/ui/reader.cpp
 )
 target_include_directories(xreader_epub_tests PRIVATE . ../main)
 target_compile_features(xreader_epub_tests PRIVATE cxx_std_17)
-target_compile_options(xreader_epub_tests PRIVATE -Wall -Wextra -Werror)
+target_compile_options(xreader_epub_tests PRIVATE -Wall -Wextra -Werror -Wconversion -Wshadow)
 enable_testing()
 add_test(NAME xreader_epub_tests COMMAND xreader_epub_tests)
