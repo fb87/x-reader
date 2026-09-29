@@ -210,6 +210,30 @@ void draw_codepoint(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint32_t
     draw_glyph(framebuffer, x, y, character, scale, value);
 }
 
+void draw_icon(framebuffer_t* framebuffer, uint16_t x, uint16_t y, icon_t icon, uint8_t scale,
+               uint8_t value)
+{
+    if (framebuffer == nullptr || scale == 0 || icon >= icon_count)
+        return;
+    const icon_glyph_t* glyph = &icon_glyphs[icon];
+    for (uint8_t row = 0; row < icon_size; ++row)
+    {
+        const uint8_t* packed = &glyph->bitmap[row * icon_stride];
+        for (uint8_t column = 0; column < icon_size; ++column)
+        {
+            if ((packed[column / 8U] & (0x80U >> (column % 8U))) == 0)
+                continue;
+            fill_rect(framebuffer, static_cast<uint16_t>(x + column * scale),
+                      static_cast<uint16_t>(y + row * scale), scale, scale, value);
+        }
+    }
+}
+
+uint16_t icon_advance(uint8_t scale)
+{
+    return static_cast<uint16_t>(icon_size * (scale == 0 ? 1 : scale));
+}
+
 uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const char* text,
                    uint8_t scale, uint8_t value)
 {

@@ -5,8 +5,8 @@
 
 #include "esp_event.h"
 #include "esp_log.h"
-#include "esp_netif.h"
 #include "esp_timer.h"
+#include "esp_netif.h"
 #include "esp_wifi.h"
 #include "nvs.h"
 #include "sdkconfig.h"
@@ -28,6 +28,8 @@ static scan_result_t scans[max_scan_results] = {};
 static int64_t connect_started_us = 0;
 static constexpr int64_t connect_timeout_us = 15LL * 1000LL * 1000LL;
 static constexpr uint8_t max_reconnect_attempts = 3;
+static int64_t last_rssi_refresh_us = 0;
+static constexpr int64_t rssi_refresh_us = 5LL * 1000LL * 1000LL;
 
 static failure_t failure_for_reason(uint8_t reason)
 {
@@ -134,8 +136,7 @@ static void event_handler(void*, esp_event_base_t base, int32_t id, void* data)
             wifi_ap_record_t records[max_scan_results] = {};
             if (esp_wifi_scan_get_ap_records(&count, records) == ESP_OK)
             {
-                state.scan_count =
-                    static_cast<uint8_t>(count > max_scan_results ? max_scan_results : count);
+                state.scan_count = static_cast<uint8_t>(count > max_scan_results ? max_scan_results : count);
                 for (uint8_t index = 0; index < state.scan_count; ++index)
                 {
                     snprintf(scans[index].ssid, sizeof(scans[index].ssid), "%s",
@@ -248,8 +249,7 @@ esp_err_t init()
 
     char ssid[33] = {};
     char password[65] = {};
-    if (read_credentials(ssid, sizeof(ssid), password, sizeof(password)) == ESP_OK &&
-        ssid[0] != '\0')
+    if (read_credentials(ssid, sizeof(ssid), password, sizeof(password)) == ESP_OK && ssid[0] != '\0')
         apply_credentials(ssid, password);
     else if (CONFIG_XREADER_WIFI_SSID[0] != '\0')
         apply_credentials(CONFIG_XREADER_WIFI_SSID, CONFIG_XREADER_WIFI_PASSWORD);
@@ -322,6 +322,20 @@ esp_err_t set_enabled(bool enabled)
     return ESP_OK;
 }
 
+esp_err_t cancel_connect()
+{
+    if (!state.initialized || !state.enabled)
+        return ESP_ERR_INVALID_STATE;
+    connect_started_us = 0;
+    state.reconnect_attempts = 0;
+    state.connected = false;
+    state.ip[0] = '\0';
+    state.phase = phase_idle;
+    state.failure = failure_none;
+    state.last_error = ESP_OK;
+    return esp_wifi_disconnect();
+}
+
 esp_err_t reconnect()
 {
     if (!state.enabled)
@@ -338,6 +352,7 @@ esp_err_t reconnect()
     }
     return error;
 }
+
 
 esp_err_t request_scan()
 {
@@ -435,9 +450,19 @@ esp_err_t configure(const char* ssid, const char* password)
 
 void poll()
 {
-    if (!state.initialized || state.phase != phase_connecting || connect_started_us == 0)
+    if (!state.initialized)
         return;
-    if (esp_timer_get_time() - connect_started_us < connect_timeout_us)
+    const int64_t now = esp_timer_get_time();
+    if (state.connected && (last_rssi_refresh_us == 0 || now - last_rssi_refresh_us >= rssi_refresh_us))
+    {
+        wifi_ap_record_t record = {};
+        if (esp_wifi_sta_get_ap_info(&record) == ESP_OK)
+            state.rssi = record.rssi;
+        last_rssi_refresh_us = now;
+    }
+    if (state.phase != phase_connecting || connect_started_us == 0)
+        return;
+    if (now - connect_started_us < connect_timeout_us)
         return;
 
     ESP_LOGW(tag, "Wi-Fi connection timed out for %s", state.ssid);
@@ -454,33 +479,22 @@ const char* status_text(const state_t& value)
 {
     switch (value.phase)
     {
-    case phase_off:
-        return "WI-FI OFF";
-    case phase_scanning:
-        return "SCANNING...";
-    case phase_connecting:
-        return "CONNECTING...";
-    case phase_connected:
-        return "CONNECTED";
+    case phase_off: return "WI-FI OFF";
+    case phase_scanning: return "SCANNING...";
+    case phase_connecting: return "CONNECTING...";
+    case phase_connected: return "CONNECTED";
     case phase_error:
         switch (value.failure)
         {
-        case failure_auth:
-            return "WRONG PASSWORD";
-        case failure_not_found:
-            return "NETWORK NOT FOUND";
-        case failure_timeout:
-            return "CONNECTION TIMEOUT";
-        case failure_disconnected:
-            return "DISCONNECTED";
-        case failure_driver:
-            return "WI-FI ERROR";
-        default:
-            return "CONNECTION ERROR";
+        case failure_auth: return "WRONG PASSWORD";
+        case failure_not_found: return "NETWORK NOT FOUND";
+        case failure_timeout: return "CONNECTION TIMEOUT";
+        case failure_disconnected: return "DISCONNECTED";
+        case failure_driver: return "WI-FI ERROR";
+        default: return "CONNECTION ERROR";
         }
     case phase_idle:
-    default:
-        return "READY";
+    default: return "READY";
     }
 }
 

@@ -1,5 +1,7 @@
 #include "connectivity.hpp"
 
+#include <string.h>
+
 #include "gfx/font.hpp"
 #include "ui/chrome.hpp"
 #include "ui/layout/layout.hpp"
@@ -12,7 +14,7 @@ namespace ui
 namespace
 {
 static const char* const labels[connectivity_item_count] = {
-    "WI-FI", "NETWORKS", "FORGET NETWORK", "SYNC SERVER", "BACK",
+    "WI-FI", "NETWORKS", "RETRY / CANCEL", "FORGET NETWORK", "SYNC SERVER", "BACK",
 };
 
 static layout::rect_t items_area(layout::viewport_t viewport)
@@ -31,14 +33,15 @@ void draw_connectivity(gfx::framebuffer_t* framebuffer, connectivity_item_t focu
     const layout::viewport_t viewport = {framebuffer->width, framebuffer->height};
     const layout::metrics_t metrics = layout::metrics(viewport);
     gfx::clear(framebuffer, 0x0f);
-    chrome::draw_status_bar(
-        framebuffer, "CONNECTIVITY",
-        status != nullptr && status[0] != '\0' ? status : (connected ? "ONLINE" : "OFFLINE"));
+    chrome::draw_status_bar(framebuffer, "Connectivity");
 
+    const bool connecting = status != nullptr && strcmp(status, "CONNECTING...") == 0;
     const char* const values[connectivity_item_count] = {
         wifi_enabled ? "ON" : "OFF",
         connected ? (ssid != nullptr && ssid[0] != '\0' ? ssid : (ip != nullptr ? ip : "CONNECTED"))
                   : "NOT CONNECTED",
+        connecting ? "CANCEL" : "RETRY",
+        ssid != nullptr && ssid[0] != '\0' ? "SAVED" : "NONE",
         sync_server_configured ? "CONFIGURED" : "NOT CONFIGURED",
         "RETURN",
     };
@@ -51,15 +54,15 @@ void draw_connectivity(gfx::framebuffer_t* framebuffer, connectivity_item_t focu
                         static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap);
         const bool selected = index == static_cast<uint8_t>(focus);
         gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height,
-                       selected ? 0x00 : 0x0f);
+                       selected ? 0x0d : 0x0f);
         if (!selected)
         {
-            gfx::fill_rect(framebuffer, item.x, static_cast<uint16_t>(item.y + item.height - 1U),
-                           item.width, 1, 0x0b);
+            gfx::fill_rect(framebuffer, item.x,
+                           static_cast<uint16_t>(item.y + item.height - 1U), item.width, 1, 0x0b);
         }
 
-        const uint8_t foreground = selected ? 0x0f : 0x00;
-        const uint8_t secondary = selected ? 0x0c : 0x06;
+        const uint8_t foreground = 0x00;
+        const uint8_t secondary = selected ? 0x04 : 0x06;
         gfx::draw_text(framebuffer, static_cast<uint16_t>(item.x + 14U),
                        static_cast<uint16_t>(item.y + (item.height - 16U) / 2U), labels[index], 1,
                        foreground);
@@ -72,7 +75,9 @@ void draw_connectivity(gfx::framebuffer_t* framebuffer, connectivity_item_t focu
                        static_cast<uint16_t>(item.y + (item.height - 16U) / 2U), values[index], 1,
                        secondary);
     }
-    chrome::draw_indication_bar(framebuffer, "MOVE", "SELECT", "BACK");
+    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
+                                {"Select", gfx::icon_check},
+                                {"Back", gfx::icon_arrow_back});
 }
 
 bool connectivity_touch_item(uint16_t display_width, uint16_t display_height, uint16_t x,
@@ -85,7 +90,8 @@ bool connectivity_touch_item(uint16_t display_width, uint16_t display_height, ui
     const layout::metrics_t metrics = layout::metrics(viewport);
     uint8_t index = 0;
     if (!focus::hit_rows(items_area(viewport), connectivity_item_count,
-                         static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap, x, y, &index))
+                         static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap, x, y,
+                         &index))
         return false;
 
     *item = static_cast<connectivity_item_t>(index);

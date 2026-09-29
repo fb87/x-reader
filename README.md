@@ -124,3 +124,26 @@ The Connectivity screen can now scan nearby Wi-Fi networks, select an SSID, ente
 connect and persist credentials, forget the saved network, and configure the sync server.
 Text entry uses the reusable `ui::keyboard` component. It supports both QWERTY and T9 layouts,
 touch hit-testing, and directional/select/back navigation for physical-button devices.
+
+## Power management
+
+The M5Paper build now persists the active book position before sleep, disables Wi-Fi cleanly, and enters deep sleep after the configured idle timeout (including while service/status screens are open). The centre/power key is configured as the primary wake source, with a long timer fallback. Battery voltage is sampled from the M5Paper battery ADC and shown in the common status bar; critically low voltage enters safe sleep before display/storage activity.
+
+
+## Completion sprint (2026-09-29)
+
+The UI framework now also includes reusable confirmation/warning dialogs, Storage and About screens,
+and an expanded text-input component with QWERTY/T9/Symbol pages, in-place cursor editing and
+password reveal. Settings exposes Storage and About, and Book Manager can open Storage. NVS reader
+state now carries a schema version while retaining per-key validation/fallback behavior.
+
+## Completion sprint update
+
+Recent TODO-driven work adds whole-book reader search, NFC normalization for EPUB text,
+numeric/named entity decoding, improved Vietnamese combining-mark handling, Wi-Fi retry/cancel
+and RSSI refresh, confirmation before forgetting a network or installing OTA firmware, OTA semantic
+version comparison/release notes/low-battery guard, T9 commit timing, and physical-key repeat support.
+
+## Book management / file browser update
+
+The Book Manager now includes a responsive SD-card file browser. Directories can be traversed with touch or physical buttons and EPUB files can be opened directly. Library Book Details expose a `MENU` action with Open/Rename/Delete operations. Rename uses the shared text-entry framework and migrates persisted reading position/bookmarks to the renamed path. Delete requires confirmation. Duplicate EPUB detection compares size first and hashes only same-size candidates; the Book Manager status reports detected duplicates.

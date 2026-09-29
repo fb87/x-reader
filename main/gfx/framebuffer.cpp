@@ -272,5 +272,38 @@ void draw_rect(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t widt
     fill_rect(framebuffer, static_cast<uint16_t>(x + width - 1), y, 1, height, value);
 }
 
+void blit_4bpp_scaled(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t width,
+                      uint16_t height, const uint8_t* source, uint16_t source_width,
+                      uint16_t source_height)
+{
+    if (framebuffer == nullptr || framebuffer->pixels == nullptr || source == nullptr ||
+        width == 0U || height == 0U || source_width == 0U || source_height == 0U ||
+        x >= framebuffer->width || y >= framebuffer->height)
+        return;
+    const uint16_t draw_width = width > framebuffer->width - x
+                                    ? static_cast<uint16_t>(framebuffer->width - x)
+                                    : width;
+    const uint16_t draw_height = height > framebuffer->height - y
+                                     ? static_cast<uint16_t>(framebuffer->height - y)
+                                     : height;
+    for (uint16_t dy = 0; dy < draw_height; ++dy)
+    {
+        const uint16_t sy = static_cast<uint16_t>(
+            (static_cast<uint32_t>(dy) * source_height) / height);
+        for (uint16_t dx = 0; dx < draw_width; ++dx)
+        {
+            const uint16_t sx = static_cast<uint16_t>(
+                (static_cast<uint32_t>(dx) * source_width) / width);
+            const size_t source_pixel = static_cast<size_t>(sy) * source_width + sx;
+            const uint8_t packed = source[source_pixel / 2U];
+            const uint8_t value = (source_pixel & 1U) == 0U
+                                      ? static_cast<uint8_t>(packed >> 4U)
+                                      : static_cast<uint8_t>(packed & 0x0fU);
+            set_pixel(framebuffer, static_cast<uint16_t>(x + dx),
+                      static_cast<uint16_t>(y + dy), value);
+        }
+    }
+}
+
 } // namespace gfx
 } // namespace xreader

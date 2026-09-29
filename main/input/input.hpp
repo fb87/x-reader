@@ -39,6 +39,7 @@ enum event_type_t : uint8_t
     event_button_up,
     event_key_down,
     event_key_up,
+    event_key_repeat,
 };
 
 struct event_t
@@ -63,6 +64,7 @@ struct config_t
 
 esp_err_t start(const config_t* config, QueueHandle_t events);
 bool enqueue_key(QueueHandle_t events, key_t key, bool pressed);
+bool enqueue_key_repeat(QueueHandle_t events, key_t key);
 void flush(QueueHandle_t events);
 
 } // namespace input

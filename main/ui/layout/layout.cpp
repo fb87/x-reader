@@ -79,8 +79,9 @@ rect_t content(viewport_t vp)
 {
     const metrics_t m = metrics(vp);
     const uint32_t chrome_height = static_cast<uint32_t>(m.status_height) + m.footer_height;
-    const uint16_t height =
-        vp.height > chrome_height ? static_cast<uint16_t>(vp.height - chrome_height) : 0;
+    const uint16_t height = vp.height > chrome_height
+                                ? static_cast<uint16_t>(vp.height - chrome_height)
+                                : 0;
     return {0, m.status_height, vp.width, height};
 }
 
@@ -93,15 +94,30 @@ rect_t row(rect_t area, uint8_t index, uint8_t count, uint16_t preferred_height,
     uint16_t height = preferred_height;
     if (static_cast<uint32_t>(height) * count + gaps > area.height)
     {
-        const uint16_t available =
-            static_cast<uint16_t>(area.height > gaps ? area.height - gaps : 0);
+        const uint16_t available = static_cast<uint16_t>(area.height > gaps ? area.height - gaps : 0);
         height = count > 0 ? static_cast<uint16_t>(available / count) : 0;
     }
     const uint32_t total = static_cast<uint32_t>(height) * count + gaps;
-    const uint16_t top =
-        total < area.height ? static_cast<uint16_t>((area.height - total) / 2U) : 0;
-    return {area.x, static_cast<uint16_t>(area.y + top + index * (height + preferred_gap)),
-            area.width, height};
+    const uint16_t top = total < area.height ? static_cast<uint16_t>((area.height - total) / 2U) : 0;
+    return {area.x,
+            static_cast<uint16_t>(area.y + top + index * (height + preferred_gap)),
+            area.width,
+            height};
+}
+
+rect_t stacked_row(rect_t area, uint8_t index, uint8_t count, uint16_t height, uint16_t gap)
+{
+    if (count == 0 || index >= count || height == 0)
+        return {};
+    const uint32_t gaps = static_cast<uint32_t>(count - 1U) * gap;
+    uint16_t resolved = height;
+    if (static_cast<uint32_t>(resolved) * count + gaps > area.height)
+    {
+        const uint16_t available =
+            static_cast<uint16_t>(area.height > gaps ? area.height - gaps : 0);
+        resolved = static_cast<uint16_t>(available / count);
+    }
+    return {area.x, static_cast<uint16_t>(area.y + index * (resolved + gap)), area.width, resolved};
 }
 
 rect_t centered_panel(viewport_t vp, uint8_t width_percent, uint8_t height_percent)
@@ -110,12 +126,24 @@ rect_t centered_panel(viewport_t vp, uint8_t width_percent, uint8_t height_perce
         width_percent = 100;
     if (height_percent > 100)
         height_percent = 100;
-    const uint16_t width =
-        static_cast<uint16_t>(static_cast<uint32_t>(vp.width) * width_percent / 100U);
-    const uint16_t height =
-        static_cast<uint16_t>(static_cast<uint32_t>(vp.height) * height_percent / 100U);
+    const uint16_t width = static_cast<uint16_t>(static_cast<uint32_t>(vp.width) * width_percent / 100U);
+    const uint16_t height = static_cast<uint16_t>(static_cast<uint32_t>(vp.height) * height_percent / 100U);
     return {static_cast<uint16_t>((vp.width - width) / 2U),
             static_cast<uint16_t>((vp.height - height) / 2U), width, height};
+}
+
+footer_zone_t footer_hit(viewport_t vp, uint16_t x, uint16_t y)
+{
+    const metrics_t m = metrics(vp);
+    if (vp.height < m.footer_height || y < static_cast<uint16_t>(vp.height - m.footer_height) ||
+        x >= vp.width)
+        return footer_none;
+    const uint16_t third = static_cast<uint16_t>(vp.width / 3U);
+    if (x < third)
+        return footer_left;
+    if (x < static_cast<uint32_t>(third) * 2U)
+        return footer_center;
+    return footer_right;
 }
 
 } // namespace layout

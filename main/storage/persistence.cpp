@@ -21,7 +21,16 @@ static constexpr const char* text_scale_key = "text_scale";
 static constexpr const char* line_spacing_key = "line_space";
 static constexpr const char* refresh_mode_key = "refresh";
 static constexpr const char* orientation_key = "orient";
+static constexpr const char* margin_mode_key = "margin";
+static constexpr const char* paragraph_spacing_key = "para_space";
+static constexpr const char* text_alignment_key = "align";
+static constexpr const char* reverse_page_turn_key = "page_rev";
+static constexpr const char* invert_colors_key = "invert";
+static constexpr const char* show_clock_key = "show_clock";
 static constexpr const char* sleep_timeout_key = "sleep_min";
+static constexpr const char* schema_key = "schema";
+// v2 makes portrait the default orientation to match the UI mockups.
+static constexpr uint8_t schema_version = 2;
 static char cached_path[512] = {};
 static uint32_t cached_spine = 0;
 static uint32_t cached_page = 0;
@@ -69,6 +78,41 @@ esp_err_t init()
         if (error == ESP_OK)
             error = nvs_flash_init();
     }
+    if (error != ESP_OK)
+        return error;
+
+    nvs_handle_t handle = 0;
+    error = nvs_open(namespace_name, NVS_READWRITE, &handle);
+    if (error != ESP_OK)
+        return error;
+    uint8_t stored_schema = 0;
+    const esp_err_t schema_error = nvs_get_u8(handle, schema_key, &stored_schema);
+    if (schema_error == ESP_ERR_NVS_NOT_FOUND)
+    {
+        error = nvs_set_u8(handle, schema_key, schema_version);
+        if (error == ESP_OK)
+            error = nvs_commit(handle);
+    }
+    else if (schema_error == ESP_OK && stored_schema < schema_version)
+    {
+        // v1 stored an explicit landscape orientation for every device that had ever
+        // saved settings.  Drop that key so the v2 portrait default applies once; a
+        // later explicit choice is written back by save_settings and survives.
+        const esp_err_t erase_error = nvs_erase_key(handle, orientation_key);
+        if (erase_error != ESP_OK && erase_error != ESP_ERR_NVS_NOT_FOUND)
+            error = erase_error;
+        if (error == ESP_OK)
+            error = nvs_set_u8(handle, schema_key, schema_version);
+        if (error == ESP_OK)
+            error = nvs_commit(handle);
+    }
+    else if (schema_error != ESP_OK || stored_schema > schema_version)
+    {
+        // Keep user data intact. Individual readers already validate values and
+        // fall back to defaults when a key is missing/corrupt.
+        error = schema_error == ESP_OK ? ESP_ERR_INVALID_VERSION : schema_error;
+    }
+    nvs_close(handle);
     return error;
 }
 
@@ -80,6 +124,12 @@ void default_settings(settings_t* settings)
     settings->line_spacing = 0;
     settings->refresh_mode = 0;
     settings->orientation = 1;
+    settings->margin_mode = 1;
+    settings->paragraph_spacing = 0;
+    settings->text_alignment = 0;
+    settings->reverse_page_turn = 0;
+    settings->invert_colors = 0;
+    settings->show_clock = 1;
     settings->sleep_timeout_minutes = 60;
 }
 
@@ -96,6 +146,12 @@ esp_err_t load_settings(settings_t* settings)
     uint8_t line_spacing = 0;
     uint8_t refresh_mode = 0;
     uint8_t orientation = 0;
+    uint8_t margin_mode = 0;
+    uint8_t paragraph_spacing = 0;
+    uint8_t text_alignment = 0;
+    uint8_t reverse_page_turn = 0;
+    uint8_t invert_colors = 0;
+    uint8_t show_clock = 0;
     uint32_t sleep_timeout = 0;
     if (nvs_get_u8(handle, text_scale_key, &text_scale) == ESP_OK &&
         (text_scale == 1 || text_scale == 2))
@@ -106,6 +162,18 @@ esp_err_t load_settings(settings_t* settings)
         settings->refresh_mode = refresh_mode;
     if (nvs_get_u8(handle, orientation_key, &orientation) == ESP_OK && orientation <= 1)
         settings->orientation = orientation;
+    if (nvs_get_u8(handle, margin_mode_key, &margin_mode) == ESP_OK && margin_mode <= 2)
+        settings->margin_mode = margin_mode;
+    if (nvs_get_u8(handle, paragraph_spacing_key, &paragraph_spacing) == ESP_OK && paragraph_spacing <= 1)
+        settings->paragraph_spacing = paragraph_spacing;
+    if (nvs_get_u8(handle, text_alignment_key, &text_alignment) == ESP_OK && text_alignment <= 2)
+        settings->text_alignment = text_alignment;
+    if (nvs_get_u8(handle, reverse_page_turn_key, &reverse_page_turn) == ESP_OK && reverse_page_turn <= 1)
+        settings->reverse_page_turn = reverse_page_turn;
+    if (nvs_get_u8(handle, invert_colors_key, &invert_colors) == ESP_OK && invert_colors <= 1)
+        settings->invert_colors = invert_colors;
+    if (nvs_get_u8(handle, show_clock_key, &show_clock) == ESP_OK && show_clock <= 1)
+        settings->show_clock = show_clock;
     if (nvs_get_u32(handle, sleep_timeout_key, &sleep_timeout) == ESP_OK && sleep_timeout > 0)
         settings->sleep_timeout_minutes = sleep_timeout;
     nvs_close(handle);
@@ -127,6 +195,18 @@ esp_err_t save_settings(const settings_t* settings)
         error = nvs_set_u8(handle, refresh_mode_key, settings->refresh_mode);
     if (error == ESP_OK)
         error = nvs_set_u8(handle, orientation_key, settings->orientation);
+    if (error == ESP_OK)
+        error = nvs_set_u8(handle, margin_mode_key, settings->margin_mode);
+    if (error == ESP_OK)
+        error = nvs_set_u8(handle, paragraph_spacing_key, settings->paragraph_spacing);
+    if (error == ESP_OK)
+        error = nvs_set_u8(handle, text_alignment_key, settings->text_alignment);
+    if (error == ESP_OK)
+        error = nvs_set_u8(handle, reverse_page_turn_key, settings->reverse_page_turn);
+    if (error == ESP_OK)
+        error = nvs_set_u8(handle, invert_colors_key, settings->invert_colors);
+    if (error == ESP_OK)
+        error = nvs_set_u8(handle, show_clock_key, settings->show_clock);
     if (error == ESP_OK)
         error = nvs_set_u32(handle, sleep_timeout_key, settings->sleep_timeout_minutes);
     if (error == ESP_OK)
@@ -283,6 +363,7 @@ esp_err_t save_position_for_book(const char* path, uint32_t spine, uint32_t page
     return error;
 }
 
+
 esp_err_t load_bookmarks_for_book(const char* path, bookmark_t* bookmarks, uint8_t capacity,
                                   uint8_t* count)
 {
@@ -336,6 +417,24 @@ esp_err_t save_bookmarks_for_book(const char* path, const bookmark_t* bookmarks,
         error = nvs_commit(handle);
     nvs_close(handle);
     return error;
+}
+
+esp_err_t copy_book_state(const char* old_path, const char* new_path)
+{
+    if (old_path == nullptr || new_path == nullptr)
+        return ESP_ERR_INVALID_ARG;
+    uint32_t spine = 0;
+    uint32_t page = 0;
+    const esp_err_t position_error = load_position_for_book(old_path, &spine, &page);
+    if (position_error == ESP_OK)
+        save_position_for_book(new_path, spine, page);
+
+    bookmark_t bookmarks[max_bookmarks_per_book] = {};
+    uint8_t count = 0;
+    const esp_err_t bookmark_error = load_bookmarks_for_book(old_path, bookmarks, max_bookmarks_per_book, &count);
+    if (bookmark_error == ESP_OK)
+        save_bookmarks_for_book(new_path, bookmarks, count);
+    return position_error == ESP_OK || bookmark_error == ESP_OK ? ESP_OK : ESP_ERR_NOT_FOUND;
 }
 
 } // namespace persistence

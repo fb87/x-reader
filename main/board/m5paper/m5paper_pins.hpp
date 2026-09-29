@@ -28,6 +28,7 @@ static constexpr gpio_num_t touch_int_pin = GPIO_NUM_36;
 static constexpr gpio_num_t rotary_right_pin = GPIO_NUM_39;
 static constexpr gpio_num_t rotary_press_pin = GPIO_NUM_38;
 static constexpr gpio_num_t rotary_left_pin = GPIO_NUM_37;
+static constexpr gpio_num_t battery_adc_pin = GPIO_NUM_35;
 
 static constexpr uint16_t display_width = 960;
 static constexpr uint16_t display_height = 540;

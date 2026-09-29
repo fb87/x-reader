@@ -22,6 +22,8 @@ struct button_config_t
     uint32_t poll_interval_ms = 20;
     uint8_t stable_samples = 2;
     uint32_t power_long_press_ms = 800;
+    uint32_t repeat_delay_ms = 450;
+    uint32_t repeat_interval_ms = 120;
 };
 
 esp_err_t start_buttons(QueueHandle_t events, const button_config_t* config = nullptr);

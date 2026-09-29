@@ -1,5 +1,7 @@
 #include "it8951e.hpp"
 
+#include <string.h>
+
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
@@ -168,9 +170,17 @@ static esp_err_t write_pixel_data(device_t* device, const uint8_t* pixels, size_
     {
         const size_t remaining = size - offset;
         const size_t chunk = remaining < payload_size ? remaining : payload_size;
-        for (size_t index = 0; index < chunk; ++index)
+        // IT8951 4-bpp grayscale uses 0x0 for black and 0xF for white, which is the
+        // same convention the UI layer draws with (0x0f paper, 0x00 ink), so the
+        // nibbles pass through unchanged unless the user asked for inverted colours.
+        if (device->inverted)
         {
-            transfer[preamble_size + index] = static_cast<uint8_t>(~pixels[offset + index]);
+            for (size_t index = 0; index < chunk; ++index)
+                transfer[preamble_size + index] = static_cast<uint8_t>(~pixels[offset + index]);
+        }
+        else
+        {
+            memcpy(&transfer[preamble_size], &pixels[offset], chunk);
         }
 
         error = wait_ready(device);
@@ -187,8 +197,9 @@ static esp_err_t write_pixel_data(device_t* device, const uint8_t* pixels, size_
     }
 
     const int64_t elapsed_us = esp_timer_get_time() - start;
-    ESP_LOGI(tag, "pixel upload: %u bytes in %u chunks, %lld ms", static_cast<unsigned>(size),
-             static_cast<unsigned>(chunks), static_cast<long long>(elapsed_us / 1000));
+    ESP_LOGI(tag, "pixel upload: %u bytes in %u chunks, %lld ms",
+             static_cast<unsigned>(size), static_cast<unsigned>(chunks),
+             static_cast<long long>(elapsed_us / 1000));
     heap_caps_free(transfer);
     return error;
 }
@@ -345,11 +356,24 @@ esp_err_t refresh(device_t* device, uint16_t x, uint16_t y, uint16_t width, uint
     uint16_t target_height = height;
     if (device->rotation == 1)
     {
+        // display_buffer_area takes native panel coordinates, unlike the image-load
+        // command which accepts a rotation flag and lets the controller place the
+        // pixels.  Measured on hardware: with rotation=1 the controller maps logical
+        // y directly onto native x, so the area is a plain transpose.  Mirroring it
+        // (native_x = width - y - height) refreshes a band at the opposite end of
+        // the panel, which leaves partial updates showing stale rows while a
+        // full-screen refresh still looks correct because it covers everything.
         target_x = y;
-        target_y = static_cast<uint16_t>(device->width - width - x);
+        target_y = x;
         target_width = height;
         target_height = width;
     }
+
+    // Never issue an out-of-range DISPLAY_AREA command: some IT8951 firmwares stay
+    // busy indefinitely after receiving one, which looks like a frozen application.
+    if (static_cast<uint32_t>(target_x) + target_width > device->width ||
+        static_cast<uint32_t>(target_y) + target_height > device->height)
+        return ESP_ERR_INVALID_ARG;
 
     const uint16_t args[] = {
         target_x,
@@ -377,6 +401,12 @@ void set_rotation(device_t* device, uint8_t rotation)
 {
     if (device != nullptr)
         device->rotation = static_cast<uint8_t>(rotation & 1U);
+}
+
+void set_inverted(device_t* device, bool inverted)
+{
+    if (device != nullptr)
+        device->inverted = inverted;
 }
 
 uint16_t logical_width(const device_t* device)

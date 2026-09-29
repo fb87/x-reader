@@ -1,5 +1,6 @@
 #include "library.hpp"
 
+#include <stdio.h>
 #include <ctype.h>
 #include <dirent.h>
 #include <string.h>
@@ -27,6 +28,68 @@ struct book_list_t
     char names[max_books][max_name_length];
     char titles[max_books][max_name_length];
 };
+
+
+// Mockup 2 puts a "Library / SD Card" header under the status bar and fills the
+// rest with rows.  Drawing and hit-testing both go through these helpers.
+static layout::rect_t catalog_area(layout::viewport_t vp)
+{
+    const layout::metrics_t m = layout::metrics(vp);
+    layout::rect_t area = layout::content(vp);
+    const uint16_t header = m.display_class == layout::display_compact ? 40U : 46U;
+    if (area.height > header)
+    {
+        area.y = static_cast<uint16_t>(area.y + header);
+        area.height = static_cast<uint16_t>(area.height - header);
+    }
+    const uint16_t inset = m.display_class == layout::display_compact ? 14U : 20U;
+    if (area.width > inset * 2U)
+    {
+        area.x = static_cast<uint16_t>(area.x + inset);
+        area.width = static_cast<uint16_t>(area.width - inset * 2U);
+    }
+    return area;
+}
+
+static uint16_t catalog_row_height(layout::viewport_t vp)
+{
+    return static_cast<uint16_t>(layout::metrics(vp).row_height + 16U);
+}
+
+static uint8_t catalog_visible_rows(layout::viewport_t vp, size_t count)
+{
+    const layout::metrics_t m = layout::metrics(vp);
+    const layout::rect_t area = catalog_area(vp);
+    const uint16_t step = static_cast<uint16_t>(catalog_row_height(vp) + m.gap);
+    uint8_t fits = step == 0U ? 1U : static_cast<uint8_t>((area.height + m.gap) / step);
+    if (fits == 0U)
+        fits = 1U;
+    return static_cast<uint8_t>(count < fits ? count : fits);
+}
+
+static uint8_t catalog_first_row(uint8_t focus, uint8_t visible, size_t count)
+{
+    if (count == 0U || visible == 0U)
+        return 0U;
+    const uint8_t selected = static_cast<uint8_t>(focus % count);
+    return selected >= visible ? static_cast<uint8_t>(selected - visible + 1U) : 0U;
+}
+
+static layout::rect_t catalog_row(layout::viewport_t vp, uint8_t index, uint8_t visible)
+{
+    const layout::metrics_t m = layout::metrics(vp);
+    return layout::stacked_row(catalog_area(vp), index, visible, catalog_row_height(vp), m.gap);
+}
+
+static void format_size(uint32_t bytes, char* output, size_t capacity)
+{
+    if (bytes >= 1024U * 1024U)
+        snprintf(output, capacity, "EPUB  %lu.%lu MB",
+                 static_cast<unsigned long>(bytes / (1024U * 1024U)),
+                 static_cast<unsigned long>((bytes % (1024U * 1024U)) / (105U * 1024U)));
+    else
+        snprintf(output, capacity, "EPUB  %lu KB", static_cast<unsigned long>(bytes / 1024U));
+}
 
 static bool is_epub(const char* name)
 {
@@ -209,9 +272,9 @@ static const char* basename_from_path(const char* path)
 }
 
 static void draw_book_icon(gfx::framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t w,
-                           uint16_t h, bool selected)
+                           uint16_t h)
 {
-    const uint8_t fg = selected ? 0x0f : 0x00;
+    const uint8_t fg = 0x00;
     gfx::draw_rect(framebuffer, x, y, w, h, fg);
     if (w > 12 && h > 12)
     {
@@ -238,29 +301,26 @@ static void draw_library_rows(gfx::framebuffer_t* framebuffer, const char* const
     const uint8_t visible = count > 6 ? 6 : count;
     for (uint8_t index = 0; index < visible; ++index)
     {
-        const layout::rect_t item =
-            layout::row(area, index, visible, static_cast<uint16_t>(m.row_height + 8U), m.gap);
+        const layout::rect_t item = layout::row(area, index, visible,
+                                                static_cast<uint16_t>(m.row_height + 8U), m.gap);
         const bool selected = index == static_cast<uint8_t>(focus_index % count);
         if (selected)
-            gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height, 0x00);
+            gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height, 0x0d);
         else
             gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height, 0x0f);
-        gfx::draw_rect(framebuffer, item.x, item.y, item.width, item.height,
-                       selected ? 0x00 : 0x0a);
+        gfx::draw_rect(framebuffer, item.x, item.y, item.width, item.height, selected ? 0x08 : 0x0d);
 
-        const uint16_t icon_h =
-            item.height > 16 ? static_cast<uint16_t>(item.height - 16U) : item.height;
+        const uint16_t icon_h = item.height > 16 ? static_cast<uint16_t>(item.height - 16U) : item.height;
         const uint16_t icon_w = static_cast<uint16_t>(icon_h * 3U / 4U);
         draw_book_icon(framebuffer, static_cast<uint16_t>(item.x + 12U),
-                       static_cast<uint16_t>(item.y + (item.height - icon_h) / 2U), icon_w, icon_h,
-                       selected);
+                       static_cast<uint16_t>(item.y + (item.height - icon_h) / 2U), icon_w, icon_h);
 
         const uint16_t text_x = static_cast<uint16_t>(item.x + 24U + icon_w);
         gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 11U), titles[index], 1,
-                       selected ? 0x0f : 0x00);
+                       0x00);
         if (item.height >= 46)
             gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 31U), "EPUB", 1,
-                           selected ? 0x0c : 0x07);
+                           selected ? 0x04 : 0x07);
     }
 }
 } // namespace
@@ -274,8 +334,10 @@ void draw_library(gfx::framebuffer_t* framebuffer, bool storage_mounted, const c
     const layout::viewport_t vp = {framebuffer->width, framebuffer->height};
     const layout::metrics_t m = layout::metrics(vp);
     gfx::clear(framebuffer, 0x0f);
-    chrome::draw_status_bar(framebuffer, "LIBRARY", storage_mounted ? "SD" : "NO SD");
-    chrome::draw_indication_bar(framebuffer, "UP/DOWN", "OPEN", "BACK");
+    chrome::draw_status_bar(framebuffer, "Library");
+    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
+                                {"Open", gfx::icon_book},
+                                {"Back", gfx::icon_arrow_back});
 
     if (!storage_mounted)
     {
@@ -314,8 +376,10 @@ void draw_library_list(gfx::framebuffer_t* framebuffer, bool storage_mounted,
     const layout::viewport_t vp = {framebuffer->width, framebuffer->height};
     const layout::metrics_t m = layout::metrics(vp);
     gfx::clear(framebuffer, 0x0f);
-    chrome::draw_status_bar(framebuffer, "LIBRARY", storage_mounted ? "SD" : "NO SD");
-    chrome::draw_indication_bar(framebuffer, "UP/DOWN", "OPEN", "BACK");
+    chrome::draw_status_bar(framebuffer, "Library");
+    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
+                                {"Open", gfx::icon_book},
+                                {"Back", gfx::icon_arrow_back});
     if (!storage_mounted)
     {
         gfx::draw_text(framebuffer, m.margin, static_cast<uint16_t>(m.status_height + m.margin),
@@ -335,16 +399,120 @@ void draw_library_list(gfx::framebuffer_t* framebuffer, bool storage_mounted,
     draw_library_rows(framebuffer, titles, visible_count, focus_index);
 }
 
+void draw_library_catalog_view(gfx::framebuffer_t* framebuffer, bool storage_mounted,
+                               const services::library_index::catalog_t* catalog,
+                               const uint16_t* indices, size_t count, uint8_t focus_index,
+                               const char* title)
+{
+    if (framebuffer == nullptr)
+        return;
+    const layout::viewport_t vp = {framebuffer->width, framebuffer->height};
+    const layout::metrics_t m = layout::metrics(vp);
+    gfx::clear(framebuffer, 0x0f);
+    const char* heading = title == nullptr || title[0] == '\0' ? "Library" : title;
+    const char* sort_name = "Title";
+    if (catalog != nullptr)
+    {
+        if (catalog->sort_mode == services::library_index::sort_author) sort_name = "Author";
+        else if (catalog->sort_mode == services::library_index::sort_recent_added) sort_name = "Added";
+        else if (catalog->sort_mode == services::library_index::sort_recent_read) sort_name = "Recent";
+    }
+    char trailing[32] = {};
+    snprintf(trailing, sizeof(trailing), "%s  %s", storage_mounted ? "SD Card" : "No SD card",
+             sort_name);
+    chrome::draw_status_bar(framebuffer, nullptr);
+    chrome::draw_title_bar(framebuffer, heading, trailing);
+    chrome::draw_indication_bar(framebuffer, {"Search", gfx::icon_search},
+                                {"Open", gfx::icon_book},
+                                {"Details", gfx::icon_info});
+    if (!storage_mounted)
+    {
+        gfx::draw_text(framebuffer, m.margin, static_cast<uint16_t>(m.status_height + m.margin),
+                       "No SD card", 2, 0x00);
+        return;
+    }
+    if (catalog == nullptr || count == 0U)
+    {
+        gfx::draw_text(framebuffer, m.margin, static_cast<uint16_t>(m.status_height + m.margin),
+                       "No matching books", 2, 0x00);
+        return;
+    }
+
+    const uint8_t visible = catalog_visible_rows(vp, count);
+    const uint8_t selected_index = static_cast<uint8_t>(focus_index % count);
+    const uint8_t start_row = catalog_first_row(focus_index, visible, count);
+    for (uint8_t row_index = 0; row_index < visible; ++row_index)
+    {
+        const uint8_t view_index = static_cast<uint8_t>(start_row + row_index);
+        if (view_index >= count)
+            break;
+        const uint16_t catalog_index = indices == nullptr ? view_index : indices[view_index];
+        if (catalog_index >= catalog->count)
+            continue;
+        const layout::rect_t item = catalog_row(vp, row_index, visible);
+        if (item.height == 0U)
+            break;
+        const bool selected = view_index == selected_index;
+        gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height,
+                       selected ? 0x0d : 0x0f);
+        gfx::fill_rect(framebuffer, item.x, static_cast<uint16_t>(item.y + item.height - 1U),
+                       item.width, 1, 0x0c);
+
+        // The cached cover is a still-encoded JPEG/PNG; decoding one per row on
+        // every redraw would cost more than the e-paper refresh itself, so the
+        // list keeps the line-art placeholder and Book Info shows the real cover.
+        const uint16_t icon_h = item.height > 18U ? static_cast<uint16_t>(item.height - 18U)
+                                                  : item.height;
+        const uint16_t icon_w = static_cast<uint16_t>(icon_h * 3U / 4U);
+        draw_book_icon(framebuffer, static_cast<uint16_t>(item.x + 10U),
+                       static_cast<uint16_t>(item.y + (item.height - icon_h) / 2U), icon_w, icon_h);
+
+        const uint16_t text_x = static_cast<uint16_t>(item.x + 20U + icon_w);
+        const auto& entry = catalog->entries[catalog_index];
+        gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 6U), entry.title, 1,
+                       0x00);
+        if (item.height >= 42U)
+            gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 24U), entry.author,
+                           1, selected ? 0x04 : 0x06);
+        if (item.height >= 56U)
+        {
+            char size_text[32] = {};
+            format_size(entry.file_size, size_text, sizeof(size_text));
+            gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 42U), size_text, 1,
+                           selected ? 0x05 : 0x07);
+        }
+    }
+}
+
+void draw_library_catalog(gfx::framebuffer_t* framebuffer, bool storage_mounted,
+                          const services::library_index::catalog_t* catalog, size_t count,
+                          uint8_t focus_index, const char* title)
+{
+    if (catalog != nullptr && count > catalog->count)
+        count = catalog->count;
+    draw_library_catalog_view(framebuffer, storage_mounted, catalog, nullptr, count, focus_index, title);
+}
+
 bool library_touch_index(uint16_t display_width, uint16_t display_height, uint16_t x, uint16_t y,
-                         uint8_t count, uint8_t* index)
+                         uint8_t count, uint8_t current_focus, uint8_t* index)
 {
     if (count == 0 || index == nullptr)
         return false;
     const layout::viewport_t vp = {display_width, display_height};
-    const layout::metrics_t m = layout::metrics(vp);
-    const uint8_t visible = count > 6 ? 6 : count;
-    return focus::hit_rows(library_area(vp), visible, static_cast<uint16_t>(m.row_height + 8U),
-                           m.gap, x, y, index);
+    const uint8_t visible = catalog_visible_rows(vp, count);
+    const uint8_t start = catalog_first_row(current_focus, visible, count);
+    for (uint8_t row = 0; row < visible; ++row)
+    {
+        const layout::rect_t bounds = catalog_row(vp, row, visible);
+        if (bounds.height == 0U || !layout::contains(bounds, x, y))
+            continue;
+        const uint8_t resolved = static_cast<uint8_t>(start + row);
+        if (resolved >= count)
+            return false;
+        *index = resolved;
+        return true;
+    }
+    return false;
 }
 
 bool find_first_book(const char* mount_path, char* path, size_t capacity)

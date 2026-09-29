@@ -60,6 +60,7 @@ bool map_event(const event_t* event, action_event_t* action)
         action->action = action_select;
         break;
     case event_key_up:
+    case event_key_repeat:
         action->action = action_for_key(event->key);
         break;
     default:

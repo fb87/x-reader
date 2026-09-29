@@ -9,13 +9,13 @@ namespace xreader
 namespace ui
 {
 
+// Book Manager and Book Sync moved under Settings so Home can become the
+// library list the mockup shows.
 enum home_action_t : uint8_t
 {
     home_continue_reading,
     home_library,
     home_recent_books,
-    home_book_manager,
-    home_book_sync,
     home_settings,
     home_sleep,
     home_action_count,

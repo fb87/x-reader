@@ -94,6 +94,52 @@ static uint8_t paeth(uint8_t a, uint8_t b, uint8_t c)
     return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
 }
 
+static esp_err_t inspect_jpeg(const uint8_t* data, size_t size, info_t* info)
+{
+    if (data == nullptr || info == nullptr || size < 4U || data[0] != 0xffU || data[1] != 0xd8U)
+        return ESP_ERR_INVALID_RESPONSE;
+    size_t offset = 2U;
+    while (offset + 4U <= size)
+    {
+        while (offset < size && data[offset] == 0xffU)
+            ++offset;
+        if (offset >= size)
+            break;
+        const uint8_t marker = data[offset++];
+        if (marker == 0xd9U || marker == 0xdaU)
+            break;
+        if (marker == 0x01U || (marker >= 0xd0U && marker <= 0xd7U))
+            continue;
+        if (offset + 2U > size)
+            return ESP_ERR_INVALID_SIZE;
+        const uint16_t length = static_cast<uint16_t>((static_cast<uint16_t>(data[offset]) << 8U) |
+                                                       data[offset + 1U]);
+        if (length < 2U || offset + length > size)
+            return ESP_ERR_INVALID_SIZE;
+        const bool sof = (marker >= 0xc0U && marker <= 0xc3U) ||
+                         (marker >= 0xc5U && marker <= 0xc7U) ||
+                         (marker >= 0xc9U && marker <= 0xcbU) ||
+                         (marker >= 0xcdU && marker <= 0xcfU);
+        if (sof)
+        {
+            if (length < 7U)
+                return ESP_ERR_INVALID_RESPONSE;
+            const uint16_t height = static_cast<uint16_t>(
+                (static_cast<uint16_t>(data[offset + 3U]) << 8U) | data[offset + 4U]);
+            const uint16_t width = static_cast<uint16_t>(
+                (static_cast<uint16_t>(data[offset + 5U]) << 8U) | data[offset + 6U]);
+            if (width == 0U || height == 0U)
+                return ESP_ERR_INVALID_SIZE;
+            info->width = width;
+            info->height = height;
+            info->supported = false; // dimensions known; decoder is intentionally still PNG-only.
+            return ESP_OK;
+        }
+        offset += length;
+    }
+    return ESP_ERR_INVALID_RESPONSE;
+}
+
 static uint8_t sample(const uint8_t* row, uint8_t color_type, uint16_t x)
 {
     const uint8_t* pixel = row + static_cast<size_t>(x) * (color_type == 0 ? 1 : color_type == 2 ? 3
@@ -117,15 +163,17 @@ esp_err_t inspect(const uint8_t* data, size_t size, info_t* info)
     *info = {};
     png_t png = {};
     esp_err_t error = parse_png(data, size, &png);
-    if (error != ESP_OK && size >= 2 && data[0] == 0xff && data[1] == 0xd8)
-        error = ESP_ERR_NOT_SUPPORTED;
     if (error == ESP_OK)
     {
         info->width = png.width;
         info->height = png.height;
         info->supported = true;
+        free(png.compressed);
+        return ESP_OK;
     }
     free(png.compressed);
+    if (size >= 2U && data[0] == 0xffU && data[1] == 0xd8U)
+        return inspect_jpeg(data, size, info);
     return error;
 }
 

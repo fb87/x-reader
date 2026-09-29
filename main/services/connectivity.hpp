@@ -60,6 +60,7 @@ struct state_t
 esp_err_t init();
 esp_err_t set_enabled(bool enabled);
 esp_err_t reconnect();
+esp_err_t cancel_connect();
 esp_err_t request_scan();
 uint8_t scan_results(scan_result_t* results, uint8_t capacity);
 esp_err_t forget_network();

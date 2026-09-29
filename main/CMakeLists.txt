@@ -9,11 +9,13 @@ idf_component_register(
         "epub/zip.cpp"
         "epub/inflate.cpp"
         "epub/book.cpp"
+        "epub/css.cpp"
         "epub/xml.cpp"
         "epub/image.cpp"
         "gfx/framebuffer.cpp"
         "gfx/font.cpp"
         "gfx/unicode_font.cpp"
+        "gfx/icon_font.cpp"
         "gfx/m5epd_font16.c"
         "input/input.cpp"
         "input/mapper.cpp"
@@ -23,14 +25,22 @@ idf_component_register(
         "services/connectivity.cpp"
         "services/ota.cpp"
         "services/book_manager.cpp"
+        "services/file_browser.cpp"
+        "services/library_index.cpp"
         "services/book_sync.cpp"
+        "services/debug_console.cpp"
         "ui/layout/layout.cpp"
+        "ui/widgets.cpp"
         "ui/navigation/focus.cpp"
         "ui/library.cpp"
+        "ui/library_details.cpp"
         "ui/navigation.cpp"
         "ui/chrome.cpp"
         "ui/home.cpp"
         "ui/settings.cpp"
+        "ui/settings_panel.cpp"
+        "ui/display_settings.cpp"
+        "ui/reading_settings.cpp"
         "ui/quick_settings.cpp"
         "ui/book_info.cpp"
         "ui/contents.cpp"
@@ -40,10 +50,15 @@ idf_component_register(
         "ui/keyboard.cpp"
         "ui/ota.cpp"
         "ui/book_manager.cpp"
+        "ui/file_browser.cpp"
+        "ui/book_actions.cpp"
         "ui/book_sync.cpp"
         "ui/screen.cpp"
         "ui/reader.cpp"
         "ui/hardware_test.cpp"
+        "ui/dialog.cpp"
+        "ui/storage_screen.cpp"
+        "ui/about.cpp"
     INCLUDE_DIRS
         "."
         "board/m5paper"
@@ -61,6 +76,7 @@ idf_component_register(
         esp_adc
         esp_timer
         fatfs
+        vfs
         esp_wifi
         esp_event
         esp_netif
@@ -68,6 +84,8 @@ idf_component_register(
         esp_https_ota
         app_update
         nvs_flash
+        json
+        mbedtls
 )
 
 target_compile_features(${COMPONENT_LIB} PRIVATE cxx_std_17)
@@ -86,4 +104,10 @@ endif()
 
 if(XREADER_DIAGNOSTICS)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE XREADER_DIAGNOSTICS=1)
+endif()
+
+# Serial test-harness console.  Injects synthetic input events so a host can
+# drive the UI without touching the panel.  Never enable for a release image.
+if(XREADER_DEBUG_CONSOLE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE XREADER_DEBUG_CONSOLE=1)
 endif()

@@ -5,8 +5,8 @@
 #include "esp_log.h"
 #include "freertos/task.h"
 
-#include "xteink_button_decode.hpp"
 #include "xteink_pins.hpp"
+#include "xteink_button_decode.hpp"
 
 namespace xreader
 {
@@ -31,6 +31,8 @@ struct task_context_t
     bool power_active = false;
     uint8_t power_stable = 0;
     TickType_t power_press_tick = 0;
+    TickType_t navigation_press_tick = 0;
+    TickType_t navigation_repeat_tick = 0;
 };
 
 static task_context_t task_context = {};
@@ -69,7 +71,30 @@ static void update_navigation(task_context_t* context, input::key_t key)
         input::enqueue_key(context->events, context->active, false);
     context->active = key;
     if (context->active != input::key_none)
+    {
         input::enqueue_key(context->events, context->active, true);
+        context->navigation_press_tick = xTaskGetTickCount();
+        context->navigation_repeat_tick = context->navigation_press_tick;
+    }
+}
+
+static bool repeatable(input::key_t key)
+{
+    return key == input::key_up || key == input::key_down || key == input::key_left ||
+           key == input::key_right || key == input::key_page_next || key == input::key_page_prev;
+}
+
+static void update_repeat(task_context_t* context)
+{
+    if (!repeatable(context->active) || context->config.repeat_interval_ms == 0U)
+        return;
+    const TickType_t now = xTaskGetTickCount();
+    const uint32_t held_ms = static_cast<uint32_t>((now - context->navigation_press_tick) * portTICK_PERIOD_MS);
+    const uint32_t since_repeat_ms = static_cast<uint32_t>((now - context->navigation_repeat_tick) * portTICK_PERIOD_MS);
+    if (held_ms < context->config.repeat_delay_ms || since_repeat_ms < context->config.repeat_interval_ms)
+        return;
+    input::enqueue_key_repeat(context->events, context->active);
+    context->navigation_repeat_tick = now;
 }
 
 static void update_power(task_context_t* context)
@@ -108,6 +133,7 @@ static void task(void* argument)
     while (true)
     {
         update_navigation(context, read_navigation_key(context));
+        update_repeat(context);
         update_power(context);
         vTaskDelay(pdMS_TO_TICKS(context->config.poll_interval_ms));
     }
@@ -147,8 +173,7 @@ esp_err_t start_buttons(QueueHandle_t events, const button_config_t* config)
     };
     error = adc_oneshot_config_channel(task_context.adc, button_ladder1_channel, &channel_config);
     if (error == ESP_OK)
-        error =
-            adc_oneshot_config_channel(task_context.adc, button_ladder2_channel, &channel_config);
+        error = adc_oneshot_config_channel(task_context.adc, button_ladder2_channel, &channel_config);
     if (error != ESP_OK)
     {
         adc_oneshot_del_unit(task_context.adc);
@@ -180,6 +205,8 @@ esp_err_t start_buttons(QueueHandle_t events, const button_config_t* config)
     task_context.power_active = task_context.power_candidate;
     task_context.power_stable = selected.stable_samples;
     task_context.power_press_tick = xTaskGetTickCount();
+    task_context.navigation_press_tick = task_context.power_press_tick;
+    task_context.navigation_repeat_tick = task_context.power_press_tick;
 
     if (xTaskCreate(task, "xteink_keys", 3072, &task_context, 5, nullptr) != pdPASS)
     {

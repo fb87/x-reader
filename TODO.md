@@ -37,11 +37,11 @@ This checklist tracks the remaining work needed to move X-Reader from the curren
 - [x] Show CONNECTED result and IP/RSSI
 - [x] Detect and display AUTH FAILED / wrong password
 - [x] Detect and display connection timeout
-- [ ] Add retry/cancel flow
+- [x] Add retry/cancel flow
 - [x] Automatically return to Connectivity after successful pairing
-- [ ] Add forget-network confirmation
-- [ ] Add periodic RSSI refresh
-- [ ] Add rescan action
+- [x] Add forget-network confirmation
+- [x] Add periodic RSSI refresh
+- [x] Add rescan action
 - [x] Automatically reconnect saved network at boot
 
 ## P1 — Keyboard / Text Input
@@ -50,53 +50,53 @@ This checklist tracks the remaining work needed to move X-Reader from the curren
 - [x] Reusable T9 keyboard
 - [x] Physical-button navigation
 - [x] Touch navigation
-- [ ] Add symbols/special-character page
-- [ ] Add cursor movement
-- [ ] Add editing inside existing text
-- [ ] Add password show/hide toggle
-- [ ] Add physical-key repeat
-- [ ] Improve T9 commit timeout behavior
+- [x] Add symbols/special-character page
+- [x] Add cursor movement
+- [x] Add editing inside existing text
+- [x] Add password show/hide toggle
+- [x] Add physical-key repeat
+- [x] Improve T9 commit timeout behavior
 - [ ] Support long press where useful
-- [ ] Add reusable text-input dialog API
-- [ ] Use same input API for search, rename, Wi-Fi, sync URL, etc.
+- [x] Add reusable text-input dialog API
+- [x] Use same input API for search, rename, Wi-Fi, sync URL, etc.
 
 ## P0 — Book Sync
 
 - [x] Sync-service configuration
 - [x] Reading-position upload
-- [ ] Define remote library manifest protocol
-- [ ] Fetch remote library manifest
-- [ ] Compare local vs remote books
-- [ ] Download new EPUB files
-- [ ] Update changed EPUB files
-- [ ] Support resumable `.part` downloads
-- [ ] Verify downloaded files before install
-- [ ] Download reading progress from server
-- [ ] Resolve reading-position conflicts
-- [ ] Sync bookmarks
-- [ ] Add offline retry queue
-- [ ] Add sync progress UI
-- [ ] Add sync history / last-error details
-- [ ] Define deletion/conflict policy
+- [x] Define remote library manifest protocol
+- [x] Fetch remote library manifest
+- [x] Compare local vs remote books
+- [x] Download new EPUB files
+- [x] Update changed EPUB files
+- [x] Support resumable `.part` downloads
+- [x] Verify downloaded files before install
+- [x] Download reading progress from server
+- [x] Resolve reading-position conflicts
+- [x] Sync bookmarks
+- [x] Add offline retry queue
+- [x] Add sync progress UI
+- [x] Add sync history / last-error details
+- [x] Define deletion/conflict policy
 
 ## P1 — Book Manager
 
 - [x] Library browsing
 - [x] Basic import flow
 - [x] Temporary-file cleanup
-- [ ] Add persistent library index/database
-- [ ] Avoid full SD scan on normal startup
-- [ ] Extract EPUB title/author metadata
+- [x] Add persistent library index/database
+- [x] Avoid full SD scan on normal startup
+- [x] Extract EPUB title/author metadata
 - [ ] Extract and cache cover image
-- [ ] Sort by title
-- [ ] Sort by author
-- [ ] Sort by recently added
-- [ ] Sort by recently read
-- [ ] Filter/search library
-- [ ] Rename book
-- [ ] Delete book with confirmation
-- [ ] Duplicate detection
-- [ ] Storage usage screen
+- [x] Sort by title
+- [x] Sort by author
+- [x] Sort by recently added
+- [x] Sort by recently read
+- [x] Filter/search library
+- [x] Rename book
+- [x] Delete book with confirmation
+- [x] Duplicate detection
+- [x] Storage usage screen
 - [ ] Handle SD removal/reinsert cleanly
 
 ## P1 — Reader
@@ -110,8 +110,8 @@ This checklist tracks the remaining work needed to move X-Reader from the curren
 - [x] Session bookmarks
 - [x] Persist bookmarks per book
 - [x] Persist reading progress per book
-- [ ] Add reading history
-- [ ] Search inside current book
+- [x] Add reading history
+- [x] Search inside current book
 - [ ] Font selection
 - [ ] Margin controls
 - [ ] Text alignment controls
@@ -121,15 +121,15 @@ This checklist tracks the remaining work needed to move X-Reader from the curren
 - [ ] Footnote handling
 - [ ] Image rendering inside EPUB
 - [ ] Improve CSS support
-- [ ] Add progress indicator / percentage
+- [x] Add progress indicator / percentage
 - [ ] Add configurable tap zones / button mappings
 
 ## P1 — EPUB Compatibility
 
-- [ ] Normalize text to NFC at the document/text boundary
-- [ ] Keep lightweight Vietnamese NFD fallback
+- [x] Normalize text to NFC at the document/text boundary
+- [x] Keep lightweight Vietnamese NFD fallback
 - [ ] Improve XHTML parser robustness
-- [ ] Improve HTML entity handling
+- [x] Improve HTML entity handling
 - [ ] Add CSS subset parser
 - [ ] Support EPUB2 NCX navigation
 - [ ] Support EPUB3 nav document
@@ -144,30 +144,30 @@ This checklist tracks the remaining work needed to move X-Reader from the curren
 
 - [x] OTA manifest lookup
 - [x] Firmware download/install path
-- [ ] Proper semantic version comparison
-- [ ] Show download progress
-- [ ] Add user confirmation before install
-- [ ] Add low-battery guard
-- [ ] Add network-loss recovery
-- [ ] Add rollback support
+- [x] Proper semantic version comparison
+- [x] Show download progress
+- [x] Add user confirmation before install
+- [x] Add low-battery guard
+- [x] Add network-loss recovery
+- [x] Add rollback support
 - [ ] Add firmware verification/signature validation
 - [ ] Add failed-update recovery UI
-- [ ] Display release notes
-- [ ] Record last OTA result
+- [x] Display release notes
+- [x] Record last OTA result
 
 ## P1 — Power Management
 
 - [x] Configurable sleep timeout
-- [ ] Implement idle sleep
-- [ ] Implement deep sleep where appropriate
-- [ ] Wake from physical button
+- [x] Implement idle sleep
+- [x] Implement deep sleep where appropriate
+- [x] Wake from physical button (M5Paper centre/power key)
 - [ ] Wake from touch on supported board
-- [ ] Persist current book/page before sleep
-- [ ] Shut down Wi-Fi before deep sleep
-- [ ] Reconnect Wi-Fi after wake only when needed
-- [ ] Read and display battery level
-- [ ] Low-battery warning
-- [ ] Critical-battery safe shutdown
+- [x] Persist current book/page before sleep
+- [x] Shut down Wi-Fi before deep sleep
+- [x] Reconnect Wi-Fi after wake only when needed
+- [x] Read and display battery level (M5Paper ADC; XTeink hardware hook remains)
+- [x] Low-battery warning
+- [x] Critical-battery safe shutdown
 - [ ] Measure idle/current consumption
 
 ## P1 — Remaining Screens
@@ -186,17 +186,17 @@ This checklist tracks the remaining work needed to move X-Reader from the curren
 - [x] Book Sync
 - [x] Wi-Fi Networks
 - [x] QWERTY/T9 Keyboard
-- [ ] Full File Browser
-- [ ] Rich Book Details screen
-- [ ] Search screen
-- [ ] Storage screen
-- [ ] Device/About screen
+- [x] Full File Browser
+- [x] Rich Book Details screen
+- [x] Search screen
+- [x] Storage screen
+- [x] Device/About screen
 - [ ] Date/time settings
 - [ ] Wi-Fi network details
-- [ ] Sync progress/history screen
-- [ ] OTA progress/result screen
-- [ ] Generic confirmation dialog
-- [ ] Generic warning/error dialog
+- [x] Sync progress/history screen
+- [x] OTA progress/result screen
+- [x] Generic confirmation dialog
+- [x] Generic warning/error dialog
 - [ ] Empty-state screens
 - [ ] First-run/onboarding screen
 
@@ -221,10 +221,10 @@ This checklist tracks the remaining work needed to move X-Reader from the curren
 ## P2 — Persistence / Reliability
 
 - [x] Persist bookmarks
-- [ ] Persist recent books/history
+- [x] Persist recent books/history
 - [x] Persist per-book progress
-- [ ] Persist UI preferences
-- [ ] Version NVS schema
+- [x] Persist UI preferences
+- [x] Version NVS schema
 - [ ] Handle corrupted NVS safely
 - [ ] Handle corrupted EPUB safely
 - [ ] Add filesystem error handling

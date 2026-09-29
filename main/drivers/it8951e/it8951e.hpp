@@ -49,6 +49,7 @@ struct device_t
     uint16_t width;
     uint16_t height;
     uint8_t rotation;
+    bool inverted;
     uint16_t device_memory_low;
     uint16_t device_memory_high;
     esp_task_wdt_user_handle_t watchdog_user;
@@ -61,6 +62,9 @@ esp_err_t write_image_4bpp(device_t* device, const uint8_t* pixels, uint16_t x, 
 esp_err_t refresh(device_t* device, uint16_t x, uint16_t y, uint16_t width, uint16_t height,
                   refresh_mode_t mode);
 void set_rotation(device_t* device, uint8_t rotation);
+// Optional user preference: send the inverse of every nibble so the panel shows
+// light text on a dark page.
+void set_inverted(device_t* device, bool inverted);
 uint16_t logical_width(const device_t* device);
 uint16_t logical_height(const device_t* device);
 

@@ -222,6 +222,14 @@ bool enqueue_key(QueueHandle_t events, key_t key, bool pressed)
     return xQueueSend(events, &event, 0) == pdTRUE;
 }
 
+bool enqueue_key_repeat(QueueHandle_t events, key_t key)
+{
+    if (events == nullptr || key == key_none)
+        return false;
+    const event_t event = {event_key_repeat, 0, 0, key};
+    return xQueueSend(events, &event, 0) == pdTRUE;
+}
+
 void flush(QueueHandle_t events)
 {
     if (events == nullptr)
