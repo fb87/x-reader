@@ -187,9 +187,8 @@ static esp_err_t write_pixel_data(device_t* device, const uint8_t* pixels, size_
     }
 
     const int64_t elapsed_us = esp_timer_get_time() - start;
-    ESP_LOGI(tag, "pixel upload: %u bytes in %u chunks, %lld ms",
-             static_cast<unsigned>(size), static_cast<unsigned>(chunks),
-             static_cast<long long>(elapsed_us / 1000));
+    ESP_LOGI(tag, "pixel upload: %u bytes in %u chunks, %lld ms", static_cast<unsigned>(size),
+             static_cast<unsigned>(chunks), static_cast<long long>(elapsed_us / 1000));
     heap_caps_free(transfer);
     return error;
 }
@@ -302,7 +301,7 @@ esp_err_t write_image_4bpp(device_t* device, const uint8_t* pixels, uint16_t x, 
                            uint16_t width, uint16_t height)
 {
     if (device == nullptr || pixels == nullptr || width == 0 || height == 0 || (width & 3U) != 0 ||
-        x + width > device->width || y + height > device->height)
+        x + width > logical_width(device) || y + height > logical_height(device))
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -334,8 +333,8 @@ esp_err_t write_image_4bpp(device_t* device, const uint8_t* pixels, uint16_t x, 
 esp_err_t refresh(device_t* device, uint16_t x, uint16_t y, uint16_t width, uint16_t height,
                   refresh_mode_t mode)
 {
-    if (device == nullptr || width == 0 || height == 0 || x + width > device->width ||
-        y + height > device->height)
+    if (device == nullptr || width == 0 || height == 0 || x + width > logical_width(device) ||
+        y + height > logical_height(device))
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -372,6 +371,26 @@ esp_err_t refresh(device_t* device, uint16_t x, uint16_t y, uint16_t width, uint
         error = wait_ready(device);
     }
     return error;
+}
+
+void set_rotation(device_t* device, uint8_t rotation)
+{
+    if (device != nullptr)
+        device->rotation = static_cast<uint8_t>(rotation & 1U);
+}
+
+uint16_t logical_width(const device_t* device)
+{
+    if (device == nullptr)
+        return 0;
+    return device->rotation == 0 ? device->width : device->height;
+}
+
+uint16_t logical_height(const device_t* device)
+{
+    if (device == nullptr)
+        return 0;
+    return device->rotation == 0 ? device->height : device->width;
 }
 
 } // namespace it8951e

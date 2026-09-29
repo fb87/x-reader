@@ -1,0 +1,27 @@
+menu "X-Reader services"
+
+config XREADER_WIFI_SSID
+    string "Default Wi-Fi SSID"
+    default ""
+    help
+        Optional bootstrap Wi-Fi network. Runtime NVS configuration overrides this value.
+
+config XREADER_WIFI_PASSWORD
+    string "Default Wi-Fi password"
+    default ""
+    help
+        Password for the bootstrap Wi-Fi network.
+
+config XREADER_OTA_MANIFEST_URL
+    string "OTA manifest URL"
+    default ""
+    help
+        JSON manifest URL. Expected fields: {"version":"...","url":"..."}.
+
+config XREADER_SYNC_SERVER
+    string "Book sync server"
+    default ""
+    help
+        Base URL for the X-Reader sync API. Reading progress is POSTed to /v1/progress.
+
+endmenu

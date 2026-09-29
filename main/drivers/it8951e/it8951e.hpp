@@ -60,6 +60,9 @@ esp_err_t write_image_4bpp(device_t* device, const uint8_t* pixels, uint16_t x, 
                            uint16_t width, uint16_t height);
 esp_err_t refresh(device_t* device, uint16_t x, uint16_t y, uint16_t width, uint16_t height,
                   refresh_mode_t mode);
+void set_rotation(device_t* device, uint8_t rotation);
+uint16_t logical_width(const device_t* device);
+uint16_t logical_height(const device_t* device);
 
 } // namespace it8951e
 } // namespace drivers

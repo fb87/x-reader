@@ -30,7 +30,9 @@ metrics_t metrics(viewport_t vp)
         result.margin = 24;
         result.gap = 6;
         result.status_height = 32;
-        result.footer_height = 34;
+        // Keep bottom actions large enough for reliable finger input on touch devices.
+        // 56 px is also still compact enough for the 800x480 XTeink layout.
+        result.footer_height = 56;
         result.row_height = 44;
         result.panel_padding = 18;
     }
@@ -39,7 +41,7 @@ metrics_t metrics(viewport_t vp)
         result.margin = 40;
         result.gap = 8;
         result.status_height = 36;
-        result.footer_height = 36;
+        result.footer_height = 60;
         result.row_height = 52;
         result.panel_padding = 22;
     }
@@ -48,7 +50,7 @@ metrics_t metrics(viewport_t vp)
         result.margin = 52;
         result.gap = 10;
         result.status_height = 42;
-        result.footer_height = 42;
+        result.footer_height = 64;
         result.row_height = 60;
         result.panel_padding = 28;
     }

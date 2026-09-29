@@ -15,7 +15,8 @@ namespace ui
 namespace
 {
 static const char* const item_labels[settings_item_count] = {
-    "TEXT SIZE", "LINE SPACING", "REFRESH MODE", "SLEEP TIMEOUT", "BACK",
+    "TEXT SIZE",     "LINE SPACING", "REFRESH MODE",  "ORIENTATION",
+    "SLEEP TIMEOUT", "CONNECTIVITY", "SYSTEM UPDATE", "BACK",
 };
 
 static layout::rect_t items_area(layout::viewport_t vp)
@@ -35,7 +36,7 @@ void draw_settings(gfx::framebuffer_t* framebuffer, settings_item_t focus,
     gfx::clear(framebuffer, 0x0f);
     chrome::draw_status_bar(framebuffer, "SETTINGS", "READER");
 
-    const quick_settings_values_t defaults = {2, 0, 0, 60};
+    const quick_settings_values_t defaults = {2, 0, 0, 0, 60};
     const quick_settings_values_t* current = values == nullptr ? &defaults : values;
     char sleep_value[24] = {};
     snprintf(sleep_value, sizeof(sleep_value), "%u MIN",
@@ -44,7 +45,10 @@ void draw_settings(gfx::framebuffer_t* framebuffer, settings_item_t focus,
         current->text_scale == 1 ? "SMALL" : "MEDIUM",
         current->line_spacing != 0 ? "WIDE" : "NORMAL",
         current->refresh_mode != 0 ? "FAST" : "QUALITY",
+        current->orientation != 0 ? "PORTRAIT" : "LANDSCAPE",
         sleep_value,
+        "WI-FI / NETWORK",
+        "OTA",
         "RETURN",
     };
 

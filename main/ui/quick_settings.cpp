@@ -14,10 +14,8 @@ namespace ui
 namespace
 {
 static const char* const labels[quick_setting_count] = {
-    "TEXT SIZE",
-    "LINE SPACING",
-    "REFRESH MODE",
-    "SLEEP TIMEOUT",
+    "CONTENTS",     "BOOKMARKS",    "BOOK INFO",   "ADD BOOKMARK",  "TEXT SIZE",
+    "LINE SPACING", "REFRESH MODE", "ORIENTATION", "SLEEP TIMEOUT",
 };
 
 static layout::rect_t panel(layout::viewport_t vp)
@@ -61,15 +59,20 @@ void draw_quick_settings(gfx::framebuffer_t* framebuffer, quick_setting_t focus,
     gfx::draw_text(framebuffer, static_cast<uint16_t>(box.x + 14U),
                    static_cast<uint16_t>(box.y + 9U), "READER MENU", 1, 0x0f);
 
-    const quick_settings_values_t defaults = {2, 0, 0, 60};
+    const quick_settings_values_t defaults = {2, 0, 0, 0, 60};
     const quick_settings_values_t* current = values == nullptr ? &defaults : values;
     char sleep_value[24] = {};
     snprintf(sleep_value, sizeof(sleep_value), "%u MIN",
              static_cast<unsigned>(current->sleep_timeout_minutes));
     const char* value_labels[quick_setting_count] = {
+        ">",
+        ">",
+        ">",
+        "+",
         current->text_scale == 1 ? "SMALL" : "MEDIUM",
         current->line_spacing != 0 ? "WIDE" : "NORMAL",
         current->refresh_mode != 0 ? "FAST" : "QUALITY",
+        current->orientation != 0 ? "PORTRAIT" : "LANDSCAPE",
         sleep_value,
     };
 

@@ -345,6 +345,9 @@ int main()
     assert(compact_metrics.display_class == xreader::ui::layout::display_compact);
     assert(medium_metrics.display_class == xreader::ui::layout::display_medium);
     assert(compact_metrics.margin < medium_metrics.margin);
+    // Bottom navigation is a direct touch target, so keep it at least finger-sized.
+    assert(compact_metrics.footer_height >= 48);
+    assert(medium_metrics.footer_height >= 48);
     const auto compact_content = xreader::ui::layout::content({800, 480});
     const auto medium_content = xreader::ui::layout::content({960, 540});
     assert(compact_content.width == 800 && medium_content.width == 960);
@@ -368,6 +371,9 @@ int main()
         .page_count = 1,
         .spine_index = 0,
         .spine_count = 2,
+        .toc_count = 2,
+        .bookmark_count = 0,
+        .wifi_network_count = 0,
     };
     xreader::ui::initialize(&screen);
     assert(screen.screen == xreader::ui::screen_home);
@@ -383,6 +389,66 @@ int main()
     assert(xreader::ui::dispatch(&screen, &back, &screen_context) ==
            xreader::ui::screen_command_show_home);
     assert(screen.screen == xreader::ui::screen_home);
+
+    // Reader menu exposes the extended screens and remains button navigable.
+    screen.screen = xreader::ui::screen_quick_settings;
+    screen.quick_focus = xreader::ui::quick_setting_contents;
+    assert(xreader::ui::dispatch(&screen, &select, &screen_context) ==
+           xreader::ui::screen_command_show_contents);
+    assert(screen.screen == xreader::ui::screen_contents);
+    assert(xreader::ui::dispatch(&screen, &back, &screen_context) ==
+           xreader::ui::screen_command_close_quick_settings);
+    assert(screen.screen == xreader::ui::screen_reader);
+
+    // Management screens are reachable with the same button navigation model.
+    screen.screen = xreader::ui::screen_home;
+    screen.home_focus = xreader::ui::home_book_manager;
+    assert(xreader::ui::dispatch(&screen, &select, &screen_context) ==
+           xreader::ui::screen_command_show_book_manager);
+    assert(screen.screen == xreader::ui::screen_book_manager);
+    assert(xreader::ui::dispatch(&screen, &back, &screen_context) ==
+           xreader::ui::screen_command_show_home);
+
+    screen.screen = xreader::ui::screen_settings;
+    screen.settings_focus = xreader::ui::settings_connectivity;
+    assert(xreader::ui::dispatch(&screen, &select, &screen_context) ==
+           xreader::ui::screen_command_show_connectivity);
+    assert(screen.screen == xreader::ui::screen_connectivity);
+    assert(xreader::ui::dispatch(&screen, &back, &screen_context) ==
+           xreader::ui::screen_command_show_settings);
+    screen.settings_focus = xreader::ui::settings_ota;
+    assert(xreader::ui::dispatch(&screen, &select, &screen_context) ==
+           xreader::ui::screen_command_show_ota);
+    assert(screen.screen == xreader::ui::screen_ota);
+
+    // Wi-Fi network selection and text input are fully button navigable.
+    screen.screen = xreader::ui::screen_connectivity;
+    screen.connectivity_focus = xreader::ui::connectivity_network;
+    assert(xreader::ui::dispatch(&screen, &select, &screen_context) ==
+           xreader::ui::screen_command_show_wifi_networks);
+    assert(screen.screen == xreader::ui::screen_wifi_networks);
+
+    xreader::ui::screen_context_t wifi_context = screen_context;
+    wifi_context.wifi_network_count = 3;
+    assert(xreader::ui::dispatch(&screen, &down, &wifi_context) ==
+           xreader::ui::screen_command_redraw);
+    assert(screen.wifi_network_focus == 1);
+    assert(xreader::ui::dispatch(&screen, &back, &wifi_context) ==
+           xreader::ui::screen_command_show_connectivity);
+
+    xreader::ui::keyboard_begin(&screen.keyboard, xreader::ui::keyboard_purpose_wifi_password,
+                                "WI-FI PASSWORD", "", true, xreader::ui::keyboard_qwerty);
+    screen.screen = xreader::ui::screen_keyboard;
+    screen.keyboard.focus_row = 1;
+    screen.keyboard.focus_col = 0; // q
+    assert(xreader::ui::dispatch(&screen, &select, &wifi_context) ==
+           xreader::ui::screen_command_redraw);
+    assert(strcmp(screen.keyboard.text, "q") == 0);
+    screen.keyboard.focus_row = 4;
+    screen.keyboard.focus_col = 3; // switch to T9
+    assert(xreader::ui::dispatch(&screen, &select, &wifi_context) ==
+           xreader::ui::screen_command_redraw);
+    assert(screen.keyboard.mode == xreader::ui::keyboard_t9);
 
     // Reader supports physical directional/select/back actions.
     screen.screen = xreader::ui::screen_reader;

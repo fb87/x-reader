@@ -15,7 +15,10 @@ enum settings_item_t : uint8_t
     settings_text_size,
     settings_line_spacing,
     settings_refresh_mode,
+    settings_orientation,
     settings_sleep_timeout,
+    settings_connectivity,
+    settings_ota,
     settings_back,
     settings_item_count,
 };

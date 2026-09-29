@@ -3,6 +3,7 @@ idf_component_register(
         "main.cpp"
         "board/m5paper/m5paper_board.cpp"
         "board/xteink/xteink_board.cpp"
+        "board/xteink/xteink_buttons.cpp"
         "drivers/gt911/gt911.cpp"
         "drivers/it8951e/it8951e.cpp"
         "epub/zip.cpp"
@@ -19,6 +20,10 @@ idf_component_register(
         "storage/sdcard/sdcard.cpp"
         "storage/persistence.cpp"
         "storage/book_loader.cpp"
+        "services/connectivity.cpp"
+        "services/ota.cpp"
+        "services/book_manager.cpp"
+        "services/book_sync.cpp"
         "ui/layout/layout.cpp"
         "ui/navigation/focus.cpp"
         "ui/library.cpp"
@@ -27,19 +32,42 @@ idf_component_register(
         "ui/home.cpp"
         "ui/settings.cpp"
         "ui/quick_settings.cpp"
+        "ui/book_info.cpp"
+        "ui/contents.cpp"
+        "ui/bookmarks.cpp"
+        "ui/connectivity.cpp"
+        "ui/wifi_networks.cpp"
+        "ui/keyboard.cpp"
+        "ui/ota.cpp"
+        "ui/book_manager.cpp"
+        "ui/book_sync.cpp"
         "ui/screen.cpp"
         "ui/reader.cpp"
         "ui/hardware_test.cpp"
     INCLUDE_DIRS
         "."
         "board/m5paper"
+        "board/xteink"
         "drivers/gt911"
         "drivers/it8951e"
         "epub"
         "gfx"
         "input"
         "storage/sdcard"
+        "services"
         "ui"
+    REQUIRES
+        driver
+        esp_adc
+        esp_timer
+        fatfs
+        esp_wifi
+        esp_event
+        esp_netif
+        esp_http_client
+        esp_https_ota
+        app_update
+        nvs_flash
 )
 
 target_compile_features(${COMPONENT_LIB} PRIVATE cxx_std_17)

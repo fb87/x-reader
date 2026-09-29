@@ -19,6 +19,15 @@ add_executable(xreader_epub_tests
     ../main/ui/library.cpp
     ../main/ui/settings.cpp
     ../main/ui/quick_settings.cpp
+    ../main/ui/contents.cpp
+    ../main/ui/bookmarks.cpp
+    ../main/ui/book_info.cpp
+    ../main/ui/connectivity.cpp
+    ../main/ui/wifi_networks.cpp
+    ../main/ui/keyboard.cpp
+    ../main/ui/ota.cpp
+    ../main/ui/book_manager.cpp
+    ../main/ui/book_sync.cpp
     ../main/ui/screen.cpp
     ../main/ui/chrome.cpp
     ../main/ui/reader.cpp

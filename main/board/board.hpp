@@ -13,6 +13,7 @@ enum display_controller_t
 {
     display_controller_unknown,
     display_controller_it8951e,
+    display_controller_ssd1677,
 };
 
 enum storage_bus_t

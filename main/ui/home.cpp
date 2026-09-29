@@ -26,19 +26,34 @@ static layout::rect_t continue_card(layout::viewport_t vp)
 static layout::rect_t action_card(layout::viewport_t vp, uint8_t index)
 {
     const layout::metrics_t m = layout::metrics(vp);
-    layout::rect_t body = layout::inset(layout::content(vp), m.margin);
+    const layout::rect_t body = layout::inset(layout::content(vp), m.margin);
     const layout::rect_t hero = continue_card(vp);
     const uint16_t gap = m.gap;
     const uint16_t top = static_cast<uint16_t>(hero.y + hero.height + gap);
-    const uint16_t available_h =
-        body.y + body.height > top ? static_cast<uint16_t>(body.y + body.height - top) : 0;
     const uint16_t column_gap = gap;
     const uint16_t row_gap = gap;
     const uint16_t card_w = body.width > column_gap
                                 ? static_cast<uint16_t>((body.width - column_gap) / 2U)
                                 : body.width;
-    const uint16_t card_h =
-        available_h > row_gap ? static_cast<uint16_t>((available_h - row_gap) / 2U) : available_h;
+    const uint8_t tile_count = static_cast<uint8_t>(home_action_count - 1U);
+    const uint8_t row_count = static_cast<uint8_t>((tile_count + 1U) / 2U);
+
+    // Do not stretch home tiles to consume all remaining vertical space.  The mockup
+    // intentionally uses compact action tiles with breathing room below them.  A fixed
+    // height derived from the standard row metric keeps the same visual proportions in
+    // landscape and portrait layouts.
+    uint16_t card_h = static_cast<uint16_t>(m.row_height + 20U);
+    const uint16_t available_h =
+        body.y + body.height > top ? static_cast<uint16_t>(body.y + body.height - top) : 0;
+    const uint32_t gaps_h = row_count > 0U ? static_cast<uint32_t>(row_count - 1U) * row_gap : 0U;
+    const uint32_t required_h = static_cast<uint32_t>(card_h) * row_count + gaps_h;
+    if (available_h < required_h && row_count > 0U)
+    {
+        const uint16_t usable =
+            available_h > gaps_h ? static_cast<uint16_t>(available_h - gaps_h) : 0;
+        card_h = static_cast<uint16_t>(usable / row_count);
+    }
+
     const uint8_t local = static_cast<uint8_t>(index - 1U);
     const uint8_t row = static_cast<uint8_t>(local / 2U);
     const uint8_t col = static_cast<uint8_t>(local % 2U);
@@ -81,6 +96,8 @@ void draw_home(gfx::framebuffer_t* framebuffer, bool storage_mounted, const char
         const layout::rect_t card = action_card(vp, index);
         const char* subtitle = index == home_library        ? "Browse your books"
                                : index == home_recent_books ? "Recently opened"
+                               : index == home_book_manager ? "Import, remove, organize"
+                               : index == home_book_sync    ? "Sync books and progress"
                                : index == home_settings     ? "Reader preferences"
                                                             : "Suspend device";
         draw_card(framebuffer, card, menu_labels[index], subtitle,

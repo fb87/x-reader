@@ -20,6 +20,7 @@ static constexpr const char* page_key = "page";
 static constexpr const char* text_scale_key = "text_scale";
 static constexpr const char* line_spacing_key = "line_space";
 static constexpr const char* refresh_mode_key = "refresh";
+static constexpr const char* orientation_key = "orient";
 static constexpr const char* sleep_timeout_key = "sleep_min";
 static char cached_path[512] = {};
 static uint32_t cached_spine = 0;
@@ -47,6 +48,16 @@ static void position_key(const char* prefix, const char* path, char* key)
 {
     snprintf(key, 16, "%s%08lx", prefix, static_cast<unsigned long>(book_hash(path)));
 }
+
+struct bookmark_blob_t
+{
+    uint8_t version;
+    uint8_t count;
+    uint8_t reserved[2];
+    bookmark_t items[max_bookmarks_per_book];
+};
+
+static constexpr uint8_t bookmark_blob_version = 1;
 } // namespace
 
 esp_err_t init()
@@ -68,6 +79,7 @@ void default_settings(settings_t* settings)
     settings->text_scale = 2;
     settings->line_spacing = 0;
     settings->refresh_mode = 0;
+    settings->orientation = 0;
     settings->sleep_timeout_minutes = 60;
 }
 
@@ -83,6 +95,7 @@ esp_err_t load_settings(settings_t* settings)
     uint8_t text_scale = 0;
     uint8_t line_spacing = 0;
     uint8_t refresh_mode = 0;
+    uint8_t orientation = 0;
     uint32_t sleep_timeout = 0;
     if (nvs_get_u8(handle, text_scale_key, &text_scale) == ESP_OK &&
         (text_scale == 1 || text_scale == 2))
@@ -91,6 +104,8 @@ esp_err_t load_settings(settings_t* settings)
         settings->line_spacing = line_spacing;
     if (nvs_get_u8(handle, refresh_mode_key, &refresh_mode) == ESP_OK && refresh_mode <= 1)
         settings->refresh_mode = refresh_mode;
+    if (nvs_get_u8(handle, orientation_key, &orientation) == ESP_OK && orientation <= 1)
+        settings->orientation = orientation;
     if (nvs_get_u32(handle, sleep_timeout_key, &sleep_timeout) == ESP_OK && sleep_timeout > 0)
         settings->sleep_timeout_minutes = sleep_timeout;
     nvs_close(handle);
@@ -110,6 +125,8 @@ esp_err_t save_settings(const settings_t* settings)
         error = nvs_set_u8(handle, line_spacing_key, settings->line_spacing);
     if (error == ESP_OK)
         error = nvs_set_u8(handle, refresh_mode_key, settings->refresh_mode);
+    if (error == ESP_OK)
+        error = nvs_set_u8(handle, orientation_key, settings->orientation);
     if (error == ESP_OK)
         error = nvs_set_u32(handle, sleep_timeout_key, settings->sleep_timeout_minutes);
     if (error == ESP_OK)
@@ -263,6 +280,61 @@ esp_err_t save_position_for_book(const char* path, uint32_t spine, uint32_t page
         cached_page = page;
         cache_valid = true;
     }
+    return error;
+}
+
+esp_err_t load_bookmarks_for_book(const char* path, bookmark_t* bookmarks, uint8_t capacity,
+                                  uint8_t* count)
+{
+    if (path == nullptr || bookmarks == nullptr || count == nullptr || capacity == 0)
+        return ESP_ERR_INVALID_ARG;
+
+    *count = 0;
+    nvs_handle_t handle = 0;
+    esp_err_t error = nvs_open(namespace_name, NVS_READONLY, &handle);
+    if (error != ESP_OK)
+        return error;
+
+    char key[16] = {};
+    position_key("b", path, key);
+    bookmark_blob_t blob = {};
+    size_t size = sizeof(blob);
+    error = nvs_get_blob(handle, key, &blob, &size);
+    nvs_close(handle);
+    if (error != ESP_OK)
+        return error;
+    if (size != sizeof(blob) || blob.version != bookmark_blob_version ||
+        blob.count > max_bookmarks_per_book)
+        return ESP_ERR_INVALID_SIZE;
+
+    const uint8_t loaded = blob.count < capacity ? blob.count : capacity;
+    for (uint8_t index = 0; index < loaded; ++index)
+        bookmarks[index] = blob.items[index];
+    *count = loaded;
+    return ESP_OK;
+}
+
+esp_err_t save_bookmarks_for_book(const char* path, const bookmark_t* bookmarks, uint8_t count)
+{
+    if (path == nullptr || (bookmarks == nullptr && count != 0) || count > max_bookmarks_per_book)
+        return ESP_ERR_INVALID_ARG;
+
+    bookmark_blob_t blob = {};
+    blob.version = bookmark_blob_version;
+    blob.count = count;
+    for (uint8_t index = 0; index < count; ++index)
+        blob.items[index] = bookmarks[index];
+
+    nvs_handle_t handle = 0;
+    esp_err_t error = nvs_open(namespace_name, NVS_READWRITE, &handle);
+    if (error != ESP_OK)
+        return error;
+    char key[16] = {};
+    position_key("b", path, key);
+    error = nvs_set_blob(handle, key, &blob, sizeof(blob));
+    if (error == ESP_OK)
+        error = nvs_commit(handle);
+    nvs_close(handle);
     return error;
 }
 
