@@ -415,6 +415,8 @@ static void run()
     storage::persistence::settings_t settings = {};
     storage::persistence::default_settings(&settings);
     storage::persistence::load_settings(&settings);
+    // Keep the current hardware rollout in portrait while the orientation UI settles.
+    settings.orientation = 1;
     services::connectivity::init();
     if (services::connectivity::snapshot().ssid[0] != '\0')
         services::connectivity::set_enabled(true);
