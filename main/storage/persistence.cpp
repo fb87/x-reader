@@ -79,7 +79,7 @@ void default_settings(settings_t* settings)
     settings->text_scale = 2;
     settings->line_spacing = 0;
     settings->refresh_mode = 0;
-    settings->orientation = 0;
+    settings->orientation = 1;
     settings->sleep_timeout_minutes = 60;
 }
 
