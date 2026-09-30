@@ -18,6 +18,7 @@
 #include "drivers/gt911/gt911.hpp"
 #include "drivers/it8951e/it8951e.hpp"
 #include "epub/book.hpp"
+#include "epub/image.hpp"
 #include "gfx/framebuffer.hpp"
 #include "input/input.hpp"
 #include "input/mapper.hpp"
@@ -28,6 +29,7 @@
 #include "services/book_manager.hpp"
 #include "services/file_browser.hpp"
 #include "services/library_index.hpp"
+#include "services/library_scan.hpp"
 #include "services/book_sync.hpp"
 #include "services/debug_console.hpp"
 #include "storage/sdcard/sdcard.hpp"
@@ -43,6 +45,7 @@
 #include "ui/contents.hpp"
 #include "ui/hardware_test.hpp"
 #include "ui/home.hpp"
+#include "ui/splash.hpp"
 #include "ui/library.hpp"
 #include "ui/library_details.hpp"
 #include "ui/navigation.hpp"
@@ -589,13 +592,110 @@ static uint16_t catalog_index_for_path(const services::library_index::catalog_t*
     return 0U;
 }
 
+struct cover_bitmap_t
+{
+    uint8_t* pixels;
+    uint16_t width;
+    uint16_t height;
+};
+
+// Decodes the cached cover for the currently open book, if the cover exists
+// and is a format the decoder supports (PNG only; entry.cover_supported is
+// false for JPEG sources).  Returns a heap buffer the caller must free with
+// heap_caps_free(), or a zeroed result on any failure -- a missing/unsupported
+// cover is not an error, draw_book_info() falls back to its placeholder.
+static cover_bitmap_t load_book_cover(const services::library_index::catalog_t* catalog,
+                                      const char* book_path)
+{
+    cover_bitmap_t result = {};
+    if (catalog == nullptr || book_path == nullptr || book_path[0] == '\0')
+        return result;
+    const uint16_t index = catalog_index_for_path(catalog, book_path);
+    if (index >= catalog->count)
+        return result;
+    const auto& entry = catalog->entries[index];
+    if (!entry.cover_supported || entry.cover_cache[0] == '\0' || entry.cover_width == 0U ||
+        entry.cover_height == 0U)
+        return result;
+
+    FILE* file = fopen(entry.cover_cache, "rb");
+    if (file == nullptr)
+        return result;
+    if (fseek(file, 0, SEEK_END) != 0)
+    {
+        fclose(file);
+        return result;
+    }
+    const long file_size = ftell(file);
+    // cache_cover() in library_index.cpp bounds the source it wrote to 2 MB.
+    if (file_size <= 0 || file_size > 2 * 1024 * 1024 || fseek(file, 0, SEEK_SET) != 0)
+    {
+        fclose(file);
+        return result;
+    }
+    uint8_t* encoded = static_cast<uint8_t*>(
+        heap_caps_malloc(static_cast<size_t>(file_size), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (encoded == nullptr)
+    {
+        fclose(file);
+        return result;
+    }
+    const size_t read = fread(encoded, 1, static_cast<size_t>(file_size), file);
+    fclose(file);
+    if (read != static_cast<size_t>(file_size))
+    {
+        heap_caps_free(encoded);
+        return result;
+    }
+
+    const size_t pixel_bytes =
+        (static_cast<size_t>(entry.cover_width) * entry.cover_height + 1U) / 2U;
+    uint8_t* pixels = static_cast<uint8_t*>(
+        heap_caps_malloc(pixel_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (pixels == nullptr)
+    {
+        heap_caps_free(encoded);
+        return result;
+    }
+    if (epub::image::decode_mono(encoded, read, pixels, pixel_bytes) != ESP_OK)
+    {
+        heap_caps_free(encoded);
+        heap_caps_free(pixels);
+        return result;
+    }
+    heap_caps_free(encoded);
+    result.pixels = pixels;
+    result.width = entry.cover_width;
+    result.height = entry.cover_height;
+    return result;
+}
+
 static void draw_book_manager_state(gfx::framebuffer_t* framebuffer,
                                     const ui::screen_state_t* state,
                                     size_t book_count, bool mounted, uint16_t duplicate_count)
 {
     ui::draw_book_manager(framebuffer,
                           state == nullptr ? ui::book_manager_library : state->book_manager_focus,
-                          static_cast<uint16_t>(book_count), mounted, duplicate_count);
+                          static_cast<uint16_t>(book_count), mounted, duplicate_count,
+                          services::library_scan::busy());
+}
+
+// Called from the polling loop while screen_book_manager is visible.  Copies a
+// finished background scan into the live catalog and re-derives the values the
+// UI and Book Sync path read from it.  Returns true when a result was applied.
+static bool apply_library_scan_result(services::library_index::catalog_t* catalog,
+                                      char book_paths[][ui::book_path_length], size_t* book_count,
+                                      uint16_t* duplicate_book_count)
+{
+    services::library_scan::result_t result = {};
+    if (!services::library_scan::take_result(catalog, &result))
+        return false;
+    refresh_book_paths(catalog, book_paths, services::library_index::max_books, book_count);
+    *duplicate_book_count = services::book_manager::duplicate_count(catalog);
+    ESP_LOGI(tag, "library scan applied: imported=%u removed=%u books=%u error=%s",
+             static_cast<unsigned>(result.imported), static_cast<unsigned>(result.removed),
+             static_cast<unsigned>(*book_count), esp_err_to_name(result.error));
+    return true;
 }
 
 static void draw_library_view(gfx::framebuffer_t* framebuffer, bool mounted,
@@ -720,12 +820,17 @@ static void perform_service_action(const ui::screen_state_t* screen_state, const
     {
         if (mount_path == nullptr)
             return;
+        // Import/Cleanup both need a full catalog rebuild afterwards, which reparses
+        // every EPUB's metadata and takes seconds.  That used to run inline here and
+        // dropped input for the whole scan; it now runs on a background task and the
+        // polling loop below picks up the result via library_scan::take_result().
+        (void)catalog;
+        (void)book_paths;
+        (void)book_count;
         if (screen_state->book_manager_focus == ui::book_manager_import)
-            services::book_manager::import_books(mount_path);
+            services::library_scan::request(services::library_scan::action_import, mount_path);
         else if (screen_state->book_manager_focus == ui::book_manager_cleanup)
-            services::book_manager::cleanup(mount_path);
-        if (catalog != nullptr && book_paths != nullptr && book_count != nullptr)
-            *book_count = refresh_library_catalog(mount_path, catalog, book_paths, services::library_index::max_books, true);
+            services::library_scan::request(services::library_scan::action_cleanup, mount_path);
         return;
     }
     if (screen_state->screen == ui::screen_book_sync)
@@ -860,6 +965,23 @@ static void run()
     drivers::it8951e::set_inverted(&display, settings.invert_colors != 0U);
     ui::chrome::set_clock_visible(settings.show_clock != 0U);
 
+    // The e-paper panel holds whatever it last showed with the controller off,
+    // so without a splash the first thing a user sees on power-on is a stale
+    // frame from the previous session until Home's first real paint several
+    // steps below.  Allocate the framebuffer now, immediately after the
+    // display itself is ready, so that paint can happen here instead.
+    gfx::framebuffer_t framebuffer = {};
+    error = gfx::create(&framebuffer, drivers::it8951e::logical_width(&display),
+                        drivers::it8951e::logical_height(&display));
+    if (error != ESP_OK)
+    {
+        ESP_LOGE(tag, "Unable to allocate display framebuffer: %s", esp_err_to_name(error));
+        board::m5paper::power_off();
+        return;
+    }
+    ui::draw_splash(&framebuffer, "Starting...");
+    (void)transfer_dirty(&framebuffer, &display);
+
     const drivers::gt911::config_t touch_config = {
         .port = I2C_NUM_0,
         .sda_pin = board::m5paper::touch_sda_pin,
@@ -872,6 +994,9 @@ static void run()
     {
         ESP_LOGW(tag, "Touch initialization failed: %s", esp_err_to_name(error));
     }
+
+    ui::draw_splash(&framebuffer, "Mounting SD card...");
+    (void)transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
 
     const storage::sdcard::config_t sd_config = {
         .spi_host = board::m5paper::epd_spi_host,
@@ -886,28 +1011,11 @@ static void run()
         ESP_LOGW(tag, "SD-card initialization failed: %s", esp_err_to_name(error));
     }
 
-    gfx::framebuffer_t framebuffer = {};
-    error = gfx::create(&framebuffer, drivers::it8951e::logical_width(&display),
-                        drivers::it8951e::logical_height(&display));
-    if (error != ESP_OK)
-    {
-        ESP_LOGE(tag, "Unable to allocate display framebuffer: %s", esp_err_to_name(error));
-        board::m5paper::power_off();
-        return;
-    }
+    ui::draw_splash(&framebuffer, sd_card.mounted ? "Loading library..." : "No SD card");
+    (void)transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
 
     ui::screen_state_t screen_state = {};
     ui::initialize(&screen_state);
-    ui::draw_home(&framebuffer, sd_card.mounted, nullptr, screen_state.home_focus);
-    error = transfer_dirty(&framebuffer, &display);
-    if (error != ESP_OK)
-    {
-        ESP_LOGE(tag, "Library display update failed: %s", esp_err_to_name(error));
-        gfx::destroy(&framebuffer);
-        board::m5paper::power_off();
-        return;
-    }
-    ESP_LOGI(tag, "Home display update complete");
     error = services::ota::confirm_running_image();
     if (error != ESP_OK)
         ESP_LOGE(tag, "Unable to confirm running image: %s", esp_err_to_name(error));
@@ -966,6 +1074,10 @@ static void run()
     bool library_recent_mode = false;
     uint16_t library_detail_index = 0U;
     uint16_t duplicate_book_count = 0U;
+    // Tracked across both polling loops below so a background library scan only
+    // triggers an e-paper refresh on the tick where its state actually changes
+    // (started/finished), not on every 500 ms poll while it runs.
+    bool library_scan_was_busy = false;
     services::file_browser::listing_t file_listing = {};
     char book_path[ui::book_path_length] = {};
     bool have_book = false;
@@ -1010,7 +1122,8 @@ static void run()
         const bool service_screen = screen_state.screen == ui::screen_connectivity ||
                                     screen_state.screen == ui::screen_wifi_networks ||
                                     screen_state.screen == ui::screen_ota ||
-                                    screen_state.screen == ui::screen_book_sync;
+                                    screen_state.screen == ui::screen_book_sync ||
+                                    screen_state.screen == ui::screen_book_manager;
         const TickType_t wait_ticks = service_screen ? pdMS_TO_TICKS(500U) : idle_timeout_ticks(settings);
         if (xQueueReceive(events, &event, wait_ticks) != pdTRUE)
         {
@@ -1031,6 +1144,20 @@ static void run()
                     screen_state.screen = ui::screen_connectivity;
                     draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
                     transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
+                    continue;
+                }
+                if (screen_state.screen == ui::screen_book_manager)
+                {
+                    const bool busy_now = services::library_scan::busy();
+                    const bool applied = apply_library_scan_result(library_catalog, book_paths,
+                                                                    &book_count, &duplicate_book_count);
+                    if (applied || busy_now != library_scan_was_busy)
+                    {
+                        draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
+                                                duplicate_book_count);
+                        transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
+                    }
+                    library_scan_was_busy = busy_now;
                     continue;
                 }
                 if (screen_state.screen == ui::screen_connectivity)
@@ -1469,6 +1596,7 @@ static void run()
             {
                 duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
                 draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted, duplicate_book_count);
+                library_scan_was_busy = services::library_scan::busy();
             }
             else if (screen_state.screen == ui::screen_file_browser)
                 ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
@@ -1600,7 +1728,8 @@ static void run()
         const bool service_screen = screen_state.screen == ui::screen_connectivity ||
                                     screen_state.screen == ui::screen_wifi_networks ||
                                     screen_state.screen == ui::screen_ota ||
-                                    screen_state.screen == ui::screen_book_sync;
+                                    screen_state.screen == ui::screen_book_sync ||
+                                    screen_state.screen == ui::screen_book_manager;
         const TickType_t wait_ticks = service_screen ? pdMS_TO_TICKS(500U) : idle_timeout_ticks(settings);
         if (xQueueReceive(events, &event, wait_ticks) != pdTRUE)
         {
@@ -1621,6 +1750,20 @@ static void run()
                     screen_state.screen = ui::screen_connectivity;
                     draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
                     transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
+                    continue;
+                }
+                if (screen_state.screen == ui::screen_book_manager)
+                {
+                    const bool busy_now = services::library_scan::busy();
+                    const bool applied = apply_library_scan_result(library_catalog, book_paths,
+                                                                    &book_count, &duplicate_book_count);
+                    if (applied || busy_now != library_scan_was_busy)
+                    {
+                        draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
+                                                duplicate_book_count);
+                        transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
+                    }
+                    library_scan_was_busy = busy_now;
                     continue;
                 }
                 if (screen_state.screen == ui::screen_connectivity)
@@ -2087,6 +2230,7 @@ static void run()
             {
                 duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
                 draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted, duplicate_book_count);
+                library_scan_was_busy = services::library_scan::busy();
             }
             else if (screen_state.screen == ui::screen_file_browser)
                 ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
@@ -2200,7 +2344,12 @@ static void run()
             else if (screen_state.screen == ui::screen_bookmarks)
                 ui::draw_bookmarks(&framebuffer, bookmarks, bookmark_count, screen_state.bookmarks_focus);
             else if (screen_state.screen == ui::screen_book_info)
-                ui::draw_book_info(&framebuffer, book, spine_index, book->spine_count);
+            {
+                const cover_bitmap_t cover = load_book_cover(library_catalog, book_path);
+                ui::draw_book_info(&framebuffer, book, spine_index, book->spine_count, cover.pixels,
+                                   cover.width, cover.height);
+                heap_caps_free(cover.pixels);
+            }
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -2218,7 +2367,10 @@ static void run()
         }
         if (command == ui::screen_command_show_book_info)
         {
-            ui::draw_book_info(&framebuffer, book, spine_index, book->spine_count);
+            const cover_bitmap_t cover = load_book_cover(library_catalog, book_path);
+            ui::draw_book_info(&framebuffer, book, spine_index, book->spine_count, cover.pixels,
+                               cover.width, cover.height);
+            heap_caps_free(cover.pixels);
             transfer_dirty(&framebuffer, &display);
             continue;
         }

@@ -27,6 +27,7 @@ idf_component_register(
         "services/book_manager.cpp"
         "services/file_browser.cpp"
         "services/library_index.cpp"
+        "services/library_scan.cpp"
         "services/book_sync.cpp"
         "services/debug_console.cpp"
         "ui/layout/layout.cpp"
@@ -59,6 +60,7 @@ idf_component_register(
         "ui/dialog.cpp"
         "ui/storage_screen.cpp"
         "ui/about.cpp"
+        "ui/splash.cpp"
     INCLUDE_DIRS
         "."
         "board/m5paper"

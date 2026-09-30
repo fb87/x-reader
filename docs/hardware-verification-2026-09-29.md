@@ -142,3 +142,61 @@ survived the earlier landscape sweep.
 **Long operations block the input loop.** Book Manager *Import* and *Cleanup*
 rescan the card synchronously on the UI task, so taps are dropped for several
 seconds. This is the "watchdog-safe long operations" item in `X-READER-TODO.md`.
+
+---
+
+# Follow-up: blocking scan, splash, cover decode — 2026-09-30
+
+## Bug found and fixed
+
+### 8. Book Manager Import/Cleanup crashed the device (interrupt WDT panic)
+Moving the catalog rebuild to a background task (`services::library_scan`) to
+stop it from blocking input, as flagged in the "Still open" section above,
+initially **crashed the device** rather than fixing it: `Guru Meditation
+Error: Core 0 panic'ed (Interrupt wdt timeout)`. Decoded with `addr2line`, the
+backtrace was the new task inside `zip::open() -> fopen() -> vfs_fat_open() ->
+_lock_acquire`, stuck spinning on a newlib lock.
+
+Root cause: stack size, not concurrency. `library_index::rebuild()` runs the
+same EPUB zip/XML metadata parser that boots on the main app task's 64 KB
+stack (`CONFIG_ESP_MAIN_TASK_STACK_SIZE`). The new background task was given
+only 8 KB — plenty for simple I/O, not for this parser. The overflow
+corrupted adjacent memory (apparently including a libc lock structure) before
+FreeRTOS's canary check could catch it, which is what made it look like an
+SD/SPI concurrency bug rather than what it was. Giving the task 65536 bytes
+(matching the main task) fixed it outright; verified over multiple Import and
+Cleanup runs with no crash and rotary input actively moving focus *during* the
+scan (confirming input isn't blocked, not just that the device doesn't crash).
+
+## What shipped
+
+- **Async library scan** (`services/library_scan.{hpp,cpp}`): Import and
+  Cleanup now rebuild the catalog on a background task. Book Manager shows
+  "SCANNING..." on both rows while it runs and polls for completion every
+  500 ms like Connectivity/OTA already did, only triggering an e-paper
+  refresh when the busy state actually changes (not every poll tick).
+- **Splash screen** (`ui/splash.{hpp,cpp}`, mockup 1): shown from display
+  init through SD mount to catalog load, replacing what used to be a
+  placeholder Home paint (nullptr book title) that got overwritten a moment
+  later anyway. Confirmed via serial log dirty-rect sizes (full GC16 paint,
+  two small DU status-line updates, final full GC16 repaint into Home) and
+  two hardware photos catching it mid- and post-render.
+- **Book Info cover decode**: `main.cpp` now reads the cached cover file and
+  decodes it via the existing `epub::image::decode_mono`/`blit_4bpp_scaled`
+  (both already used and host-tested elsewhere), letterboxed to preserve
+  aspect ratio. `ui/book_info.cpp` stays a pure drawing function — it takes
+  already-decoded pixels, no file I/O in the UI layer.
+
+## Verification gap
+
+None of the 32 EPUBs on the test SD card have an embedded cover image
+(`.xreader-covers` cache directory doesn't exist), so the actual decode path
+could not be exercised end-to-end on hardware with real data. What *is*
+verified: the underlying primitives (`decode_mono`, `blit_4bpp_scaled`) have
+existing host-test coverage with a synthetic PNG; the fallback path (no
+cover → placeholder icon, the case 100% of current books hit) was confirmed
+crash-free on hardware; and the full touch-navigation sweep passed with this
+code active. The aspect-fit and file-loading glue in `load_book_cover()` is
+new and only indirectly exercised.
+
+Full sweep after all three fixes: `ALL CHECKS PASSED`.

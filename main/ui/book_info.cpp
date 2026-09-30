@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "gfx/font.hpp"
+#include "gfx/framebuffer.hpp"
 #include "ui/chrome.hpp"
 #include "ui/layout/layout.hpp"
 #include "ui/widgets.hpp"
@@ -10,7 +11,8 @@
 namespace xreader::ui {
 
 void draw_book_info(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
-                    uint8_t spine_index, uint8_t spine_count)
+                    uint8_t spine_index, uint8_t spine_count, const uint8_t* cover_pixels,
+                    uint16_t cover_pixel_width, uint16_t cover_pixel_height)
 {
     if (framebuffer == nullptr) return;
     const layout::viewport_t vp{framebuffer->width, framebuffer->height};
@@ -22,15 +24,38 @@ void draw_book_info(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
     const char* title = book && book->title[0] ? book->title : "Unknown title";
     const char* author = book && book->author[0] ? book->author : "Unknown author";
 
-    // Mockup 4 leads with a cover beside the title block.  The cached cover is
-    // still an encoded JPEG/PNG, so until a decode-to-framebuffer path exists the
-    // slot is drawn as a labelled placeholder rather than left blank.
+    // Mockup 4 leads with a cover beside the title block.
     const uint16_t cover_w = static_cast<uint16_t>(body.width / 3U);
     const uint16_t cover_h = static_cast<uint16_t>(cover_w * 3U / 2U);
     gfx::draw_rect(framebuffer, body.x, body.y, cover_w, cover_h, 0x07);
-    gfx::draw_icon(framebuffer, static_cast<uint16_t>(body.x + (cover_w - gfx::icon_advance(1)) / 2U),
-                   static_cast<uint16_t>(body.y + (cover_h - gfx::icon_advance(1)) / 2U),
-                   gfx::icon_book, 1, 0x08);
+    if (cover_pixels != nullptr && cover_pixel_width != 0U && cover_pixel_height != 0U)
+    {
+        // Fit the decoded cover inside the slot preserving aspect ratio
+        // (blit_4bpp_scaled stretches to whatever rect it is given), letterboxed
+        // rather than cropped so nothing the cover shows is cut off.
+        uint16_t fit_w = cover_w;
+        uint16_t fit_h = static_cast<uint16_t>(static_cast<uint32_t>(cover_pixel_height) * cover_w /
+                                               cover_pixel_width);
+        if (fit_h > cover_h)
+        {
+            fit_h = cover_h;
+            fit_w = static_cast<uint16_t>(static_cast<uint32_t>(cover_pixel_width) * cover_h /
+                                          cover_pixel_height);
+        }
+        const uint16_t fit_x = static_cast<uint16_t>(body.x + (cover_w - fit_w) / 2U);
+        const uint16_t fit_y = static_cast<uint16_t>(body.y + (cover_h - fit_h) / 2U);
+        gfx::blit_4bpp_scaled(framebuffer, fit_x, fit_y, fit_w, fit_h, cover_pixels,
+                              cover_pixel_width, cover_pixel_height);
+    }
+    else
+    {
+        // No decoded cover (JPEG source, missing cache, or read/decode failure):
+        // a labelled placeholder rather than an empty box.
+        gfx::draw_icon(framebuffer,
+                       static_cast<uint16_t>(body.x + (cover_w - gfx::icon_advance(1)) / 2U),
+                       static_cast<uint16_t>(body.y + (cover_h - gfx::icon_advance(1)) / 2U),
+                       gfx::icon_book, 1, 0x08);
+    }
 
     const uint16_t text_x = static_cast<uint16_t>(body.x + cover_w + 16U);
     const uint16_t text_w = body.width > cover_w + 16U

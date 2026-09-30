@@ -20,7 +20,8 @@ static layout::rect_t items_area(layout::viewport_t viewport)
 } // namespace
 
 void draw_book_manager(gfx::framebuffer_t* framebuffer, book_manager_item_t focus,
-                       uint16_t book_count, bool storage_mounted, uint16_t duplicate_count)
+                       uint16_t book_count, bool storage_mounted, uint16_t duplicate_count,
+                       bool scanning)
 {
     if (framebuffer == nullptr)
         return;
@@ -28,11 +29,6 @@ void draw_book_manager(gfx::framebuffer_t* framebuffer, book_manager_item_t focu
     const layout::viewport_t viewport = {framebuffer->width, framebuffer->height};
     const layout::metrics_t metrics = layout::metrics(viewport);
     gfx::clear(framebuffer, 0x0f);
-    char status[28] = {};
-    if (storage_mounted && duplicate_count > 0U)
-        snprintf(status, sizeof(status), "%u DUPLICATE%s", static_cast<unsigned>(duplicate_count), duplicate_count == 1U ? "" : "S");
-    else
-        snprintf(status, sizeof(status), "%s", storage_mounted ? "SD READY" : "NO SD");
     chrome::draw_status_bar(framebuffer, "Book Manager");
 
     char count_text[24] = {};
@@ -40,12 +36,15 @@ void draw_book_manager(gfx::framebuffer_t* framebuffer, book_manager_item_t focu
     const char* const labels[book_manager_item_count] = {
         "LIBRARY", "FILE BROWSER", "IMPORT BOOKS", "STORAGE", "CLEANUP", "BACK",
     };
+    // A scan runs in the background for both Import and Cleanup (the cheap file
+    // move/delete is always followed by a full catalog rebuild), so both rows
+    // show the same in-progress state while either is running.
     const char* const values[book_manager_item_count] = {
         count_text,
         "BROWSE SD CARD",
-        "FROM /IMPORT",
+        scanning ? "SCANNING..." : "FROM /IMPORT",
         storage_mounted ? "AVAILABLE" : "UNAVAILABLE",
-        duplicate_count > 0U ? "TEMP FILES / DUPES" : "REMOVE TEMP FILES",
+        scanning ? "SCANNING..." : (duplicate_count > 0U ? "TEMP FILES / DUPES" : "REMOVE TEMP FILES"),
         "RETURN",
     };
 
