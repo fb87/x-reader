@@ -32,6 +32,8 @@ static const char* event_name(event_type_t type)
         return "button_down";
     case event_button_up:
         return "button_up";
+    case event_button_long_press:
+        return "button_long_press";
     default:
         return "unknown";
     }
@@ -53,16 +55,25 @@ static void touch_coordinates(const config_t* config, uint16_t raw_x, uint16_t r
     }
 }
 
+// Debounced state for one momentary button, shared by the centre/power button
+// and the two "rotary" pins.  Named generically because it is reused for all
+// three physical buttons below.
+struct button_debounce_t
+{
+    bool state;
+    bool candidate;
+    uint8_t stable_samples;
+};
+
 struct task_context_t
 {
     config_t config;
     QueueHandle_t events;
-    uint8_t rotary_state;
-    int8_t rotary_quarters;
-    uint8_t rotary_cooldown_samples;
-    bool button_state;
-    bool button_candidate;
-    uint8_t button_stable_samples;
+    button_debounce_t press_button;
+    TickType_t press_start_tick;
+    bool press_long_fired;
+    button_debounce_t right_button;
+    button_debounce_t left_button;
     bool touch_active;
     uint16_t touch_x;
     uint16_t touch_y;
@@ -79,56 +90,87 @@ static void send(task_context_t* context, event_t event)
 #endif
 }
 
+// Returns true exactly once, on the sample where a debounced press-to-release
+// transition completes (i.e. a short click).  A debounced press-to-press "no
+// change" or a still-bouncing read returns false.
+static bool debounce_click(button_debounce_t* button, bool pressed)
+{
+    if (pressed != button->candidate)
+    {
+        button->candidate = pressed;
+        button->stable_samples = 0;
+        return false;
+    }
+    if (button->stable_samples < debounce_samples)
+        ++button->stable_samples;
+    if (button->stable_samples >= debounce_samples && pressed != button->state)
+    {
+        button->state = pressed;
+        return !pressed;
+    }
+    return false;
+}
+
+// The M5Paper board does not have a continuous rotary encoder: "rotary right"
+// and "rotary left" are two independent momentary buttons (confirmed on
+// hardware -- a quadrature gray-code decoder, which is what this function
+// used to run, requires a true encoder's alternating two-phase signal and a
+// plain button press does not reliably produce one, which is why "rotating"
+// appeared to do nothing).  Each fires its rotary event on release, matching
+// how the centre button already fires event_button_up on release below.
 static void poll_rotary(task_context_t* context)
 {
-    static constexpr int8_t transition_table[16] = {
-        0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0,
-    };
-    const uint8_t right = static_cast<uint8_t>(gpio_get_level(context->config.rotary_right_pin));
-    const uint8_t left = static_cast<uint8_t>(gpio_get_level(context->config.rotary_left_pin));
-    const uint8_t state = static_cast<uint8_t>((right << 1) | left);
-    const uint8_t transition = static_cast<uint8_t>((context->rotary_state << 2) | state);
-    context->rotary_quarters += transition_table[transition];
-    context->rotary_state = state;
+    const bool right_pressed = gpio_get_level(context->config.rotary_right_pin) == 0;
+    if (debounce_click(&context->right_button, right_pressed))
+        send(context, {event_rotary_clockwise, 0, 0});
 
-    if (context->rotary_cooldown_samples > 0)
-        --context->rotary_cooldown_samples;
-
-    if (context->rotary_quarters >= 4)
-    {
-        if (context->rotary_cooldown_samples == 0)
-        {
-            send(context, {event_rotary_clockwise, 0, 0});
-            context->rotary_cooldown_samples = debounce_samples;
-        }
-        context->rotary_quarters = 0;
-    }
-    else if (context->rotary_quarters <= -4)
-    {
-        if (context->rotary_cooldown_samples == 0)
-        {
-            send(context, {event_rotary_counterclockwise, 0, 0});
-            context->rotary_cooldown_samples = debounce_samples;
-        }
-        context->rotary_quarters = 0;
-    }
+    const bool left_pressed = gpio_get_level(context->config.rotary_left_pin) == 0;
+    if (debounce_click(&context->left_button, left_pressed))
+        send(context, {event_rotary_counterclockwise, 0, 0});
 }
+
+static constexpr uint32_t long_press_ms = 700;
 
 static void poll_button(task_context_t* context)
 {
     const bool pressed = gpio_get_level(context->config.rotary_press_pin) == 0;
-    if (pressed != context->button_candidate)
+    const bool was_pressed = context->press_button.state;
+    if (pressed != context->press_button.candidate)
     {
-        context->button_candidate = pressed;
-        context->button_stable_samples = 0;
-        return;
+        context->press_button.candidate = pressed;
+        context->press_button.stable_samples = 0;
     }
-    if (context->button_stable_samples < debounce_samples)
-        ++context->button_stable_samples;
-    if (context->button_stable_samples >= debounce_samples && pressed != context->button_state)
+    else if (context->press_button.stable_samples < debounce_samples)
     {
-        context->button_state = pressed;
-        send(context, {pressed ? event_button_down : event_button_up, 0, 0});
+        ++context->press_button.stable_samples;
+        if (context->press_button.stable_samples >= debounce_samples &&
+            pressed != context->press_button.state)
+        {
+            context->press_button.state = pressed;
+            if (pressed)
+            {
+                context->press_start_tick = xTaskGetTickCount();
+                context->press_long_fired = false;
+            }
+        }
+    }
+
+    if (context->press_button.state && !was_pressed)
+        send(context, {event_button_down, 0, 0});
+
+    if (context->press_button.state && !context->press_long_fired &&
+        static_cast<uint32_t>(xTaskGetTickCount() - context->press_start_tick) >=
+            pdMS_TO_TICKS(long_press_ms))
+    {
+        context->press_long_fired = true;
+        send(context, {event_button_long_press, 0, 0});
+    }
+    else if (was_pressed && !context->press_button.state)
+    {
+        // A long press already delivered its own action; releasing afterwards
+        // must not also fire the short-press action.
+        if (!context->press_long_fired)
+            send(context, {event_button_up, 0, 0});
     }
 }
 
@@ -196,13 +238,17 @@ esp_err_t start(const config_t* config, QueueHandle_t events)
 
     task_context.config = *config;
     task_context.events = events;
-    task_context.rotary_state = static_cast<uint8_t>(
-        (gpio_get_level(config->rotary_right_pin) << 1) | gpio_get_level(config->rotary_left_pin));
-    task_context.rotary_cooldown_samples = 0;
-    task_context.button_state = gpio_get_level(config->rotary_press_pin) == 0;
-    task_context.button_candidate = task_context.button_state;
-    task_context.button_stable_samples = debounce_samples;
-    task_context.rotary_quarters = 0;
+    task_context.press_button.state = gpio_get_level(config->rotary_press_pin) == 0;
+    task_context.press_button.candidate = task_context.press_button.state;
+    task_context.press_button.stable_samples = debounce_samples;
+    task_context.press_start_tick = xTaskGetTickCount();
+    task_context.press_long_fired = false;
+    task_context.right_button.state = gpio_get_level(config->rotary_right_pin) == 0;
+    task_context.right_button.candidate = task_context.right_button.state;
+    task_context.right_button.stable_samples = debounce_samples;
+    task_context.left_button.state = gpio_get_level(config->rotary_left_pin) == 0;
+    task_context.left_button.candidate = task_context.left_button.state;
+    task_context.left_button.stable_samples = debounce_samples;
     task_context.touch_active = false;
     task_context.touch_x = 0;
     task_context.touch_y = 0;
@@ -235,13 +281,19 @@ void flush(QueueHandle_t events)
     if (events == nullptr)
         return;
     xQueueReset(events);
-    task_context.rotary_quarters = 0;
-    task_context.rotary_cooldown_samples = 0;
     // Keep the physical touch state across queue flushes. Resetting it while a
     // finger is still down can synthesize a second touch_down on the next report.
-    task_context.button_candidate = gpio_get_level(task_context.config.rotary_press_pin) == 0;
-    task_context.button_state = task_context.button_candidate;
-    task_context.button_stable_samples = debounce_samples;
+    task_context.press_button.candidate = gpio_get_level(task_context.config.rotary_press_pin) == 0;
+    task_context.press_button.state = task_context.press_button.candidate;
+    task_context.press_button.stable_samples = debounce_samples;
+    task_context.press_start_tick = xTaskGetTickCount();
+    task_context.press_long_fired = false;
+    task_context.right_button.candidate = gpio_get_level(task_context.config.rotary_right_pin) == 0;
+    task_context.right_button.state = task_context.right_button.candidate;
+    task_context.right_button.stable_samples = debounce_samples;
+    task_context.left_button.candidate = gpio_get_level(task_context.config.rotary_left_pin) == 0;
+    task_context.left_button.state = task_context.left_button.candidate;
+    task_context.left_button.stable_samples = debounce_samples;
 }
 
 } // namespace input

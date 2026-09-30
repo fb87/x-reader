@@ -53,7 +53,7 @@ void draw_wifi_networks(gfx::framebuffer_t* framebuffer, const wifi_network_view
         {
             const wifi_network_view_t& network = networks[index];
             gfx::draw_text(framebuffer, static_cast<uint16_t>(row.x + 12U),
-                           static_cast<uint16_t>(row.y + (row.height - 16U) / 2U), network.ssid, 1,
+                           static_cast<uint16_t>(row.y + (row.height - 24U) / 2U), network.ssid, 1,
                            foreground);
             char info[24] = {};
             snprintf(info, sizeof(info), "%s %d dBm", network.secured ? "LOCK" : "OPEN",
@@ -64,14 +64,14 @@ void draw_wifi_networks(gfx::framebuffer_t* framebuffer, const wifi_network_view
                     ? static_cast<uint16_t>(row.x + row.width - info_width - 12U)
                     : row.x;
             gfx::draw_text(framebuffer, info_x,
-                           static_cast<uint16_t>(row.y + (row.height - 16U) / 2U), info, 1,
+                           static_cast<uint16_t>(row.y + (row.height - 24U) / 2U), info, 1,
                            selected ? 0x04 : 0x06);
         }
         else
         {
             const char* label = index == visible_networks ? "RESCAN" : "ADD HIDDEN NETWORK";
             gfx::draw_text(framebuffer, static_cast<uint16_t>(row.x + 12U),
-                           static_cast<uint16_t>(row.y + (row.height - 16U) / 2U), label, 1,
+                           static_cast<uint16_t>(row.y + (row.height - 24U) / 2U), label, 1,
                            foreground);
         }
     }

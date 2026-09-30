@@ -164,7 +164,11 @@ layout::rect_t key_rect(layout::viewport_t v, const keyboard_state_t* s, uint8_t
     const auto a = kb_area(v);
     const uint8_t rs = rows(s);
     const uint32_t gy = static_cast<uint32_t>(rs - 1U) * m.gap;
-    const uint16_t kh = static_cast<uint16_t>((a.height > gy ? a.height - gy : 0U) / rs);
+    // Portrait screens leave far more vertical room than 5 key rows need; fill
+    // would otherwise stretch each key well past a comfortable tap target.
+    const uint16_t fill_height = static_cast<uint16_t>((a.height > gy ? a.height - gy : 0U) / rs);
+    const uint16_t max_key_height = static_cast<uint16_t>(m.row_height + 12U);
+    const uint16_t kh = fill_height > max_key_height ? max_key_height : fill_height;
     const uint8_t cs = cols(s, r);
     if (cs == 0 || c >= cs)
         return {};
@@ -427,7 +431,7 @@ void draw_keyboard(gfx::framebuffer_t* fb, const keyboard_state_t* s)
     else
         snprintf(d, sizeof(d), "%s", s->text);
     gfx::draw_text(fb, static_cast<uint16_t>(f.x + 10U),
-                   static_cast<uint16_t>(f.y + (f.height > 16U ? (f.height - 16U) / 2U : 0U)), d, 1,
+                   static_cast<uint16_t>(f.y + (f.height > 16U ? (f.height - 24U) / 2U : 0U)), d, 1,
                    0x00);
     for (uint8_t r = 0; r < rows(s); ++r)
         for (uint8_t c = 0; c < cols(s, r); ++c)
@@ -443,7 +447,7 @@ void draw_keyboard(gfx::framebuffer_t* fb, const keyboard_state_t* s)
             const uint16_t w = gfx::measure_text(l, 1);
             gfx::draw_text(
                 fb, k.width > w ? static_cast<uint16_t>(k.x + (k.width - w) / 2U) : k.x,
-                static_cast<uint16_t>(k.y + (k.height > 16U ? (k.height - 16U) / 2U : 0U)), l, 1,
+                static_cast<uint16_t>(k.y + (k.height > 16U ? (k.height - 24U) / 2U : 0U)), l, 1,
                 sel ? 0x0f : 0x00);
         }
     chrome::draw_indication_bar(fb, {"Move", gfx::icon_list}, {"Type", gfx::icon_check},

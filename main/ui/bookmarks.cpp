@@ -33,7 +33,7 @@ void draw_bookmarks(gfx::framebuffer_t* framebuffer, const bookmark_view_t* item
     if (count == 0)
     {
         gfx::draw_text(framebuffer, area.x, area.y, "No bookmarks yet", 1, 0x05);
-        gfx::draw_text(framebuffer, area.x, static_cast<uint16_t>(area.y + 28U),
+        gfx::draw_text(framebuffer, area.x, static_cast<uint16_t>(area.y + 30U),
                        "Add one from the Reader Menu", 1, 0x07);
     }
     else

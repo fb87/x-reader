@@ -18,9 +18,12 @@ struct reader_settings_t
     uint8_t text_alignment;
 };
 
+// spine_index is the current chapter, used only to grey out the footer's
+// Prev/Next cells when there is truly nowhere left to go (start/end of book);
+// mid-book chapter boundaries stay enabled since Next/Prev still moves there.
 void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const epub::book_t* book,
                  const epub::document_t* document, uint8_t page, uint8_t page_count,
-                 const reader_settings_t* settings);
+                 uint8_t spine_index, const reader_settings_t* settings);
 uint8_t page_count(const epub::document_t* document, const reader_settings_t* settings,
                    uint16_t display_width, uint16_t display_height);
 // Finds a UTF-8 byte substring and maps its byte offset to the cached page.

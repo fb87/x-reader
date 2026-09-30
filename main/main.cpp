@@ -122,14 +122,14 @@ transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* disp
 static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* display,
                       const char* book_path, const epub::book_t* book,
                       const epub::document_t* document, uint8_t page, uint8_t page_count,
-                      const ui::reader_settings_t* settings)
+                      uint8_t spine_index, const ui::reader_settings_t* settings)
 {
     if (book_path != nullptr)
         active_book_path = book_path;
     [[maybe_unused]] const int64_t draw_start = XR_TIME_US();
     XR_LOGI("draw start page=%u/%u", static_cast<unsigned>(page + 1),
             static_cast<unsigned>(page_count));
-    ui::draw_reader(framebuffer, book_path, book, document, page, page_count, settings);
+    ui::draw_reader(framebuffer, book_path, book, document, page, page_count, spine_index, settings);
     XR_LOGI("draw done elapsed_us=%lld", static_cast<long long>(XR_TIME_US() - draw_start));
     const drivers::it8951e::refresh_mode_t refresh_mode =
         settings != nullptr && settings->refresh_mode != 0 ? drivers::it8951e::refresh_du
@@ -139,9 +139,11 @@ static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_
 
 static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* display,
                       const epub::book_t* book, const epub::document_t* document, uint8_t page,
-                      uint8_t page_count, const ui::reader_settings_t* settings)
+                      uint8_t page_count, uint8_t spine_index,
+                      const ui::reader_settings_t* settings)
 {
-    return show(framebuffer, display, active_book_path, book, document, page, page_count, settings);
+    return show(framebuffer, display, active_book_path, book, document, page, page_count,
+               spine_index, settings);
 }
 
 static bool load_book_file(const char* path, epub::book_t* book, epub::document_t* document)
@@ -1725,7 +1727,7 @@ static void run()
     total_pages = ui::page_count(document, &reader_settings, framebuffer.width, framebuffer.height);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
     screen_state.screen = ui::screen_reader;
-    show(&framebuffer, &display, book_path, book, document, page, total_pages, &reader_settings);
+    show(&framebuffer, &display, book_path, book, document, page, total_pages, spine_index, &reader_settings);
     input::flush(events);
     ui::bookmark_view_t bookmarks[storage::persistence::max_bookmarks_per_book] = {};
     uint8_t bookmark_count = 0;
@@ -1979,7 +1981,7 @@ static void run()
                                              framebuffer.height);
                 screen_state.screen = ui::screen_reader;
                 show(&framebuffer, &display, book_path, book, document, page, total_pages,
-                     &reader_settings);
+                     spine_index, &reader_settings);
                 reader_search_offset = 0U;
             }
             else
@@ -1990,7 +1992,7 @@ static void run()
                 reader_search_offset = found_offset + strlen(reader_search_query);
                 screen_state.screen = ui::screen_reader;
                 show(&framebuffer, &display, book_path, book, document, page, total_pages,
-                     &reader_settings);
+                     spine_index, &reader_settings);
             }
             continue;
         }
@@ -1999,7 +2001,7 @@ static void run()
         {
             screen_state.screen = ui::screen_reader;
             show(&framebuffer, &display, book_path, book, document, page, total_pages,
-                 &reader_settings);
+                 spine_index, &reader_settings);
             continue;
         }
         if (command == ui::screen_command_library_search)
@@ -2276,7 +2278,7 @@ static void run()
                             restored_page < total_pages ? static_cast<uint8_t>(restored_page) : 0U;
                         screen_state.screen = ui::screen_reader;
                         show(&framebuffer, &display, book, document, page, total_pages,
-                             &reader_settings);
+                             spine_index, &reader_settings);
                     }
                 }
             }
@@ -2378,7 +2380,7 @@ static void run()
                 }
             }
             screen_state.screen = ui::screen_reader;
-            show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+            show(&framebuffer, &display, book, document, page, total_pages, spine_index, &reader_settings);
             continue;
         }
         if (command == ui::screen_command_redraw)
@@ -2498,7 +2500,7 @@ static void run()
                 total_pages = ui::page_count(document, &reader_settings, framebuffer.width,
                                              framebuffer.height);
                 screen_state.screen = ui::screen_reader;
-                show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+                show(&framebuffer, &display, book, document, page, total_pages, spine_index, &reader_settings);
             }
             continue;
         }
@@ -2516,7 +2518,7 @@ static void run()
                     page = mark.page < total_pages ? mark.page : 0;
                     screen_state.screen = ui::screen_reader;
                     show(&framebuffer, &display, book, document, page, total_pages,
-                         &reader_settings);
+                         spine_index, &reader_settings);
                 }
             }
             continue;
@@ -2530,7 +2532,7 @@ static void run()
         }
         if (command == ui::screen_command_close_quick_settings)
         {
-            show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+            show(&framebuffer, &display, book, document, page, total_pages, spine_index, &reader_settings);
             input::flush(events);
             continue;
         }
@@ -2600,7 +2602,7 @@ static void run()
             else if (screen_state.screen == ui::screen_reading_settings)
                 ui::draw_reading_settings(&framebuffer, screen_state.reading_focus, &quick_values);
             else
-                show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+                show(&framebuffer, &display, book, document, page, total_pages, spine_index, &reader_settings);
             transfer_dirty(&framebuffer, &display);
             input::flush(events);
             continue;
@@ -2639,7 +2641,7 @@ static void run()
             }
             // Start rendering/refreshing before committing the reading position to NVS so
             // flash persistence is not part of the touch-to-display latency.
-            show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+            show(&framebuffer, &display, book, document, page, total_pages, spine_index, &reader_settings);
             storage::persistence::save_position_for_book(book_path, spine_index, page);
             input::flush(events);
         }

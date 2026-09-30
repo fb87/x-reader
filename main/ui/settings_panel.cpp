@@ -84,7 +84,7 @@ void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
                            ink);
             text_x = static_cast<uint16_t>(text_x + glyph + 10U);
         }
-        gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(row.y + (row.height - 16U) / 2U),
+        gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(row.y + (row.height - 24U) / 2U),
                        spec.label == nullptr ? "" : spec.label, 1, ink);
 
         const layout::rect_t control = control_area(row);
@@ -110,7 +110,7 @@ void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
                 const uint16_t width = gfx::measure_text(spec.value, 1);
                 if (arrow_x > width + 8U)
                     gfx::draw_text(framebuffer, static_cast<uint16_t>(arrow_x - width - 8U),
-                                   static_cast<uint16_t>(row.y + (row.height - 16U) / 2U),
+                                   static_cast<uint16_t>(row.y + (row.height - 24U) / 2U),
                                    spec.value, 1, secondary);
             }
             gfx::draw_icon(framebuffer, arrow_x,
@@ -126,7 +126,7 @@ void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
             const uint16_t x = row.width > width + 12U
                                    ? static_cast<uint16_t>(row.x + row.width - width - 12U)
                                    : row.x;
-            gfx::draw_text(framebuffer, x, static_cast<uint16_t>(row.y + (row.height - 16U) / 2U),
+            gfx::draw_text(framebuffer, x, static_cast<uint16_t>(row.y + (row.height - 24U) / 2U),
                            value, 1, secondary);
             break;
         }

@@ -63,7 +63,7 @@ void draw_book_info(gfx::framebuffer_t* framebuffer, const epub::book_t* book, u
     const uint16_t text_w =
         body.width > cover_w + 16U ? static_cast<uint16_t>(body.width - cover_w - 16U) : body.width;
     gfx::draw_text(framebuffer, text_x, body.y, title, 1, 0x00);
-    gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(body.y + 22U), author, 1, 0x05);
+    gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(body.y + 28U), author, 1, 0x05);
 
     char chapters[16] = {};
     snprintf(chapters, sizeof(chapters), "%u", static_cast<unsigned>(spine_count));
@@ -72,10 +72,10 @@ void draw_book_info(gfx::framebuffer_t* framebuffer, const epub::book_t* book, u
              static_cast<unsigned>(spine_count));
     const char* labels[] = {"Format", "Chapters", "Current chapter"};
     const char* values[] = {"EPUB", chapters, current};
-    const uint16_t list_y = static_cast<uint16_t>(body.y + 52U);
+    const uint16_t list_y = static_cast<uint16_t>(body.y + 58U);
     for (uint8_t i = 0; i < 3; ++i)
     {
-        const uint16_t y = static_cast<uint16_t>(list_y + i * 24U);
+        const uint16_t y = static_cast<uint16_t>(list_y + i * 26U);
         gfx::draw_text(framebuffer, text_x, y, labels[i], 1, 0x06);
         const uint16_t w = gfx::measure_text(values[i], 1);
         if (text_w > w)

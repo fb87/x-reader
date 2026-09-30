@@ -64,7 +64,7 @@ void draw_connectivity(gfx::framebuffer_t* framebuffer, connectivity_item_t focu
         const uint8_t foreground = 0x00;
         const uint8_t secondary = selected ? 0x04 : 0x06;
         gfx::draw_text(framebuffer, static_cast<uint16_t>(item.x + 14U),
-                       static_cast<uint16_t>(item.y + (item.height - 16U) / 2U), labels[index], 1,
+                       static_cast<uint16_t>(item.y + (item.height - 24U) / 2U), labels[index], 1,
                        foreground);
         const uint16_t value_width = gfx::measure_text(values[index], 1);
         const uint16_t value_x =
@@ -72,7 +72,7 @@ void draw_connectivity(gfx::framebuffer_t* framebuffer, connectivity_item_t focu
                 ? static_cast<uint16_t>(item.x + item.width - value_width - 14U)
                 : item.x;
         gfx::draw_text(framebuffer, value_x,
-                       static_cast<uint16_t>(item.y + (item.height - 16U) / 2U), values[index], 1,
+                       static_cast<uint16_t>(item.y + (item.height - 24U) / 2U), values[index], 1,
                        secondary);
     }
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Select", gfx::icon_check},

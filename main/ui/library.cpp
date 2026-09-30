@@ -52,7 +52,11 @@ static layout::rect_t catalog_area(layout::viewport_t vp)
 
 static uint16_t catalog_row_height(layout::viewport_t vp)
 {
-    return static_cast<uint16_t>(layout::metrics(vp).row_height + 16U);
+    // +36 (was +16) to fit three stacked 1x text lines (title/author/size) at
+    // the larger glyph size: each line needs a full 24px box plus a couple of
+    // pixels of gap, and cramming that into the old 60px total is what used to
+    // make the text look "too small" -- fewer, taller rows is the trade-off.
+    return static_cast<uint16_t>(layout::metrics(vp).row_height + 36U);
 }
 
 static uint8_t catalog_visible_rows(layout::viewport_t vp, size_t count)
@@ -319,8 +323,8 @@ static void draw_library_rows(gfx::framebuffer_t* framebuffer, const char* const
         const uint16_t text_x = static_cast<uint16_t>(item.x + 24U + icon_w);
         gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 11U), titles[index], 1,
                        0x00);
-        if (item.height >= 46)
-            gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 31U), "EPUB", 1,
+        if (item.height >= 60)
+            gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 35U), "EPUB", 1,
                            selected ? 0x04 : 0x07);
     }
 }
@@ -472,14 +476,14 @@ void draw_library_catalog_view(gfx::framebuffer_t* framebuffer, bool storage_mou
         const auto& entry = catalog->entries[catalog_index];
         gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 6U), entry.title, 1,
                        0x00);
-        if (item.height >= 42U)
-            gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 24U), entry.author,
-                           1, selected ? 0x04 : 0x06);
         if (item.height >= 56U)
+            gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 32U), entry.author,
+                           1, selected ? 0x04 : 0x06);
+        if (item.height >= 75U)
         {
             char size_text[32] = {};
             format_size(entry.file_size, size_text, sizeof(size_text));
-            gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 42U), size_text, 1,
+            gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 58U), size_text, 1,
                            selected ? 0x05 : 0x07);
         }
     }

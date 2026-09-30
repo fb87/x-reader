@@ -84,13 +84,17 @@ static void draw_home_row(gfx::framebuffer_t* framebuffer, layout::rect_t row, u
     const uint16_t icon_y = static_cast<uint16_t>(row.y + (row.height - glyph) / 2U);
     gfx::draw_icon(framebuffer, icon_x, icon_y, icons[index], 1, 0x00);
 
+    // Two stacked 1x lines (title + subtitle) need 5 (top margin) + 24 (title
+    // glyph height) + 1 (gap) + 24 (subtitle glyph height) = 54 px; below that,
+    // fall back to a single centred title line rather than let the subtitle
+    // spill past the row.
+    const bool two_lines = row.height >= 54U;
     const uint16_t text_x = static_cast<uint16_t>(icon_x + glyph + 12U);
-    const uint16_t title_y = row.height >= 44U
-                                 ? static_cast<uint16_t>(row.y + 5U)
-                                 : static_cast<uint16_t>(row.y + (row.height - 16U) / 2U);
+    const uint16_t title_y = two_lines ? static_cast<uint16_t>(row.y + 5U)
+                                       : static_cast<uint16_t>(row.y + (row.height - 24U) / 2U);
     gfx::draw_text(framebuffer, text_x, title_y, menu_labels[index], 1, 0x00);
-    if (row.height >= 44U && subtitle != nullptr && subtitle[0] != '\0')
-        gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(row.y + 25U), subtitle, 1, 0x06);
+    if (two_lines && subtitle != nullptr && subtitle[0] != '\0')
+        gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(row.y + 30U), subtitle, 1, 0x06);
 
     if (index != home_sleep)
     {

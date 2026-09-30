@@ -113,6 +113,15 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
     if (state == nullptr || event == nullptr || context == nullptr)
         return screen_command_none;
 
+    // Status-bar Home button: reachable from every screen, independent of the
+    // footer's three per-screen slots (see chrome::draw_status_bar).
+    if (event->action == input::action_pointer && state->screen != screen_home &&
+        layout::status_home_hit(context->viewport, event->x, event->y))
+    {
+        state->screen = screen_home;
+        return screen_command_show_home;
+    }
+
     // The footer is drawn as three large touch targets.  Keep its hit-testing in the
     // screen controller so visual chrome and interaction cannot drift apart.
     if (event->action == input::action_pointer)

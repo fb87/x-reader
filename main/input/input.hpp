@@ -37,6 +37,10 @@ enum event_type_t : uint8_t
     event_rotary_counterclockwise,
     event_button_down,
     event_button_up,
+    // Fires once when the centre/power button has been held past long_press_ms,
+    // and suppresses the matching event_button_up on release -- a long press is
+    // a distinct gesture (Home shortcut), not a delayed short press.
+    event_button_long_press,
     event_key_down,
     event_key_up,
     event_key_repeat,

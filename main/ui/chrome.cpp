@@ -92,14 +92,22 @@ void draw_status_bar(gfx::framebuffer_t* framebuffer, const char* title)
         return;
     const layout::metrics_t m = framebuffer_metrics(framebuffer);
     const uint16_t padding = m.display_class == layout::display_compact ? 14 : 20;
-    const uint16_t text_y = static_cast<uint16_t>((m.status_height - 16U) / 2U);
+    const uint16_t text_y = static_cast<uint16_t>((m.status_height - 24U) / 2U);
     gfx::fill_rect(framebuffer, 0, 0, framebuffer->width, m.status_height, paper);
+
+    const layout::rect_t home_button =
+        layout::status_home_bounds({framebuffer->width, framebuffer->height});
+    const uint16_t home_glyph = gfx::icon_advance(1);
+    gfx::draw_icon(framebuffer, static_cast<uint16_t>(home_button.x + (home_button.width - home_glyph) / 2U),
+                   static_cast<uint16_t>(home_button.y + (home_button.height - home_glyph) / 2U),
+                   gfx::icon_home, 1, mid);
+    const uint16_t clock_x = static_cast<uint16_t>(home_button.width + 6U);
 
     if (clock_visible)
     {
         char clock[8] = {};
         (void)local_clock(clock, sizeof(clock));
-        gfx::draw_text(framebuffer, padding, text_y, clock, 1, mid);
+        gfx::draw_text(framebuffer, clock_x, text_y, clock, 1, mid);
     }
 
     if (title != nullptr && title[0] != '\0')
@@ -140,7 +148,7 @@ void draw_title_bar(gfx::framebuffer_t* framebuffer, const char* title, const ch
     const uint16_t top = m.status_height;
     const uint16_t height = title_height({framebuffer->width, framebuffer->height});
     gfx::fill_rect(framebuffer, 0, top, framebuffer->width, height, paper);
-    gfx::draw_text(framebuffer, padding, static_cast<uint16_t>(top + (height - 16U) / 2U), title, 1,
+    gfx::draw_text(framebuffer, padding, static_cast<uint16_t>(top + (height - 24U) / 2U), title, 1,
                    ink);
     if (trailing != nullptr && trailing[0] != '\0')
     {
@@ -148,7 +156,7 @@ void draw_title_bar(gfx::framebuffer_t* framebuffer, const char* title, const ch
         const uint16_t x = framebuffer->width > width + padding
                                ? static_cast<uint16_t>(framebuffer->width - width - padding)
                                : padding;
-        gfx::draw_text(framebuffer, x, static_cast<uint16_t>(top + (height - 16U) / 2U), trailing,
+        gfx::draw_text(framebuffer, x, static_cast<uint16_t>(top + (height - 24U) / 2U), trailing,
                        1, mid);
     }
     gfx::fill_rect(framebuffer, padding, static_cast<uint16_t>(top + height - 1U),
@@ -168,6 +176,15 @@ void draw_indication_bar(gfx::framebuffer_t* framebuffer, footer_cell_t left, fo
 
     const footer_cell_t cells[3] = {left, center, right};
     const uint16_t glyph = gfx::icon_advance(1);
+    // Centre the icon+label stack as one block rather than pinning it near the
+    // top: the extra height added for finger comfort was otherwise just blank
+    // space below the label, which read as an unbalanced, "weird" footer.
+    const uint16_t label_gap = 4U;
+    const uint16_t label_height = 16U;
+    const uint16_t block_height = static_cast<uint16_t>(glyph + label_gap + label_height);
+    const uint16_t block_top = m.footer_height > block_height
+                                  ? static_cast<uint16_t>(top + (m.footer_height - block_height) / 2U)
+                                  : top;
     for (uint8_t index = 0; index < 3; ++index)
     {
         const footer_cell_t cell = cells[index];
@@ -176,22 +193,24 @@ void draw_indication_bar(gfx::framebuffer_t* framebuffer, footer_cell_t left, fo
         if (cell.label == nullptr && cell.icon == gfx::icon_none)
             continue;
 
+        const uint8_t foreground = cell.disabled ? mid : ink;
         const bool has_label = cell.label != nullptr && cell.label[0] != '\0';
         const uint16_t label_width = has_label ? gfx::measure_text(cell.label, 1) : 0;
         if (cell.icon != gfx::icon_none)
         {
             const uint16_t icon_x =
                 width > glyph ? static_cast<uint16_t>(x + (width - glyph) / 2U) : x;
-            gfx::draw_icon(framebuffer, icon_x, static_cast<uint16_t>(top + 6U), cell.icon, 1, ink);
+            gfx::draw_icon(framebuffer, icon_x, block_top, cell.icon, 1, foreground);
         }
         if (has_label)
         {
             const uint16_t label_x =
                 width > label_width ? static_cast<uint16_t>(x + (width - label_width) / 2U) : x;
-            const uint16_t label_y = cell.icon == gfx::icon_none
-                                         ? static_cast<uint16_t>(top + (m.footer_height - 16U) / 2U)
-                                         : static_cast<uint16_t>(top + 6U + glyph + 2U);
-            gfx::draw_text(framebuffer, label_x, label_y, cell.label, 1, ink);
+            const uint16_t label_y =
+                cell.icon == gfx::icon_none
+                    ? static_cast<uint16_t>(top + (m.footer_height - label_height) / 2U)
+                    : static_cast<uint16_t>(block_top + glyph + label_gap);
+            gfx::draw_text(framebuffer, label_x, label_y, cell.label, 1, foreground);
         }
         if (index != 0)
             gfx::fill_rect(framebuffer, x, static_cast<uint16_t>(top + 8U), 1,

@@ -40,7 +40,7 @@ void draw_book_actions(gfx::framebuffer_t* framebuffer, book_action_item_t focus
         const bool selected = i == static_cast<uint8_t>(focus);
         gfx::fill_rect(framebuffer, r.x, r.y, r.width, r.height, selected ? 0x0d : 0x0f);
         gfx::draw_text(framebuffer, static_cast<uint16_t>(r.x + 14U),
-                       static_cast<uint16_t>(r.y + (r.height - 16U) / 2U), labels[i], 1, 0x00);
+                       static_cast<uint16_t>(r.y + (r.height - 24U) / 2U), labels[i], 1, 0x00);
     }
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Select", gfx::icon_check},
                                 {"Back", gfx::icon_arrow_back});

@@ -166,7 +166,7 @@ uint16_t draw_breadcrumb(gfx::framebuffer_t* framebuffer, layout::rect_t bounds,
     if (framebuffer == nullptr || parts == nullptr || count == 0)
         return 0;
     const uint16_t glyph = gfx::icon_advance(1);
-    const uint16_t text_y = static_cast<uint16_t>(bounds.y + (bounds.height - 16U) / 2U);
+    const uint16_t text_y = static_cast<uint16_t>(bounds.y + (bounds.height - 24U) / 2U);
     const uint16_t icon_y = static_cast<uint16_t>(bounds.y + (bounds.height - glyph) / 2U);
     uint16_t cursor = bounds.x;
     for (uint8_t index = 0; index < count; ++index)
@@ -217,7 +217,7 @@ void draw_button(gfx::framebuffer_t* framebuffer, layout::rect_t bounds, const c
     }
     if (label_width != 0)
         gfx::draw_text(framebuffer, cursor,
-                       static_cast<uint16_t>(bounds.y + (bounds.height - 16U) / 2U), label, 1,
+                       static_cast<uint16_t>(bounds.y + (bounds.height - 24U) / 2U), label, 1,
                        foreground);
 }
 

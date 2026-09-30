@@ -7,6 +7,15 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+# +20% over the original 20px render (matches the same "a bit bigger" bump
+# applied to the footer height elsewhere): both the UI chrome text and the
+# reader's "Small" text-size option share this one table, so raising it here
+# raises both at once. Byte-aligned per-row (MSB first per byte), the same
+# packing convention icon_font.hpp already uses.
+GLYPH_HEIGHT = 24
+GLYPH_WIDTH = 28
+BYTES_PER_ROW = (GLYPH_WIDTH + 7) // 8
+
 
 def codepoints():
     ranges = (
@@ -21,28 +30,33 @@ def codepoints():
 
 
 def render(font, codepoint):
-    image = Image.new("L", (24, 20), 0)
+    image = Image.new("L", (GLYPH_WIDTH, GLYPH_HEIGHT), 0)
     draw = ImageDraw.Draw(image)
-    draw.text((0, 16), chr(codepoint), font=font, fill=255, anchor="ls", stroke_width=0)
-    pixels = []
+    # Baseline kept at the same 80% line-height fraction the 20px table used
+    # (16/20), so descenders get proportionally the same headroom.
+    baseline = round(GLYPH_HEIGHT * 16 / 20)
+    draw.text((0, baseline), chr(codepoint), font=font, fill=255, anchor="ls", stroke_width=0)
+    rows = []
     right = 1
-    for y in range(20):
-        row = 0
-        for x in range(24):
+    for y in range(GLYPH_HEIGHT):
+        row_bytes = [0] * BYTES_PER_ROW
+        for x in range(GLYPH_WIDTH):
             if image.getpixel((x, y)) >= 128:
-                row |= 1 << (23 - x)
+                row_bytes[x // 8] |= 1 << (7 - (x % 8))
                 right = max(right, x + 1)
-        pixels.extend((row >> 16, (row >> 8) & 0xFF, row & 0xFF))
+        rows.extend(row_bytes)
     advance = round(font.getlength(chr(codepoint)))
     if chr(codepoint) in "ilrt":
-        advance -= 1
-    return min(24, right), max(1, advance), pixels
+        # Tighten narrow-stem glyphs, but never past their own ink -- doing so
+        # made the next glyph overlap "i"/"t"'s rightmost column.
+        advance = max(advance - 1, right)
+    return min(GLYPH_WIDTH, right), max(1, advance), rows
 
 
 def main():
     if len(sys.argv) != 3:
         raise SystemExit("usage: generate_unicode_font.py FONT OUTPUT")
-    font = ImageFont.truetype(sys.argv[1], 20)
+    font = ImageFont.truetype(sys.argv[1], GLYPH_HEIGHT)
     try:
         font.set_variation_by_name("Bold")
     except AttributeError:

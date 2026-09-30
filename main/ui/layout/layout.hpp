@@ -63,6 +63,11 @@ rect_t row(rect_t area, uint8_t index, uint8_t count, uint16_t preferred_height,
 rect_t stacked_row(rect_t area, uint8_t index, uint8_t count, uint16_t height, uint16_t gap);
 rect_t centered_panel(viewport_t viewport, uint8_t width_percent, uint8_t height_percent);
 footer_zone_t footer_hit(viewport_t viewport, uint16_t x, uint16_t y);
+// Always-visible Home shortcut pinned to the top-left of the status bar, so
+// every screen has one tap back to Home even though the footer's three slots
+// are already spoken for by per-screen actions.
+rect_t status_home_bounds(viewport_t viewport);
+bool status_home_hit(viewport_t viewport, uint16_t x, uint16_t y);
 
 } // namespace layout
 } // namespace ui

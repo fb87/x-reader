@@ -59,7 +59,7 @@ void draw_book_sync(gfx::framebuffer_t* framebuffer, book_sync_item_t focus, boo
         const uint8_t foreground = 0x00;
         const uint8_t secondary = selected ? 0x04 : 0x06;
         gfx::draw_text(framebuffer, static_cast<uint16_t>(item.x + 14U),
-                       static_cast<uint16_t>(item.y + (item.height - 16U) / 2U), labels[index], 1,
+                       static_cast<uint16_t>(item.y + (item.height - 24U) / 2U), labels[index], 1,
                        foreground);
         char sync_value[48] = {};
         const char* value = default_values[index];
@@ -83,7 +83,7 @@ void draw_book_sync(gfx::framebuffer_t* framebuffer, book_sync_item_t focus, boo
                 ? static_cast<uint16_t>(item.x + item.width - value_width - 14U)
                 : item.x;
         gfx::draw_text(framebuffer, value_x,
-                       static_cast<uint16_t>(item.y + (item.height - 16U) / 2U), value, 1,
+                       static_cast<uint16_t>(item.y + (item.height - 24U) / 2U), value, 1,
                        secondary);
     }
     char detail[112] = {};

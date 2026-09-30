@@ -19,6 +19,10 @@ struct footer_cell_t
 {
     const char* label;
     gfx::icon_t icon;
+    // Greyed out and non-interactive: the action genuinely has nowhere to go
+    // right now (e.g. Next on the last page), rather than silently doing
+    // nothing when tapped.
+    bool disabled = false;
 };
 
 uint16_t status_height(const gfx::framebuffer_t* framebuffer);

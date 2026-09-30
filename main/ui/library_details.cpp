@@ -135,9 +135,9 @@ void draw_library_details(gfx::framebuffer_t* framebuffer,
                                     ? static_cast<uint16_t>(body.width - cover_width - m.gap)
                                     : body.width;
     gfx::draw_text(framebuffer, text_x, body.y, entry->title, 2, 0x00);
-    gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(body.y + 42U), entry->author, 1,
+    gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(body.y + 50U), entry->author, 1,
                    0x05);
-    const uint16_t rule_y = static_cast<uint16_t>(body.y + 72U);
+    const uint16_t rule_y = static_cast<uint16_t>(body.y + 80U);
     gfx::fill_rect(framebuffer, text_x, rule_y, text_width, 1, 0x0b);
 
     char size[32] = {};

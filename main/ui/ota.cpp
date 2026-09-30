@@ -62,7 +62,7 @@ void draw_ota(gfx::framebuffer_t* framebuffer, ota_item_t focus, const char* cur
         const uint8_t foreground = 0x00;
         const uint8_t secondary = selected ? 0x04 : 0x06;
         gfx::draw_text(framebuffer, static_cast<uint16_t>(item.x + 14U),
-                       static_cast<uint16_t>(item.y + (item.height - 16U) / 2U), labels[index], 1,
+                       static_cast<uint16_t>(item.y + (item.height - 24U) / 2U), labels[index], 1,
                        foreground);
         const uint16_t value_width = gfx::measure_text(values[index], 1);
         const uint16_t value_x =
@@ -70,7 +70,7 @@ void draw_ota(gfx::framebuffer_t* framebuffer, ota_item_t focus, const char* cur
                 ? static_cast<uint16_t>(item.x + item.width - value_width - 14U)
                 : item.x;
         gfx::draw_text(framebuffer, value_x,
-                       static_cast<uint16_t>(item.y + (item.height - 16U) / 2U), values[index], 1,
+                       static_cast<uint16_t>(item.y + (item.height - 24U) / 2U), values[index], 1,
                        secondary);
     }
     uint16_t note_y = viewport.height > metrics.footer_height + 52U
@@ -81,7 +81,7 @@ void draw_ota(gfx::framebuffer_t* framebuffer, ota_item_t focus, const char* cur
         char note[96] = {};
         snprintf(note, sizeof(note), "NOTES: %.82s", release_notes);
         gfx::draw_text(framebuffer, metrics.margin, note_y, note, 1, 0x06);
-        note_y = static_cast<uint16_t>(note_y + 18U);
+        note_y = static_cast<uint16_t>(note_y + 26U);
     }
     if (last_result != nullptr && last_result[0] != '\0')
     {

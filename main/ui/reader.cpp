@@ -411,7 +411,7 @@ bool find_page(const epub::document_t* document, const char* query,
 
 void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const epub::book_t* book,
                  const epub::document_t* document, uint8_t page, uint8_t page_count,
-                 const reader_settings_t* settings)
+                 uint8_t spine_index, const reader_settings_t* settings)
 {
     if (framebuffer == nullptr || book == nullptr || document == nullptr)
         return;
@@ -501,8 +501,15 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
         x = static_cast<uint16_t>(x + width);
         offset += consumed;
     }
-    chrome::draw_indication_bar(framebuffer, {"Prev", gfx::icon_arrow_back},
-                                {"Menu", gfx::icon_menu}, {"Next", gfx::icon_chevron_right});
+    // navigation_result() (navigation.cpp) already refuses to move past these same
+    // bounds, so tapping a disabled cell was already a silent no-op; this just
+    // shows that up front instead of only after an unexplained non-reaction.
+    const bool can_prev = page > 0 || spine_index > 0;
+    const bool can_next = static_cast<uint16_t>(page) + 1U < page_count ||
+                          static_cast<uint16_t>(spine_index) + 1U < book->spine_count;
+    chrome::draw_indication_bar(framebuffer, {"Prev", gfx::icon_arrow_back, !can_prev},
+                                {"Menu", gfx::icon_menu},
+                                {"Next", gfx::icon_chevron_right, !can_next});
 
     // Mockup 5 shows a progress bar with "3 / 256" on the left and the book's
     // title and author on the right, just above the action bar.

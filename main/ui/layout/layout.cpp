@@ -31,8 +31,10 @@ metrics_t metrics(viewport_t vp)
         result.gap = 6;
         result.status_height = 32;
         // Keep bottom actions large enough for reliable finger input on touch devices.
-        // 56 px is also still compact enough for the 800x480 XTeink layout.
-        result.footer_height = 56;
+        // +20% over the original 56px: the icon+label stack felt visually cramped
+        // against the very bottom edge on real M5Paper hardware.  68 px is still
+        // compact enough for the 800x480 XTeink layout.
+        result.footer_height = 68;
         result.row_height = 44;
         result.panel_padding = 18;
     }
@@ -41,7 +43,7 @@ metrics_t metrics(viewport_t vp)
         result.margin = 40;
         result.gap = 8;
         result.status_height = 36;
-        result.footer_height = 60;
+        result.footer_height = 72;
         result.row_height = 52;
         result.panel_padding = 22;
     }
@@ -50,7 +52,7 @@ metrics_t metrics(viewport_t vp)
         result.margin = 52;
         result.gap = 10;
         result.status_height = 42;
-        result.footer_height = 64;
+        result.footer_height = 77;
         result.row_height = 60;
         result.panel_padding = 28;
     }
@@ -145,6 +147,17 @@ footer_zone_t footer_hit(viewport_t vp, uint16_t x, uint16_t y)
     if (x < static_cast<uint32_t>(third) * 2U)
         return footer_center;
     return footer_right;
+}
+
+rect_t status_home_bounds(viewport_t vp)
+{
+    const metrics_t m = metrics(vp);
+    return {0, 0, m.status_height, m.status_height};
+}
+
+bool status_home_hit(viewport_t vp, uint16_t x, uint16_t y)
+{
+    return contains(status_home_bounds(vp), x, y);
 }
 
 } // namespace layout

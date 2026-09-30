@@ -133,7 +133,7 @@ int main()
         }
     }
     const uint8_t expected_narrow_metrics[][3] = {
-        {' ', 1, 3}, {'i', 3, 3}, {'l', 3, 3}, {'r', 6, 5}, {'t', 5, 4},
+        {' ', 1, 4}, {'i', 4, 4}, {'l', 4, 4}, {'r', 7, 7}, {'t', 7, 7},
     };
     for (const auto& expected : expected_narrow_metrics)
     {
@@ -150,8 +150,8 @@ int main()
         }
         assert(found);
     }
-    assert(xreader::gfx::measure_text("title", 1) == 22);
-    assert(xreader::gfx::measure_text("title", 2) == 44);
+    assert(xreader::gfx::measure_text("title", 1) == 31);
+    assert(xreader::gfx::measure_text("title", 2) == 62);
     uint32_t composed = 0;
     size_t consumed_codepoints = 0;
     assert(xreader::gfx::compose_unicode('o', 0x031bU, 'n', &composed, &consumed_codepoints));
