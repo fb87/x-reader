@@ -200,3 +200,58 @@ code active. The aspect-fit and file-loading glue in `load_book_cover()` is
 new and only indirectly exercised.
 
 Full sweep after all three fixes: `ALL CHECKS PASSED`.
+
+---
+
+# Real-touch regression: inverted portrait Y-axis — 2026-09-30
+
+## Bug
+
+User report: "GUI is frozen, touch but no reaction." Real touch was reaching
+the driver fine (`input: emit touch_down/up` logged normally) and dispatch
+correctly returned `screen_command_none` for every one of them — the screen
+genuinely had nothing at those coordinates.
+
+Root cause: `main.cpp`'s portrait pointer remap mirrored the Y axis
+(`action_event.y = display_config.width - 1 - physical_x`). This line was
+called out as hardware-unvalidated when portrait was made the default in
+Phase 0, and it stayed unvalidated through every subsequent sweep, because
+the touch-injection harness used for every "ALL CHECKS PASSED" result in this
+document computes its synthetic raw coordinates as the *exact inverse* of
+this same formula. That setup proves `ui::dispatch()` and the layout math are
+internally consistent; it can never exercise the actual raw-touch transform,
+because it never puts a real finger through the GT911 sensor.
+
+## Diagnosis
+
+Pulled the 13 raw `(physical_x, physical_y)` touch events logged during the
+user's session and checked them against Home's row/footer rects under both
+formulas:
+
+- Current formula (`y = width - 1 - physical_x`): **0 of 13** landed on
+  anything.
+- Proposed formula (`y = physical_x`, a plain transpose — matching the
+  relationship the IT8951 portrait *refresh* transform already uses, fixed
+  earlier in Phase 0): **11 of 13** landed cleanly inside a row or the
+  footer; the other two were a few pixels short of a row boundary, consistent
+  with ordinary finger imprecision rather than a miss.
+
+## Fix
+
+Removed the Y-mirroring at both pointer-remap sites in `main.cpp`; the
+transform is now a plain transpose (`x' = physical_y`, `y' = physical_x`),
+matching the IT8951 refresh-area transform's own rotation convention. Updated
+the test harness's `tap_at()` to the same corrected formula.
+
+Verified: full synthetic sweep still `ALL CHECKS PASSED` (self-consistency,
+now against the corrected formula), release build unaffected (0x143670 bytes,
+no meaningful size change), and — the test that actually matters — **the
+user confirmed real-finger touch works after reflashing.**
+
+## Lesson
+
+A synthetic input harness that computes its own inputs as the inverse of the
+code under test can validate everything the code does *after* that
+transform, but is structurally blind to bugs *in* the transform itself. Any
+future change to the raw touch/rotation pipeline needs a real-touch check,
+not just a green sweep.

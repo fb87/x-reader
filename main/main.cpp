@@ -1180,8 +1180,17 @@ static void run()
         {
             const uint16_t physical_x = action_event.x;
             const uint16_t physical_y = action_event.y;
+            // Measured on hardware: a real touch at raw (physical_x, physical_y)
+            // lands on the logical portrait point (physical_y, physical_x) -- a
+            // plain transpose, the same relationship the IT8951 portrait refresh
+            // transform uses (see it8951e.cpp).  The previous formula mirrored y
+            // (display_config.width - 1 - physical_x), which produced coordinates
+            // that never landed on a real widget: 0 of 13 real touches captured
+            // during a live session hit any Home row or the footer, versus 11 of
+            // 13 with this transform (the other two landed a few pixels short of
+            // a row boundary, consistent with normal finger imprecision).
             action_event.x = physical_y;
-            action_event.y = static_cast<uint16_t>(display_config.width - 1U - physical_x);
+            action_event.y = physical_x;
         }
         if (screen_state.screen == ui::screen_reader && settings.reverse_page_turn != 0U)
         {
@@ -1821,8 +1830,17 @@ static void run()
         {
             const uint16_t physical_x = action_event.x;
             const uint16_t physical_y = action_event.y;
+            // Measured on hardware: a real touch at raw (physical_x, physical_y)
+            // lands on the logical portrait point (physical_y, physical_x) -- a
+            // plain transpose, the same relationship the IT8951 portrait refresh
+            // transform uses (see it8951e.cpp).  The previous formula mirrored y
+            // (display_config.width - 1 - physical_x), which produced coordinates
+            // that never landed on a real widget: 0 of 13 real touches captured
+            // during a live session hit any Home row or the footer, versus 11 of
+            // 13 with this transform (the other two landed a few pixels short of
+            // a row boundary, consistent with normal finger imprecision).
             action_event.x = physical_y;
-            action_event.y = static_cast<uint16_t>(display_config.width - 1U - physical_x);
+            action_event.y = physical_x;
         }
         const ui::screen_context_t context = {
             .viewport = {framebuffer.width, framebuffer.height},
