@@ -15,6 +15,7 @@ idf_component_register(
         "gfx/framebuffer.cpp"
         "gfx/font.cpp"
         "gfx/unicode_font.cpp"
+        "gfx/reader_font.cpp"
         "gfx/icon_font.cpp"
         "gfx/m5epd_font16.c"
         "input/input.cpp"

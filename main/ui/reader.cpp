@@ -35,16 +35,21 @@ static reader_layout_t reader_layout(const reader_settings_t* settings, layout::
     reader_layout_t result = {};
     const layout::metrics_t m = layout::metrics(vp);
     result.scale = settings != nullptr && settings->text_scale == 1 ? 1 : 2;
+    // Line steps give the reader's 28px glyphs (see reader_font.hpp) room to
+    // breathe: normal is glyph height + 4px leading, relaxed adds more on top.
     result.line_step = settings != nullptr && settings->line_spacing != 0
-                           ? static_cast<uint16_t>(result.scale == 1 ? 24 : 48)
-                           : static_cast<uint16_t>(result.scale == 1 ? 20 : 44);
+                           ? static_cast<uint16_t>(result.scale == 1 ? 38 : 66)
+                           : static_cast<uint16_t>(result.scale == 1 ? 32 : 60);
     layout::rect_t body = layout::content(vp);
     // Reserve the strip above the action bar for the progress indicator and the
     // title/author line, or the last text line collides with them.
     if (body.height > progress_strip_height)
         body.height = static_cast<uint16_t>(body.height - progress_strip_height);
+    // Widened from 20/8 (compact/other) -- text this close to the physical
+    // bezel could lose its leading pixels on real hardware, especially at the
+    // "Narrow" margin_mode below.
     const uint16_t base_margin =
-        m.display_class == layout::display_compact ? 20 : static_cast<uint16_t>(m.margin - 12U);
+        m.display_class == layout::display_compact ? 28 : static_cast<uint16_t>(m.margin - 4U);
     const uint8_t margin_mode = settings != nullptr ? settings->margin_mode : 1U;
     const uint16_t horizontal_margin =
         margin_mode == 0U
@@ -55,7 +60,7 @@ static reader_layout_t reader_layout(const reader_settings_t* settings, layout::
     result.text_width = vp.width > static_cast<uint32_t>(horizontal_margin) * 2U
                             ? static_cast<uint16_t>(vp.width - horizontal_margin * 2U)
                             : vp.width;
-    const uint16_t glyph_height = static_cast<uint16_t>(20U * result.scale);
+    const uint16_t glyph_height = static_cast<uint16_t>(28U * result.scale);
     const uint16_t usable_height =
         body.height > minimum_vertical_margin * 2U
             ? static_cast<uint16_t>(body.height - minimum_vertical_margin * 2U)
@@ -191,14 +196,49 @@ static uint16_t next_glyph_width(const char* text, size_t length, size_t offset,
                                  size_t* consumed, uint32_t* codepoint)
 {
     *consumed = next_codepoint(text, length, offset, codepoint);
-    return gfx::glyph_advance(*codepoint, scale);
+    return gfx::glyph_advance(*codepoint, scale, gfx::font_reader);
 }
+// Finds where the current line ends: at a literal '\n' (left unconsumed so
+// callers can still see it and apply paragraph spacing), at the document end,
+// or -- when the line would otherwise overflow mid-word -- at the last space
+// boundary before the overflowing glyph, so prose wraps on whole words. Only
+// falls back to a hard character break when a single run has no space at all
+// (e.g. a long URL) and is itself wider than the line, so pagination cannot
+// stall.
+static size_t next_line_break(const epub::document_t* document, size_t offset,
+                              const reader_layout_t& reader)
+{
+    uint16_t x = 0;
+    size_t break_offset = offset;
+    bool have_break = false;
+    while (offset < document->length)
+    {
+        if (image_at(document, offset) != nullptr)
+            break;
+        uint32_t codepoint = 0;
+        size_t consumed = 0;
+        const uint16_t width = next_glyph_width(document->text, document->length, offset,
+                                                reader.scale, &consumed, &codepoint);
+        if (codepoint == '\n')
+            break;
+        if (x > 0 && x + width > reader.text_width)
+            return have_break ? break_offset : offset;
+        x = static_cast<uint16_t>(x + width);
+        offset += consumed;
+        if (codepoint == ' ')
+        {
+            have_break = true;
+            break_offset = offset;
+        }
+    }
+    return offset;
+}
+
 static size_t next_page_offset(const epub::document_t* document, size_t offset,
                                const reader_settings_t* settings, layout::viewport_t vp)
 {
     const reader_layout_t reader = reader_layout(settings, vp);
     size_t lines = 0;
-    uint16_t x = 0;
     while (offset < document->length && lines < reader.lines_per_screen)
     {
         if (const epub::document_image_t* image = image_at(document, offset))
@@ -213,31 +253,23 @@ static size_t next_page_offset(const epub::document_t* document, size_t offset,
             if (lines > 0U && lines + image_lines > reader.lines_per_screen)
                 break;
             lines += image_lines;
-            x = 0;
             uint32_t marker = 0;
             offset += gfx::decode_utf8(document->text + offset, &marker);
             continue;
         }
-        uint32_t codepoint = 0;
-        size_t consumed = 0;
-        const uint16_t width = next_glyph_width(document->text, document->length, offset,
-                                                reader.scale, &consumed, &codepoint);
-        if (codepoint == '\n')
+        offset = next_line_break(document, offset, reader);
+        ++lines;
+        if (offset < document->length)
         {
-            lines += settings != nullptr && settings->paragraph_spacing != 0U ? 2U : 1U;
-            x = 0;
-            offset += consumed;
-            continue;
+            uint32_t marker = 0;
+            const size_t marker_bytes = gfx::decode_utf8(document->text + offset, &marker);
+            if (marker == '\n')
+            {
+                offset += marker_bytes;
+                if (settings != nullptr && settings->paragraph_spacing != 0U)
+                    ++lines;
+            }
         }
-        if (x > 0 && x + width > reader.text_width)
-        {
-            ++lines;
-            x = 0;
-            if (lines >= reader.lines_per_screen)
-                break;
-        }
-        x = static_cast<uint16_t>(x + width);
-        offset += consumed;
     }
     return offset;
 }
@@ -321,20 +353,15 @@ static uint16_t visual_line_width(const epub::document_t* document, size_t offse
 {
     if (document == nullptr)
         return 0;
+    const size_t line_end = next_line_break(document, offset, reader);
     uint16_t width = 0;
-    while (offset < document->length)
+    while (offset < line_end)
     {
-        if (image_at(document, offset) != nullptr)
-            break;
         uint32_t codepoint = 0;
         size_t consumed = 0;
-        const uint16_t glyph_width = next_glyph_width(document->text, document->length, offset,
-                                                      reader.scale, &consumed, &codepoint);
-        if (codepoint == '\n')
-            break;
-        if (width > 0U && static_cast<uint32_t>(width) + glyph_width > reader.text_width)
-            break;
-        width = static_cast<uint16_t>(width + glyph_width);
+        width = static_cast<uint16_t>(
+            width + next_glyph_width(document->text, document->length, offset, reader.scale,
+                                     &consumed, &codepoint));
         offset += consumed;
     }
     return width;
@@ -470,36 +497,33 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
             x = line_origin;
             continue;
         }
-        uint32_t codepoint = 0;
-        size_t consumed = 0;
-        const uint16_t width = next_glyph_width(document->text, document->length, offset,
-                                                reader.scale, &consumed, &codepoint);
-        if (codepoint == '\n')
+        const size_t line_end = next_line_break(document, offset, reader);
+        while (offset < line_end)
         {
-            line = static_cast<uint16_t>(
-                line + (settings != nullptr && settings->paragraph_spacing != 0U ? 2U : 1U));
+            uint32_t codepoint = 0;
+            size_t consumed = 0;
+            const uint16_t width = next_glyph_width(document->text, document->length, offset,
+                                                    reader.scale, &consumed, &codepoint);
+            gfx::draw_codepoint(framebuffer, static_cast<uint16_t>(reader.text_left + x),
+                                static_cast<uint16_t>(reader.text_top + line * reader.line_step),
+                                codepoint, reader.scale, 0x00, gfx::font_reader);
+            x = static_cast<uint16_t>(x + width);
             offset += consumed;
-            if (line >= reader.lines_per_screen)
-                break;
-            line_origin =
-                aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
-            x = line_origin;
-            continue;
         }
-        if (x > line_origin && x + width > reader.text_width)
+        ++line;
+        if (offset < document->length)
         {
-            ++line;
-            if (line >= reader.lines_per_screen)
-                break;
-            line_origin =
-                aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
-            x = line_origin;
+            uint32_t marker = 0;
+            const size_t marker_bytes = gfx::decode_utf8(document->text + offset, &marker);
+            if (marker == '\n')
+            {
+                offset += marker_bytes;
+                if (settings != nullptr && settings->paragraph_spacing != 0U)
+                    ++line;
+            }
         }
-        gfx::draw_codepoint(framebuffer, static_cast<uint16_t>(reader.text_left + x),
-                            static_cast<uint16_t>(reader.text_top + line * reader.line_step),
-                            codepoint, reader.scale, 0x00);
-        x = static_cast<uint16_t>(x + width);
-        offset += consumed;
+        line_origin = aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
+        x = line_origin;
     }
     // navigation_result() (navigation.cpp) already refuses to move past these same
     // bounds, so tapping a disabled cell was already a silent no-op; this just

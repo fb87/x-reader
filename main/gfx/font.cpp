@@ -1,5 +1,6 @@
 #include "font.hpp"
 
+#include "reader_font.hpp"
 #include "unicode_font.hpp"
 
 extern "C"
@@ -136,12 +137,46 @@ static const unicode_glyph_t* unicode_glyph(uint32_t codepoint)
     return nullptr;
 }
 
+static const reader_glyph_t* reader_glyph(uint32_t codepoint)
+{
+    size_t low = 0;
+    size_t high = reader_glyph_count;
+    while (low < high)
+    {
+        const size_t middle = low + (high - low) / 2;
+        const reader_glyph_t* glyph = &reader_glyphs[middle];
+        if (glyph->codepoint < codepoint)
+            low = middle + 1;
+        else if (glyph->codepoint > codepoint)
+            high = middle;
+        else
+            return glyph;
+    }
+    return nullptr;
+}
+
 static void draw_unicode_glyph(framebuffer_t* framebuffer, uint16_t x, uint16_t y,
                                const unicode_glyph_t* glyph, uint8_t scale, uint8_t value)
 {
     for (uint8_t row = 0; row < unicode_glyph_height; ++row)
     {
         const uint8_t* packed = &glyph->bitmap[row * unicode_glyph_bytes_per_row];
+        for (uint8_t column = 0; column < glyph->width; ++column)
+        {
+            if ((packed[column / 8U] & (0x80U >> (column % 8U))) == 0)
+                continue;
+            fill_rect(framebuffer, static_cast<uint16_t>(x + column * scale),
+                      static_cast<uint16_t>(y + row * scale), scale, scale, value);
+        }
+    }
+}
+
+static void draw_reader_glyph(framebuffer_t* framebuffer, uint16_t x, uint16_t y,
+                              const reader_glyph_t* glyph, uint8_t scale, uint8_t value)
+{
+    for (uint8_t row = 0; row < reader_glyph_height; ++row)
+    {
+        const uint8_t* packed = &glyph->bitmap[row * reader_glyph_bytes_per_row];
         for (uint8_t column = 0; column < glyph->width; ++column)
         {
             if ((packed[column / 8U] & (0x80U >> (column % 8U))) == 0)
@@ -185,25 +220,46 @@ bool compose_unicode(uint32_t first, uint32_t second, uint32_t third, uint32_t* 
     return compose_unicode_impl(first, second, third, composed, consumed_codepoints);
 }
 
-uint16_t glyph_advance(uint32_t codepoint, uint8_t scale)
+uint16_t glyph_advance(uint32_t codepoint, uint8_t scale, font_id_t font)
 {
-    const unicode_glyph_t* glyph = unicode_glyph(codepoint);
-    if (glyph != nullptr)
-        return static_cast<uint16_t>(glyph->advance * scale);
+    if (font == font_reader)
+    {
+        const reader_glyph_t* glyph = reader_glyph(codepoint);
+        if (glyph != nullptr)
+            return static_cast<uint16_t>(glyph->advance * scale);
+    }
+    else
+    {
+        const unicode_glyph_t* glyph = unicode_glyph(codepoint);
+        if (glyph != nullptr)
+            return static_cast<uint16_t>(glyph->advance * scale);
+    }
     const char character = codepoint <= 0x7fU ? static_cast<char>(codepoint) : '?';
     return static_cast<uint16_t>((glyph_width(character) + 1U) * scale);
 }
 
 void draw_codepoint(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint32_t codepoint,
-                    uint8_t scale, uint8_t value)
+                    uint8_t scale, uint8_t value, font_id_t font)
 {
     if (framebuffer == nullptr || scale == 0)
         return;
-    const unicode_glyph_t* glyph = unicode_glyph(codepoint);
-    if (glyph != nullptr)
+    if (font == font_reader)
     {
-        draw_unicode_glyph(framebuffer, x, y, glyph, scale, value);
-        return;
+        const reader_glyph_t* glyph = reader_glyph(codepoint);
+        if (glyph != nullptr)
+        {
+            draw_reader_glyph(framebuffer, x, y, glyph, scale, value);
+            return;
+        }
+    }
+    else
+    {
+        const unicode_glyph_t* glyph = unicode_glyph(codepoint);
+        if (glyph != nullptr)
+        {
+            draw_unicode_glyph(framebuffer, x, y, glyph, scale, value);
+            return;
+        }
     }
     const char character = codepoint <= 0x7fU ? static_cast<char>(codepoint) : '?';
     draw_glyph(framebuffer, x, y, character, scale, value);
@@ -234,7 +290,7 @@ uint16_t icon_advance(uint8_t scale)
 }
 
 uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const char* text,
-                   uint8_t scale, uint8_t value)
+                   uint8_t scale, uint8_t value, font_id_t font)
 {
     if (text == nullptr || scale == 0)
         return 0;
@@ -270,8 +326,8 @@ uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const cha
                     consumed += third_bytes;
             }
             if (framebuffer != nullptr)
-                draw_codepoint(framebuffer, cursor, y, codepoint, scale, value);
-            cursor = static_cast<uint16_t>(cursor + glyph_advance(codepoint, scale));
+                draw_codepoint(framebuffer, cursor, y, codepoint, scale, value, font);
+            cursor = static_cast<uint16_t>(cursor + glyph_advance(codepoint, scale, font));
             text += consumed;
             continue;
         }
@@ -280,9 +336,9 @@ uint16_t draw_text(framebuffer_t* framebuffer, uint16_t x, uint16_t y, const cha
     return cursor - x;
 }
 
-uint16_t measure_text(const char* text, uint8_t scale)
+uint16_t measure_text(const char* text, uint8_t scale, font_id_t font)
 {
-    return draw_text(nullptr, 0, 0, text, scale, 0);
+    return draw_text(nullptr, 0, 0, text, scale, 0, font);
 }
 
 } // namespace gfx

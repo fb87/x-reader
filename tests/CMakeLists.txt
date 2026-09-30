@@ -13,6 +13,7 @@ add_executable(xreader_epub_tests
     ../main/gfx/framebuffer.cpp
     ../main/gfx/m5epd_font16.c
     ../main/gfx/unicode_font.cpp
+    ../main/gfx/reader_font.cpp
     ../main/gfx/icon_font.cpp
     ../main/ui/layout/layout.cpp
     ../main/ui/navigation/focus.cpp

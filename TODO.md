@@ -11,7 +11,7 @@ This checklist tracks the remaining work needed to move X-Reader from the curren
 - [ ] Verify physical button repeat / long-press behavior
 - [ ] Implement power button, sleep, and wake flow
 - [ ] Validate 800×480 layout and orientation on XTeink X4
-- [ ] Validate portrait/landscape touch transform on current touch device
+- [x] Validate portrait/landscape touch transform on current touch device
 - [ ] Add ESP-IDF target CI build for all supported boards
 
 ## P0 — Responsiveness / E-Paper Performance

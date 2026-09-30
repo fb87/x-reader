@@ -88,6 +88,32 @@ transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* disp
     uint16_t dirty_height = 0;
     if (!gfx::take_dirty(framebuffer, &dirty_x, &dirty_y, &dirty_width, &dirty_height))
         return ESP_OK;
+    // gfx::present() tracks the *tightest* box that actually changed, so its
+    // edge sits exactly where new content starts -- e.g. a page turn's dirty
+    // rect begins right at the first character's leading pixels, since the
+    // blank margin before it is identical to the previous page and correctly
+    // excluded. The IT8951E's partial-window refresh can show a faint seam at
+    // that window edge, which lands squarely on the first character and reads
+    // as a corrupted/missing glyph. Pad the window out into the surrounding
+    // static margin so the seam falls on background instead of content.
+    static constexpr uint16_t dirty_padding_x = 24;
+    static constexpr uint16_t dirty_padding_y = 12;
+    const uint16_t padded_x =
+        dirty_x > dirty_padding_x ? static_cast<uint16_t>(dirty_x - dirty_padding_x) : 0U;
+    const uint16_t padded_y =
+        dirty_y > dirty_padding_y ? static_cast<uint16_t>(dirty_y - dirty_padding_y) : 0U;
+    const uint16_t padded_right =
+        static_cast<uint16_t>(dirty_x + dirty_width + dirty_padding_x) > framebuffer->width
+            ? framebuffer->width
+            : static_cast<uint16_t>(dirty_x + dirty_width + dirty_padding_x);
+    const uint16_t padded_bottom =
+        static_cast<uint16_t>(dirty_y + dirty_height + dirty_padding_y) > framebuffer->height
+            ? framebuffer->height
+            : static_cast<uint16_t>(dirty_y + dirty_height + dirty_padding_y);
+    dirty_x = padded_x;
+    dirty_y = padded_y;
+    dirty_width = static_cast<uint16_t>(padded_right - padded_x);
+    dirty_height = static_cast<uint16_t>(padded_bottom - padded_y);
     const uint16_t right =
         static_cast<uint16_t>(((dirty_x + dirty_width + 3U) & ~3U) > framebuffer->width
                                   ? framebuffer->width
