@@ -3,13 +3,13 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "esp_heap_caps.h"
 #include "epub/image.hpp"
+#include "esp_heap_caps.h"
 
 #include "gfx/font.hpp"
 #include "ui/chrome.hpp"
-#include "ui/widgets.hpp"
 #include "ui/layout/layout.hpp"
+#include "ui/widgets.hpp"
 
 namespace xreader
 {
@@ -46,24 +46,24 @@ static reader_layout_t reader_layout(const reader_settings_t* settings, layout::
     const uint16_t base_margin =
         m.display_class == layout::display_compact ? 20 : static_cast<uint16_t>(m.margin - 12U);
     const uint8_t margin_mode = settings != nullptr ? settings->margin_mode : 1U;
-    const uint16_t horizontal_margin = margin_mode == 0U
-                                           ? static_cast<uint16_t>(base_margin / 2U)
-                                           : (margin_mode == 2U
-                                                  ? static_cast<uint16_t>(base_margin + base_margin / 2U)
-                                                  : base_margin);
+    const uint16_t horizontal_margin =
+        margin_mode == 0U
+            ? static_cast<uint16_t>(base_margin / 2U)
+            : (margin_mode == 2U ? static_cast<uint16_t>(base_margin + base_margin / 2U)
+                                 : base_margin);
     result.text_left = horizontal_margin;
     result.text_width = vp.width > static_cast<uint32_t>(horizontal_margin) * 2U
                             ? static_cast<uint16_t>(vp.width - horizontal_margin * 2U)
                             : vp.width;
     const uint16_t glyph_height = static_cast<uint16_t>(20U * result.scale);
-    const uint16_t usable_height = body.height > minimum_vertical_margin * 2U
-                                       ? static_cast<uint16_t>(body.height - minimum_vertical_margin * 2U)
-                                       : body.height;
-    result.lines_per_screen = usable_height >= glyph_height
-                                  ? 1U + (usable_height - glyph_height) / result.line_step
-                                  : 1U;
-    const uint16_t text_height = static_cast<uint16_t>(
-        glyph_height + (result.lines_per_screen - 1U) * result.line_step);
+    const uint16_t usable_height =
+        body.height > minimum_vertical_margin * 2U
+            ? static_cast<uint16_t>(body.height - minimum_vertical_margin * 2U)
+            : body.height;
+    result.lines_per_screen =
+        usable_height >= glyph_height ? 1U + (usable_height - glyph_height) / result.line_step : 1U;
+    const uint16_t text_height =
+        static_cast<uint16_t>(glyph_height + (result.lines_per_screen - 1U) * result.line_step);
     result.text_top = static_cast<uint16_t>(
         body.y + (body.height > text_height ? (body.height - text_height) / 2U : 0U));
     return result;
@@ -143,11 +143,12 @@ static const uint8_t* load_image_pixels(const char* book_path, const epub::docum
         return nullptr;
     }
     const size_t bytes = (static_cast<size_t>(info.width) * info.height + 1U) / 2U;
-    uint8_t* pixels = static_cast<uint8_t*>(
-        heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    uint8_t* pixels =
+        static_cast<uint8_t*>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (pixels == nullptr)
         pixels = static_cast<uint8_t*>(heap_caps_malloc(bytes, MALLOC_CAP_8BIT));
-    if (pixels == nullptr || epub::image::decode_mono(encoded, encoded_size, pixels, bytes) != ESP_OK)
+    if (pixels == nullptr ||
+        epub::image::decode_mono(encoded, encoded_size, pixels, bytes) != ESP_OK)
     {
         heap_caps_free(pixels);
         heap_caps_free(encoded);
@@ -205,8 +206,10 @@ static size_t next_page_offset(const epub::document_t* document, size_t offset,
             uint16_t image_width = 0;
             uint16_t image_height = 0;
             image_target(image, reader, &image_width, &image_height);
-            const size_t image_lines = image_height == 0U ? 1U :
-                (static_cast<size_t>(image_height) + reader.line_step - 1U) / reader.line_step;
+            const size_t image_lines =
+                image_height == 0U ? 1U
+                                   : (static_cast<size_t>(image_height) + reader.line_step - 1U) /
+                                         reader.line_step;
             if (lines > 0U && lines + image_lines > reader.lines_per_screen)
                 break;
             lines += image_lines;
@@ -255,8 +258,8 @@ struct pagination_cache_t
 
 static pagination_cache_t pagination_cache = {};
 
-static bool pagination_matches(const epub::document_t* document,
-                               const reader_settings_t* settings, layout::viewport_t vp)
+static bool pagination_matches(const epub::document_t* document, const reader_settings_t* settings,
+                               layout::viewport_t vp)
 {
     const uint8_t text_scale = settings != nullptr ? settings->text_scale : 0;
     const uint8_t line_spacing = settings != nullptr ? settings->line_spacing : 0;
@@ -354,9 +357,8 @@ static size_t page_start(const epub::document_t* document, uint8_t page,
     ensure_pagination(document, settings, vp);
     if (pagination_cache.count == 0)
         return 0;
-    const uint8_t index = page < pagination_cache.count
-                              ? page
-                              : static_cast<uint8_t>(pagination_cache.count - 1);
+    const uint8_t index =
+        page < pagination_cache.count ? page : static_cast<uint8_t>(pagination_cache.count - 1);
     return pagination_cache.offsets[index];
 }
 
@@ -374,11 +376,9 @@ uint8_t page_count(const epub::document_t* document, const reader_settings_t* se
     return pagination_cache.count;
 }
 
-
 bool find_page(const epub::document_t* document, const char* query,
-               const reader_settings_t* settings, uint16_t display_width,
-               uint16_t display_height, size_t start_offset, uint8_t* page,
-               size_t* match_offset)
+               const reader_settings_t* settings, uint16_t display_width, uint16_t display_height,
+               size_t start_offset, uint8_t* page, size_t* match_offset)
 {
     if (document == nullptr || query == nullptr || query[0] == '\0' || page == nullptr)
         return false;
@@ -425,7 +425,8 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
     const size_t start = page_start(document, page, settings, vp);
     size_t offset = start;
     uint16_t line = 0;
-    uint16_t line_origin = aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
+    uint16_t line_origin =
+        aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
     uint16_t x = line_origin;
     while (offset < document->length && line < reader.lines_per_screen)
     {
@@ -434,23 +435,29 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
             uint16_t target_width = 0;
             uint16_t target_height = 0;
             image_target(image, reader, &target_width, &target_height);
-            const size_t image_lines = target_height == 0U ? 1U :
-                (static_cast<size_t>(target_height) + reader.line_step - 1U) / reader.line_step;
+            const size_t image_lines =
+                target_height == 0U ? 1U
+                                    : (static_cast<size_t>(target_height) + reader.line_step - 1U) /
+                                          reader.line_step;
             if (line > 0U && line + image_lines > reader.lines_per_screen)
                 break;
-            const uint16_t image_y = static_cast<uint16_t>(reader.text_top + line * reader.line_step);
-            const uint16_t image_x = target_width < reader.text_width
-                                         ? static_cast<uint16_t>(reader.text_left +
-                                             (reader.text_width - target_width) / 2U)
-                                         : reader.text_left;
+            const uint16_t image_y =
+                static_cast<uint16_t>(reader.text_top + line * reader.line_step);
+            const uint16_t image_x =
+                target_width < reader.text_width
+                    ? static_cast<uint16_t>(reader.text_left +
+                                            (reader.text_width - target_width) / 2U)
+                    : reader.text_left;
             const uint8_t* pixels = load_image_pixels(book_path, image);
             if (pixels != nullptr && target_width > 0U && target_height > 0U)
                 gfx::blit_4bpp_scaled(framebuffer, image_x, image_y, target_width, target_height,
                                       pixels, image_cache.width, image_cache.height);
             else
             {
-                const uint16_t placeholder_h = target_height == 0U ? reader.line_step : target_height;
-                const uint16_t placeholder_w = target_width == 0U ? reader.text_width / 2U : target_width;
+                const uint16_t placeholder_h =
+                    target_height == 0U ? reader.line_step : target_height;
+                const uint16_t placeholder_w =
+                    target_width == 0U ? reader.text_width / 2U : target_width;
                 gfx::draw_rect(framebuffer, image_x, image_y, placeholder_w, placeholder_h, 0x08);
                 gfx::draw_text(framebuffer, static_cast<uint16_t>(image_x + 8U),
                                static_cast<uint16_t>(image_y + 8U), "IMAGE", 1, 0x06);
@@ -458,7 +465,8 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
             line = static_cast<uint16_t>(line + image_lines);
             uint32_t marker = 0;
             offset += gfx::decode_utf8(document->text + offset, &marker);
-            line_origin = aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
+            line_origin =
+                aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
             x = line_origin;
             continue;
         }
@@ -468,12 +476,13 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
                                                 reader.scale, &consumed, &codepoint);
         if (codepoint == '\n')
         {
-            line = static_cast<uint16_t>(line +
-                (settings != nullptr && settings->paragraph_spacing != 0U ? 2U : 1U));
+            line = static_cast<uint16_t>(
+                line + (settings != nullptr && settings->paragraph_spacing != 0U ? 2U : 1U));
             offset += consumed;
             if (line >= reader.lines_per_screen)
                 break;
-            line_origin = aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
+            line_origin =
+                aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
             x = line_origin;
             continue;
         }
@@ -482,7 +491,8 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
             ++line;
             if (line >= reader.lines_per_screen)
                 break;
-            line_origin = aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
+            line_origin =
+                aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
             x = line_origin;
         }
         gfx::draw_codepoint(framebuffer, static_cast<uint16_t>(reader.text_left + x),
@@ -492,16 +502,14 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
         offset += consumed;
     }
     chrome::draw_indication_bar(framebuffer, {"Prev", gfx::icon_arrow_back},
-                                {"Menu", gfx::icon_menu},
-                                {"Next", gfx::icon_chevron_right});
+                                {"Menu", gfx::icon_menu}, {"Next", gfx::icon_chevron_right});
 
     // Mockup 5 shows a progress bar with "3 / 256" on the left and the book's
     // title and author on the right, just above the action bar.
     const layout::metrics_t footer_metrics = layout::metrics(vp);
     const uint16_t margin = footer_metrics.margin;
-    const uint16_t bar_y = static_cast<uint16_t>(framebuffer->height -
-                                                 footer_metrics.footer_height -
-                                                 progress_strip_height + 6U);
+    const uint16_t bar_y = static_cast<uint16_t>(
+        framebuffer->height - footer_metrics.footer_height - progress_strip_height + 6U);
     const uint16_t bar_width = framebuffer->width > margin * 2U
                                    ? static_cast<uint16_t>(framebuffer->width - margin * 2U)
                                    : framebuffer->width;

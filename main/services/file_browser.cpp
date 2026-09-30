@@ -116,7 +116,8 @@ esp_err_t open(const char* root, const char* path, listing_t* listing)
             item->d_name[0] == '.')
             continue;
         char item_path[path_length] = {};
-        const int written = snprintf(item_path, sizeof(item_path), "%s/%s", requested, item->d_name);
+        const int written =
+            snprintf(item_path, sizeof(item_path), "%s/%s", requested, item->d_name);
         if (written <= 0 || static_cast<size_t>(written) >= sizeof(item_path))
             continue;
         struct stat info = {};

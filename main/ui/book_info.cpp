@@ -8,13 +8,15 @@
 #include "ui/layout/layout.hpp"
 #include "ui/widgets.hpp"
 
-namespace xreader::ui {
-
-void draw_book_info(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
-                    uint8_t spine_index, uint8_t spine_count, const uint8_t* cover_pixels,
-                    uint16_t cover_pixel_width, uint16_t cover_pixel_height)
+namespace xreader::ui
 {
-    if (framebuffer == nullptr) return;
+
+void draw_book_info(gfx::framebuffer_t* framebuffer, const epub::book_t* book, uint8_t spine_index,
+                    uint8_t spine_count, const uint8_t* cover_pixels, uint16_t cover_pixel_width,
+                    uint16_t cover_pixel_height)
+{
+    if (framebuffer == nullptr)
+        return;
     const layout::viewport_t vp{framebuffer->width, framebuffer->height};
     const layout::metrics_t m = layout::metrics(vp);
     gfx::clear(framebuffer, 0x0f);
@@ -58,9 +60,8 @@ void draw_book_info(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
     }
 
     const uint16_t text_x = static_cast<uint16_t>(body.x + cover_w + 16U);
-    const uint16_t text_w = body.width > cover_w + 16U
-                                ? static_cast<uint16_t>(body.width - cover_w - 16U)
-                                : body.width;
+    const uint16_t text_w =
+        body.width > cover_w + 16U ? static_cast<uint16_t>(body.width - cover_w - 16U) : body.width;
     gfx::draw_text(framebuffer, text_x, body.y, title, 1, 0x00);
     gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(body.y + 22U), author, 1, 0x05);
 
@@ -72,7 +73,8 @@ void draw_book_info(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
     const char* labels[] = {"Format", "Chapters", "Current chapter"};
     const char* values[] = {"EPUB", chapters, current};
     const uint16_t list_y = static_cast<uint16_t>(body.y + 52U);
-    for (uint8_t i = 0; i < 3; ++i) {
+    for (uint8_t i = 0; i < 3; ++i)
+    {
         const uint16_t y = static_cast<uint16_t>(list_y + i * 24U);
         gfx::draw_text(framebuffer, text_x, y, labels[i], 1, 0x06);
         const uint16_t w = gfx::measure_text(values[i], 1);
@@ -88,8 +90,7 @@ void draw_book_info(gfx::framebuffer_t* framebuffer, const epub::book_t* book,
     const layout::rect_t open_button = book_info_open_bounds(vp);
     widgets::draw_button(framebuffer, open_button, "Open Book", gfx::icon_book, true);
 
-    chrome::draw_indication_bar(framebuffer, {nullptr, gfx::icon_none},
-                                {"Open", gfx::icon_book},
+    chrome::draw_indication_bar(framebuffer, {nullptr, gfx::icon_none}, {"Open", gfx::icon_book},
                                 {"Back", gfx::icon_arrow_back});
 }
 
@@ -112,7 +113,8 @@ bool book_info_back_hit(uint16_t display_width, uint16_t display_height, uint16_
 {
     const layout::viewport_t vp{display_width, display_height};
     const auto m = layout::metrics(vp);
-    return y >= static_cast<uint16_t>(display_height - m.footer_height) && x >= display_width * 2U / 3U;
+    return y >= static_cast<uint16_t>(display_height - m.footer_height) &&
+           x >= display_width * 2U / 3U;
 }
 
 } // namespace xreader::ui

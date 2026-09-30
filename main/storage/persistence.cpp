@@ -164,11 +164,13 @@ esp_err_t load_settings(settings_t* settings)
         settings->orientation = orientation;
     if (nvs_get_u8(handle, margin_mode_key, &margin_mode) == ESP_OK && margin_mode <= 2)
         settings->margin_mode = margin_mode;
-    if (nvs_get_u8(handle, paragraph_spacing_key, &paragraph_spacing) == ESP_OK && paragraph_spacing <= 1)
+    if (nvs_get_u8(handle, paragraph_spacing_key, &paragraph_spacing) == ESP_OK &&
+        paragraph_spacing <= 1)
         settings->paragraph_spacing = paragraph_spacing;
     if (nvs_get_u8(handle, text_alignment_key, &text_alignment) == ESP_OK && text_alignment <= 2)
         settings->text_alignment = text_alignment;
-    if (nvs_get_u8(handle, reverse_page_turn_key, &reverse_page_turn) == ESP_OK && reverse_page_turn <= 1)
+    if (nvs_get_u8(handle, reverse_page_turn_key, &reverse_page_turn) == ESP_OK &&
+        reverse_page_turn <= 1)
         settings->reverse_page_turn = reverse_page_turn;
     if (nvs_get_u8(handle, invert_colors_key, &invert_colors) == ESP_OK && invert_colors <= 1)
         settings->invert_colors = invert_colors;
@@ -363,7 +365,6 @@ esp_err_t save_position_for_book(const char* path, uint32_t spine, uint32_t page
     return error;
 }
 
-
 esp_err_t load_bookmarks_for_book(const char* path, bookmark_t* bookmarks, uint8_t capacity,
                                   uint8_t* count)
 {
@@ -431,7 +432,8 @@ esp_err_t copy_book_state(const char* old_path, const char* new_path)
 
     bookmark_t bookmarks[max_bookmarks_per_book] = {};
     uint8_t count = 0;
-    const esp_err_t bookmark_error = load_bookmarks_for_book(old_path, bookmarks, max_bookmarks_per_book, &count);
+    const esp_err_t bookmark_error =
+        load_bookmarks_for_book(old_path, bookmarks, max_bookmarks_per_book, &count);
     if (bookmark_error == ESP_OK)
         save_bookmarks_for_book(new_path, bookmarks, count);
     return position_error == ESP_OK || bookmark_error == ESP_OK ? ESP_OK : ESP_ERR_NOT_FOUND;

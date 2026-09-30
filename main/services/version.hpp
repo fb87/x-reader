@@ -43,10 +43,14 @@ inline int compare(const char* lhs, const char* rhs)
     {
         const uint32_t av = component(&a);
         const uint32_t bv = component(&b);
-        if (av < bv) return -1;
-        if (av > bv) return 1;
-        if (*a == '.') ++a;
-        if (*b == '.') ++b;
+        if (av < bv)
+            return -1;
+        if (av > bv)
+            return 1;
+        if (*a == '.')
+            ++a;
+        if (*b == '.')
+            ++b;
     }
 
     // Build metadata does not affect precedence. Stable releases sort after a
@@ -68,7 +72,8 @@ inline int compare(const char* lhs, const char* rhs)
     }
     const bool a_end = *a == '\0' || *a == '+';
     const bool b_end = *b == '\0' || *b == '+';
-    if (a_end && b_end) return 0;
+    if (a_end && b_end)
+        return 0;
     return a_end ? -1 : 1;
 }
 

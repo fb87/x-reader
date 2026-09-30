@@ -14,8 +14,9 @@ namespace
 layout::rect_t panel(layout::viewport_t viewport)
 {
     const auto metrics = layout::metrics(viewport);
-    const uint16_t width = static_cast<uint16_t>(
-        viewport.width > metrics.margin * 4U ? viewport.width - metrics.margin * 4U : viewport.width);
+    const uint16_t width = static_cast<uint16_t>(viewport.width > metrics.margin * 4U
+                                                     ? viewport.width - metrics.margin * 4U
+                                                     : viewport.width);
     const uint16_t height = static_cast<uint16_t>(viewport.height / 2U);
     return {static_cast<uint16_t>((viewport.width - width) / 2U),
             static_cast<uint16_t>((viewport.height - height) / 2U), width, height};
@@ -31,8 +32,8 @@ layout::rect_t button_rect(layout::viewport_t viewport, bool accept)
 }
 } // namespace
 
-void dialog_begin(dialog_state_t* state, dialog_kind_t kind, const char* title,
-                  const char* message, const char* accept_label, const char* cancel_label)
+void dialog_begin(dialog_state_t* state, dialog_kind_t kind, const char* title, const char* message,
+                  const char* accept_label, const char* cancel_label)
 {
     if (state == nullptr)
         return;
@@ -78,8 +79,7 @@ void draw_dialog(gfx::framebuffer_t* framebuffer, const dialog_state_t* state)
                        state->focus_accept ? 0x00 : 0x0f);
     }
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_swap_horiz},
-                                {"Select", gfx::icon_check},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Select", gfx::icon_check}, {"Back", gfx::icon_arrow_back});
 }
 
 dialog_result_t dialog_handle(dialog_state_t* state, const input::action_event_t* event,

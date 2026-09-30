@@ -197,9 +197,8 @@ static esp_err_t write_pixel_data(device_t* device, const uint8_t* pixels, size_
     }
 
     const int64_t elapsed_us = esp_timer_get_time() - start;
-    ESP_LOGI(tag, "pixel upload: %u bytes in %u chunks, %lld ms",
-             static_cast<unsigned>(size), static_cast<unsigned>(chunks),
-             static_cast<long long>(elapsed_us / 1000));
+    ESP_LOGI(tag, "pixel upload: %u bytes in %u chunks, %lld ms", static_cast<unsigned>(size),
+             static_cast<unsigned>(chunks), static_cast<long long>(elapsed_us / 1000));
     heap_caps_free(transfer);
     return error;
 }

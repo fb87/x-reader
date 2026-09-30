@@ -34,8 +34,8 @@ static result_t last_result = {};
 
 static library_index::catalog_t* allocate_catalog()
 {
-    library_index::catalog_t* catalog = static_cast<library_index::catalog_t*>(heap_caps_calloc(
-        1, sizeof(library_index::catalog_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    library_index::catalog_t* catalog = static_cast<library_index::catalog_t*>(
+        heap_caps_calloc(1, sizeof(library_index::catalog_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (catalog == nullptr)
         catalog = static_cast<library_index::catalog_t*>(
             heap_caps_calloc(1, sizeof(library_index::catalog_t), MALLOC_CAP_8BIT));

@@ -50,18 +50,16 @@ void draw_bookmarks(gfx::framebuffer_t* framebuffer, const bookmark_view_t* item
                      static_cast<unsigned>(items[i].spine + 1U),
                      static_cast<unsigned>(items[i].page + 1U));
             gfx::draw_text(framebuffer, static_cast<uint16_t>(row.x + 12U),
-                           static_cast<uint16_t>(row.y + 12U), line, 1,
-                           0x00);
+                           static_cast<uint16_t>(row.y + 12U), line, 1, 0x00);
         }
     }
 
-    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
-                                {"Open", gfx::icon_book},
+    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Open", gfx::icon_book},
                                 {"Back", gfx::icon_arrow_back});
 }
 
-bool bookmarks_touch_index(uint16_t width, uint16_t height, uint16_t x, uint16_t y,
-                           uint8_t count, uint8_t* index)
+bool bookmarks_touch_index(uint16_t width, uint16_t height, uint16_t x, uint16_t y, uint8_t count,
+                           uint8_t* index)
 {
     if (index == nullptr || count == 0)
         return false;

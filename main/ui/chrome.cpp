@@ -50,8 +50,8 @@ static void draw_battery(gfx::framebuffer_t* framebuffer, uint16_t x, uint16_t y
     static constexpr uint16_t body_width = 22;
     static constexpr uint16_t body_height = 12;
     gfx::draw_rect(framebuffer, x, y, body_width, body_height, ink);
-    gfx::fill_rect(framebuffer, static_cast<uint16_t>(x + body_width),
-                   static_cast<uint16_t>(y + 3), 2, 6, ink);
+    gfx::fill_rect(framebuffer, static_cast<uint16_t>(x + body_width), static_cast<uint16_t>(y + 3),
+                   2, 6, ink);
     const uint16_t inner = static_cast<uint16_t>(body_width - 4U);
     const uint16_t filled = static_cast<uint16_t>(inner * percent / 100U);
     if (filled != 0)
@@ -148,8 +148,8 @@ void draw_title_bar(gfx::framebuffer_t* framebuffer, const char* title, const ch
         const uint16_t x = framebuffer->width > width + padding
                                ? static_cast<uint16_t>(framebuffer->width - width - padding)
                                : padding;
-        gfx::draw_text(framebuffer, x, static_cast<uint16_t>(top + (height - 16U) / 2U), trailing, 1,
-                       mid);
+        gfx::draw_text(framebuffer, x, static_cast<uint16_t>(top + (height - 16U) / 2U), trailing,
+                       1, mid);
     }
     gfx::fill_rect(framebuffer, padding, static_cast<uint16_t>(top + height - 1U),
                    static_cast<uint16_t>(framebuffer->width - padding * 2U), 1, rule);
@@ -180,16 +180,14 @@ void draw_indication_bar(gfx::framebuffer_t* framebuffer, footer_cell_t left, fo
         const uint16_t label_width = has_label ? gfx::measure_text(cell.label, 1) : 0;
         if (cell.icon != gfx::icon_none)
         {
-            const uint16_t icon_x = width > glyph
-                                        ? static_cast<uint16_t>(x + (width - glyph) / 2U)
-                                        : x;
+            const uint16_t icon_x =
+                width > glyph ? static_cast<uint16_t>(x + (width - glyph) / 2U) : x;
             gfx::draw_icon(framebuffer, icon_x, static_cast<uint16_t>(top + 6U), cell.icon, 1, ink);
         }
         if (has_label)
         {
-            const uint16_t label_x = width > label_width
-                                         ? static_cast<uint16_t>(x + (width - label_width) / 2U)
-                                         : x;
+            const uint16_t label_x =
+                width > label_width ? static_cast<uint16_t>(x + (width - label_width) / 2U) : x;
             const uint16_t label_y = cell.icon == gfx::icon_none
                                          ? static_cast<uint16_t>(top + (m.footer_height - 16U) / 2U)
                                          : static_cast<uint16_t>(top + 6U + glyph + 2U);

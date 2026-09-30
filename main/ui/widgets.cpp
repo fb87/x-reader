@@ -51,19 +51,19 @@ void draw_slider(gfx::framebuffer_t* framebuffer, layout::rect_t bounds, uint8_t
     const uint16_t track_y =
         static_cast<uint16_t>(bounds.y + (bounds.height - track_thickness) / 2U);
     const uint16_t span = static_cast<uint16_t>(bounds.width - slider_knob);
-    const uint16_t filled =
-        clamp_u16(static_cast<uint32_t>(span) * (value > max_value ? max_value : value) / max_value,
-                  span);
+    const uint16_t filled = clamp_u16(
+        static_cast<uint32_t>(span) * (value > max_value ? max_value : value) / max_value, span);
 
-    gfx::fill_rect(framebuffer, static_cast<uint16_t>(bounds.x + slider_knob / 2U), track_y,
-                   span, track_thickness, rule);
+    gfx::fill_rect(framebuffer, static_cast<uint16_t>(bounds.x + slider_knob / 2U), track_y, span,
+                   track_thickness, rule);
     if (filled != 0)
         gfx::fill_rect(framebuffer, static_cast<uint16_t>(bounds.x + slider_knob / 2U), track_y,
                        filled, track_thickness, ink);
 
-    const layout::rect_t knob = {static_cast<uint16_t>(bounds.x + filled),
-                                 static_cast<uint16_t>(bounds.y + (bounds.height - slider_knob) / 2U),
-                                 slider_knob, slider_knob};
+    const layout::rect_t knob = {
+        static_cast<uint16_t>(bounds.x + filled),
+        static_cast<uint16_t>(bounds.y + (bounds.height - slider_knob) / 2U), slider_knob,
+        slider_knob};
     rounded_fill(framebuffer, knob, ink);
 }
 

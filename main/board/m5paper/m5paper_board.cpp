@@ -141,9 +141,13 @@ esp_err_t battery_voltage_mv(uint16_t* millivolts)
 
 uint8_t battery_percent(uint16_t millivolts)
 {
-    struct point_t { uint16_t mv; uint8_t percent; };
+    struct point_t
+    {
+        uint16_t mv;
+        uint8_t percent;
+    };
     static constexpr point_t curve[] = {
-        {3300, 0}, {3400, 2}, {3500, 5}, {3600, 10}, {3700, 25},
+        {3300, 0},  {3400, 2},  {3500, 5},  {3600, 10}, {3700, 25},
         {3800, 45}, {3900, 65}, {4000, 80}, {4100, 90}, {4200, 100},
     };
     if (millivolts <= curve[0].mv)
@@ -154,7 +158,8 @@ uint8_t battery_percent(uint16_t millivolts)
         {
             const uint16_t span = static_cast<uint16_t>(curve[index].mv - curve[index - 1].mv);
             const uint16_t offset = static_cast<uint16_t>(millivolts - curve[index - 1].mv);
-            const uint8_t delta = static_cast<uint8_t>(curve[index].percent - curve[index - 1].percent);
+            const uint8_t delta =
+                static_cast<uint8_t>(curve[index].percent - curve[index - 1].percent);
             return static_cast<uint8_t>(curve[index - 1].percent +
                                         (static_cast<uint32_t>(offset) * delta) / span);
         }

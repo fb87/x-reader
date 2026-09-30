@@ -82,12 +82,10 @@ struct key_name_t
 };
 
 static const key_name_t key_names[] = {
-    {"up", input::key_up},           {"down", input::key_down},
-    {"left", input::key_left},       {"right", input::key_right},
-    {"select", input::key_select},   {"back", input::key_back},
-    {"menu", input::key_menu},       {"next", input::key_page_next},
-    {"prev", input::key_page_prev},  {"home", input::key_home},
-    {"power", input::key_power},
+    {"up", input::key_up},       {"down", input::key_down},      {"left", input::key_left},
+    {"right", input::key_right}, {"select", input::key_select},  {"back", input::key_back},
+    {"menu", input::key_menu},   {"next", input::key_page_next}, {"prev", input::key_page_prev},
+    {"home", input::key_home},   {"power", input::key_power},
 };
 
 static bool lookup_key(const char* name, input::key_t* key)
@@ -155,9 +153,9 @@ static bool feed_upload(const char* line)
     }
     unsigned char decoded[line_capacity];
     size_t decoded_length = 0;
-    const int status = mbedtls_base64_decode(decoded, sizeof(decoded), &decoded_length,
-                                             reinterpret_cast<const unsigned char*>(line),
-                                             strlen(line));
+    const int status =
+        mbedtls_base64_decode(decoded, sizeof(decoded), &decoded_length,
+                              reinterpret_cast<const unsigned char*>(line), strlen(line));
     if (status != 0)
     {
         reply("put ERR base64 %d", status);
@@ -272,14 +270,12 @@ static void handle_command(char* line)
         }
         const input::event_type_t type =
             clockwise ? input::event_rotary_clockwise : input::event_rotary_counterclockwise;
-        reply("rot %s %s", direction,
-              send_event({type, 0, 0, input::key_none}) ? "OK" : "ERR");
+        reply("rot %s %s", direction, send_event({type, 0, 0, input::key_none}) ? "OK" : "ERR");
         return;
     }
     if (strcmp(verb, "btn") == 0)
     {
-        reply("btn %s",
-              send_event({input::event_button_up, 0, 0, input::key_none}) ? "OK" : "ERR");
+        reply("btn %s", send_event({input::event_button_up, 0, 0, input::key_none}) ? "OK" : "ERR");
         return;
     }
     if (strcmp(verb, "ls") == 0)

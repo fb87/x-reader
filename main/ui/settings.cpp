@@ -9,24 +9,64 @@ namespace
 {
 static void build_rows(settings_row_t* rows)
 {
-    rows[settings_display] = {"Display",      gfx::icon_light_mode, settings_control_link,
-                              "Refresh, orientation", false, 0, 0, nullptr, 0, 0};
-    rows[settings_reading] = {"Reading",      gfx::icon_text_fields, settings_control_link,
-                              "Font, spacing", false, 0, 0, nullptr, 0, 0};
-    rows[settings_connectivity] = {"Connectivity", gfx::icon_wifi, settings_control_link,
-                                   "Wi-Fi", false, 0, 0, nullptr, 0, 0};
-    rows[settings_book_manager] = {"Book Manager", gfx::icon_folder, settings_control_link,
-                                   "Import, files", false, 0, 0, nullptr, 0, 0};
-    rows[settings_book_sync] = {"Book Sync",   gfx::icon_sync, settings_control_link,
-                                "Server, progress", false, 0, 0, nullptr, 0, 0};
-    rows[settings_ota] = {"System Update",     gfx::icon_system_update, settings_control_link,
-                          "OTA", false, 0, 0, nullptr, 0, 0};
-    rows[settings_storage] = {"Storage",       gfx::icon_storage, settings_control_link,
-                              "SD card", false, 0, 0, nullptr, 0, 0};
-    rows[settings_about] = {"About",           gfx::icon_info, settings_control_link,
-                            "Device info", false, 0, 0, nullptr, 0, 0};
-    rows[settings_back] = {"Back",             gfx::icon_arrow_back, settings_control_link,
-                           nullptr, false, 0, 0, nullptr, 0, 0};
+    rows[settings_display] = {"Display",
+                              gfx::icon_light_mode,
+                              settings_control_link,
+                              "Refresh, orientation",
+                              false,
+                              0,
+                              0,
+                              nullptr,
+                              0,
+                              0};
+    rows[settings_reading] = {"Reading",
+                              gfx::icon_text_fields,
+                              settings_control_link,
+                              "Font, spacing",
+                              false,
+                              0,
+                              0,
+                              nullptr,
+                              0,
+                              0};
+    rows[settings_connectivity] = {
+        "Connectivity", gfx::icon_wifi, settings_control_link, "Wi-Fi", false, 0, 0, nullptr, 0, 0};
+    rows[settings_book_manager] = {"Book Manager",
+                                   gfx::icon_folder,
+                                   settings_control_link,
+                                   "Import, files",
+                                   false,
+                                   0,
+                                   0,
+                                   nullptr,
+                                   0,
+                                   0};
+    rows[settings_book_sync] = {"Book Sync",
+                                gfx::icon_sync,
+                                settings_control_link,
+                                "Server, progress",
+                                false,
+                                0,
+                                0,
+                                nullptr,
+                                0,
+                                0};
+    rows[settings_ota] = {"System Update",
+                          gfx::icon_system_update,
+                          settings_control_link,
+                          "OTA",
+                          false,
+                          0,
+                          0,
+                          nullptr,
+                          0,
+                          0};
+    rows[settings_storage] = {
+        "Storage", gfx::icon_storage, settings_control_link, "SD card", false, 0, 0, nullptr, 0, 0};
+    rows[settings_about] = {
+        "About", gfx::icon_info, settings_control_link, "Device info", false, 0, 0, nullptr, 0, 0};
+    rows[settings_back] = {
+        "Back", gfx::icon_arrow_back, settings_control_link, nullptr, false, 0, 0, nullptr, 0, 0};
 }
 } // namespace
 

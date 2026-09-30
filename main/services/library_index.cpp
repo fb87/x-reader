@@ -7,9 +7,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "esp_heap_caps.h"
 #include "epub/book.hpp"
 #include "epub/image.hpp"
+#include "esp_heap_caps.h"
 
 namespace xreader
 {
@@ -158,7 +158,8 @@ static void cache_cover(const char* mount_path, const char* book_path, const epu
     }
 
     char directory[path_length] = {};
-    const int directory_written = snprintf(directory, sizeof(directory), "%s/.xreader-covers", mount_path);
+    const int directory_written =
+        snprintf(directory, sizeof(directory), "%s/.xreader-covers", mount_path);
     if (directory_written <= 0 || static_cast<size_t>(directory_written) >= sizeof(directory))
     {
         heap_caps_free(encoded);
@@ -212,7 +213,8 @@ static bool catalog_files_unchanged(const catalog_t* catalog)
     return true;
 }
 
-static void add_file(const char* mount_path, const char* path, const struct stat& info, catalog_t* catalog)
+static void add_file(const char* mount_path, const char* path, const struct stat& info,
+                     catalog_t* catalog)
 {
     if (catalog->count >= max_books || info.st_size < 0 ||
         static_cast<uint64_t>(info.st_size) > UINT32_MAX)
@@ -237,7 +239,8 @@ static void add_file(const char* mount_path, const char* path, const struct stat
     ++catalog->count;
 }
 
-static void scan_directory(const char* mount_path, const char* directory, uint8_t depth, catalog_t* catalog)
+static void scan_directory(const char* mount_path, const char* directory, uint8_t depth,
+                           catalog_t* catalog)
 {
     if (depth > 5U || catalog->count >= max_books)
         return;
@@ -374,8 +377,8 @@ esp_err_t rebuild(const char* mount_path, catalog_t* catalog)
             }
             else if (header.version == 2U)
             {
-                entry_v2_t* old_entries = static_cast<entry_v2_t*>(
-                    heap_caps_calloc(max_books, sizeof(entry_v2_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+                entry_v2_t* old_entries = static_cast<entry_v2_t*>(heap_caps_calloc(
+                    max_books, sizeof(entry_v2_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
                 if (old_entries == nullptr)
                     old_entries = static_cast<entry_v2_t*>(
                         heap_caps_calloc(max_books, sizeof(entry_v2_t), MALLOC_CAP_8BIT));
@@ -386,9 +389,12 @@ esp_err_t rebuild(const char* mount_path, catalog_t* catalog)
                 {
                     for (uint16_t i = 0; i < header.count; ++i)
                     {
-                        copy_text(previous->entries[i].path, sizeof(previous->entries[i].path), old_entries[i].path);
-                        copy_text(previous->entries[i].title, sizeof(previous->entries[i].title), old_entries[i].title);
-                        copy_text(previous->entries[i].author, sizeof(previous->entries[i].author), old_entries[i].author);
+                        copy_text(previous->entries[i].path, sizeof(previous->entries[i].path),
+                                  old_entries[i].path);
+                        copy_text(previous->entries[i].title, sizeof(previous->entries[i].title),
+                                  old_entries[i].title);
+                        copy_text(previous->entries[i].author, sizeof(previous->entries[i].author),
+                                  old_entries[i].author);
                         previous->entries[i].file_size = old_entries[i].file_size;
                         previous->entries[i].modified_time = old_entries[i].modified_time;
                         previous->entries[i].last_read_order = old_entries[i].last_read_order;

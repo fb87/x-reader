@@ -11,25 +11,78 @@ namespace
 {
 static void build_rows(settings_row_t* rows)
 {
-    rows[quick_setting_contents] = {"Table of Contents", gfx::icon_toc, settings_control_link,
-                                    nullptr, false, 0, 0, nullptr, 0, 0};
-    rows[quick_setting_bookmarks] = {"Bookmarks", gfx::icon_bookmark, settings_control_link,
-                                     nullptr, false, 0, 0, nullptr, 0, 0};
-    rows[quick_setting_add_bookmark] = {"Add bookmark", gfx::icon_add, settings_control_link,
-                                        nullptr, false, 0, 0, nullptr, 0, 0};
-    rows[quick_setting_display_settings] = {"Display Settings", gfx::icon_light_mode,
-                                            settings_control_link, nullptr, false, 0, 0,
-                                            nullptr, 0, 0};
-    rows[quick_setting_reading_settings] = {"Reading Settings", gfx::icon_text_fields,
-                                            settings_control_link, nullptr, false, 0, 0,
-                                            nullptr, 0, 0};
-    rows[quick_setting_search] = {"Search in book", gfx::icon_search, settings_control_link,
-                                  nullptr, false, 0, 0, nullptr, 0, 0};
-    rows[quick_setting_book_info] = {"Book Information", gfx::icon_info, settings_control_link,
-                                     nullptr, false, 0, 0, nullptr, 0, 0};
-    rows[quick_setting_exit_to_library] = {"Exit to Library", gfx::icon_open_in_new,
-                                           settings_control_link, nullptr, false, 0, 0,
-                                           nullptr, 0, 0};
+    rows[quick_setting_contents] = {"Table of Contents",
+                                    gfx::icon_toc,
+                                    settings_control_link,
+                                    nullptr,
+                                    false,
+                                    0,
+                                    0,
+                                    nullptr,
+                                    0,
+                                    0};
+    rows[quick_setting_bookmarks] = {"Bookmarks",
+                                     gfx::icon_bookmark,
+                                     settings_control_link,
+                                     nullptr,
+                                     false,
+                                     0,
+                                     0,
+                                     nullptr,
+                                     0,
+                                     0};
+    rows[quick_setting_add_bookmark] = {
+        "Add bookmark", gfx::icon_add, settings_control_link, nullptr, false, 0, 0, nullptr, 0, 0};
+    rows[quick_setting_display_settings] = {"Display Settings",
+                                            gfx::icon_light_mode,
+                                            settings_control_link,
+                                            nullptr,
+                                            false,
+                                            0,
+                                            0,
+                                            nullptr,
+                                            0,
+                                            0};
+    rows[quick_setting_reading_settings] = {"Reading Settings",
+                                            gfx::icon_text_fields,
+                                            settings_control_link,
+                                            nullptr,
+                                            false,
+                                            0,
+                                            0,
+                                            nullptr,
+                                            0,
+                                            0};
+    rows[quick_setting_search] = {"Search in book",
+                                  gfx::icon_search,
+                                  settings_control_link,
+                                  nullptr,
+                                  false,
+                                  0,
+                                  0,
+                                  nullptr,
+                                  0,
+                                  0};
+    rows[quick_setting_book_info] = {"Book Information",
+                                     gfx::icon_info,
+                                     settings_control_link,
+                                     nullptr,
+                                     false,
+                                     0,
+                                     0,
+                                     nullptr,
+                                     0,
+                                     0};
+    rows[quick_setting_exit_to_library] = {"Exit to Library",
+                                           gfx::icon_open_in_new,
+                                           settings_control_link,
+                                           nullptr,
+                                           false,
+                                           0,
+                                           0,
+                                           nullptr,
+                                           0,
+                                           0};
 }
 } // namespace
 

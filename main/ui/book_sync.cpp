@@ -22,10 +22,10 @@ static layout::rect_t items_area(layout::viewport_t viewport)
 
 void draw_book_sync(gfx::framebuffer_t* framebuffer, book_sync_item_t focus, bool connected,
                     bool sync_books, bool sync_progress, bool server_configured,
-                    const char* last_sync, const char* activity, uint16_t completed,
-                    uint16_t total, bool pending_retry, uint8_t retry_count,
-                    const char* last_result, uint32_t bytes_downloaded, uint32_t bytes_total,
-                    const char* history1, const char* history2)
+                    const char* last_sync, const char* activity, uint16_t completed, uint16_t total,
+                    bool pending_retry, uint8_t retry_count, const char* last_result,
+                    uint32_t bytes_downloaded, uint32_t bytes_total, const char* history1,
+                    const char* history2)
 {
     if (framebuffer == nullptr)
         return;
@@ -91,21 +91,23 @@ void draw_book_sync(gfx::framebuffer_t* framebuffer, book_sync_item_t focus, boo
         snprintf(detail, sizeof(detail), "1: %.42s  2: %.42s", history1,
                  history2 != nullptr ? history2 : "");
     else if (pending_retry)
-        snprintf(detail, sizeof(detail), "OFFLINE RETRY #%u PENDING", static_cast<unsigned>(retry_count));
+        snprintf(detail, sizeof(detail), "OFFLINE RETRY #%u PENDING",
+                 static_cast<unsigned>(retry_count));
     else if (bytes_total > 0U)
-        snprintf(detail, sizeof(detail), "%lu / %lu KB", static_cast<unsigned long>(bytes_downloaded / 1024U),
+        snprintf(detail, sizeof(detail), "%lu / %lu KB",
+                 static_cast<unsigned long>(bytes_downloaded / 1024U),
                  static_cast<unsigned long>(bytes_total / 1024U));
     else if (last_result != nullptr && last_result[0] != '\0')
         snprintf(detail, sizeof(detail), "LAST: %.92s", last_result);
     if (detail[0] != '\0')
     {
-        const uint16_t y = viewport.height > metrics.footer_height + 24U
-                               ? static_cast<uint16_t>(viewport.height - metrics.footer_height - 22U)
-                               : 0U;
+        const uint16_t y =
+            viewport.height > metrics.footer_height + 24U
+                ? static_cast<uint16_t>(viewport.height - metrics.footer_height - 22U)
+                : 0U;
         gfx::draw_text(framebuffer, metrics.margin, y, detail, 1, 0x06);
     }
-    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
-                                {"Select", gfx::icon_check},
+    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Select", gfx::icon_check},
                                 {"Back", gfx::icon_arrow_back});
 }
 
@@ -118,8 +120,7 @@ bool book_sync_touch_item(uint16_t display_width, uint16_t display_height, uint1
     const layout::metrics_t metrics = layout::metrics(viewport);
     uint8_t index = 0;
     if (!focus::hit_rows(items_area(viewport), book_sync_item_count,
-                         static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap, x, y,
-                         &index))
+                         static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap, x, y, &index))
         return false;
     *item = static_cast<book_sync_item_t>(index);
     return true;

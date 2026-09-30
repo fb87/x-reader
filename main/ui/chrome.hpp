@@ -33,8 +33,8 @@ void draw_status_bar(gfx::framebuffer_t* framebuffer, const char* title);
 void draw_title_bar(gfx::framebuffer_t* framebuffer, const char* title, const char* trailing);
 uint16_t title_height(layout::viewport_t viewport);
 
-void draw_indication_bar(gfx::framebuffer_t* framebuffer, footer_cell_t left,
-                         footer_cell_t center, footer_cell_t right);
+void draw_indication_bar(gfx::framebuffer_t* framebuffer, footer_cell_t left, footer_cell_t center,
+                         footer_cell_t right);
 
 } // namespace chrome
 } // namespace ui

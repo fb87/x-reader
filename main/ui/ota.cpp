@@ -22,8 +22,8 @@ static layout::rect_t items_area(layout::viewport_t viewport)
 
 void draw_ota(gfx::framebuffer_t* framebuffer, ota_item_t focus, const char* current_version,
               const char* available_version, const char* status, bool update_available,
-              const char* release_notes, uint8_t progress_percent,
-              const char* last_result, bool rollback_pending)
+              const char* release_notes, uint8_t progress_percent, const char* last_result,
+              bool rollback_pending)
 {
     if (framebuffer == nullptr)
         return;
@@ -36,22 +36,26 @@ void draw_ota(gfx::framebuffer_t* framebuffer, ota_item_t focus, const char* cur
     const char* const labels[ota_item_count] = {"CHECK FOR UPDATE", "INSTALL UPDATE", "BACK"};
     char install_value[48] = {};
     if (status != nullptr && strcmp(status, "INSTALLING...") == 0)
-        snprintf(install_value, sizeof(install_value), "%u%%", static_cast<unsigned>(progress_percent));
+        snprintf(install_value, sizeof(install_value), "%u%%",
+                 static_cast<unsigned>(progress_percent));
     else if (update_available)
         snprintf(install_value, sizeof(install_value), "%s",
-                 available_version != nullptr && available_version[0] != '\0' ? available_version : "READY");
+                 available_version != nullptr && available_version[0] != '\0' ? available_version
+                                                                              : "READY");
     else
         snprintf(install_value, sizeof(install_value), "NONE");
     const char* const values[ota_item_count] = {
-        current_version == nullptr ? "UNKNOWN" : current_version, install_value, "RETURN",
+        current_version == nullptr ? "UNKNOWN" : current_version,
+        install_value,
+        "RETURN",
     };
 
     const layout::rect_t area = items_area(viewport);
     for (uint8_t index = 0; index < ota_item_count; ++index)
     {
         const layout::rect_t item =
-            layout::row(area, index, ota_item_count,
-                        static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap);
+            layout::row(area, index, ota_item_count, static_cast<uint16_t>(metrics.row_height + 4U),
+                        metrics.gap);
         const bool selected = index == static_cast<uint8_t>(focus);
         gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height,
                        selected ? 0x0d : 0x0f);
@@ -82,11 +86,11 @@ void draw_ota(gfx::framebuffer_t* framebuffer, ota_item_t focus, const char* cur
     if (last_result != nullptr && last_result[0] != '\0')
     {
         char result[112] = {};
-        snprintf(result, sizeof(result), "%sLAST: %.86s", rollback_pending ? "VERIFY PENDING  " : "", last_result);
+        snprintf(result, sizeof(result), "%sLAST: %.86s",
+                 rollback_pending ? "VERIFY PENDING  " : "", last_result);
         gfx::draw_text(framebuffer, metrics.margin, note_y, result, 1, 0x06);
     }
-    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
-                                {"Select", gfx::icon_check},
+    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Select", gfx::icon_check},
                                 {"Back", gfx::icon_arrow_back});
 }
 
@@ -99,8 +103,7 @@ bool ota_touch_item(uint16_t display_width, uint16_t display_height, uint16_t x,
     const layout::metrics_t metrics = layout::metrics(viewport);
     uint8_t index = 0;
     if (!focus::hit_rows(items_area(viewport), ota_item_count,
-                         static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap, x, y,
-                         &index))
+                         static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap, x, y, &index))
         return false;
     *item = static_cast<ota_item_t>(index);
     return true;

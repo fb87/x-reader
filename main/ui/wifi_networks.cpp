@@ -44,8 +44,8 @@ void draw_wifi_networks(gfx::framebuffer_t* framebuffer, const wifi_network_view
     const layout::rect_t area = list_area(viewport);
     for (uint8_t index = 0; index < total; ++index)
     {
-        const layout::rect_t row = layout::row(area, index, total,
-                                               static_cast<uint16_t>(metrics.row_height + 2U), metrics.gap);
+        const layout::rect_t row = layout::row(
+            area, index, total, static_cast<uint16_t>(metrics.row_height + 2U), metrics.gap);
         const bool selected = index == focus;
         gfx::fill_rect(framebuffer, row.x, row.y, row.width, row.height, selected ? 0x0d : 0x0f);
         const uint8_t foreground = 0x00;
@@ -59,9 +59,10 @@ void draw_wifi_networks(gfx::framebuffer_t* framebuffer, const wifi_network_view
             snprintf(info, sizeof(info), "%s %d dBm", network.secured ? "LOCK" : "OPEN",
                      static_cast<int>(network.rssi));
             const uint16_t info_width = gfx::measure_text(info, 1);
-            const uint16_t info_x = row.width > info_width + 12U
-                                        ? static_cast<uint16_t>(row.x + row.width - info_width - 12U)
-                                        : row.x;
+            const uint16_t info_x =
+                row.width > info_width + 12U
+                    ? static_cast<uint16_t>(row.x + row.width - info_width - 12U)
+                    : row.x;
             gfx::draw_text(framebuffer, info_x,
                            static_cast<uint16_t>(row.y + (row.height - 16U) / 2U), info, 1,
                            selected ? 0x04 : 0x06);
@@ -74,8 +75,7 @@ void draw_wifi_networks(gfx::framebuffer_t* framebuffer, const wifi_network_view
                            foreground);
         }
     }
-    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
-                                {"Select", gfx::icon_check},
+    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Select", gfx::icon_check},
                                 {"Back", gfx::icon_arrow_back});
 }
 

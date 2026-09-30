@@ -57,8 +57,8 @@ void draw_connectivity(gfx::framebuffer_t* framebuffer, connectivity_item_t focu
                        selected ? 0x0d : 0x0f);
         if (!selected)
         {
-            gfx::fill_rect(framebuffer, item.x,
-                           static_cast<uint16_t>(item.y + item.height - 1U), item.width, 1, 0x0b);
+            gfx::fill_rect(framebuffer, item.x, static_cast<uint16_t>(item.y + item.height - 1U),
+                           item.width, 1, 0x0b);
         }
 
         const uint8_t foreground = 0x00;
@@ -75,8 +75,7 @@ void draw_connectivity(gfx::framebuffer_t* framebuffer, connectivity_item_t focu
                        static_cast<uint16_t>(item.y + (item.height - 16U) / 2U), values[index], 1,
                        secondary);
     }
-    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
-                                {"Select", gfx::icon_check},
+    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Select", gfx::icon_check},
                                 {"Back", gfx::icon_arrow_back});
 }
 
@@ -90,8 +89,7 @@ bool connectivity_touch_item(uint16_t display_width, uint16_t display_height, ui
     const layout::metrics_t metrics = layout::metrics(viewport);
     uint8_t index = 0;
     if (!focus::hit_rows(items_area(viewport), connectivity_item_count,
-                         static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap, x, y,
-                         &index))
+                         static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap, x, y, &index))
         return false;
 
     *item = static_cast<connectivity_item_t>(index);

@@ -1,17 +1,17 @@
+#include "esp_app_desc.h"
 #include "esp_err.h"
-#include <stdio.h>
-#include <string.h>
 #include "esp_heap_caps.h"
+#include "esp_idf_version.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_vfs_fat.h"
-#include "esp_app_desc.h"
-#include "esp_idf_version.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include <stdio.h>
+#include <string.h>
 
 #include "board/m5paper/m5paper_board.hpp"
 #include "board/m5paper/m5paper_pins.hpp"
@@ -22,42 +22,42 @@
 #include "gfx/framebuffer.hpp"
 #include "input/input.hpp"
 #include "input/mapper.hpp"
-#include "storage/book_loader.hpp"
-#include "storage/persistence.hpp"
-#include "services/connectivity.hpp"
-#include "services/ota.hpp"
 #include "services/book_manager.hpp"
+#include "services/book_sync.hpp"
+#include "services/connectivity.hpp"
+#include "services/debug_console.hpp"
 #include "services/file_browser.hpp"
 #include "services/library_index.hpp"
 #include "services/library_scan.hpp"
-#include "services/book_sync.hpp"
-#include "services/debug_console.hpp"
+#include "services/ota.hpp"
+#include "storage/book_loader.hpp"
+#include "storage/persistence.hpp"
 #include "storage/sdcard/sdcard.hpp"
-#include "ui/chrome.hpp"
-#include "ui/book_info.hpp"
-#include "ui/book_sync.hpp"
-#include "ui/book_manager.hpp"
-#include "ui/file_browser.hpp"
+#include "ui/about.hpp"
 #include "ui/book_actions.hpp"
-#include "ui/ota.hpp"
-#include "ui/connectivity.hpp"
+#include "ui/book_info.hpp"
+#include "ui/book_manager.hpp"
+#include "ui/book_sync.hpp"
 #include "ui/bookmarks.hpp"
+#include "ui/chrome.hpp"
+#include "ui/connectivity.hpp"
 #include "ui/contents.hpp"
+#include "ui/dialog.hpp"
+#include "ui/file_browser.hpp"
 #include "ui/hardware_test.hpp"
 #include "ui/home.hpp"
-#include "ui/splash.hpp"
+#include "ui/keyboard.hpp"
 #include "ui/library.hpp"
 #include "ui/library_details.hpp"
 #include "ui/navigation.hpp"
+#include "ui/ota.hpp"
 #include "ui/quick_settings.hpp"
 #include "ui/reader.hpp"
 #include "ui/screen.hpp"
 #include "ui/settings.hpp"
-#include "ui/keyboard.hpp"
-#include "ui/wifi_networks.hpp"
+#include "ui/splash.hpp"
 #include "ui/storage_screen.hpp"
-#include "ui/about.hpp"
-#include "ui/dialog.hpp"
+#include "ui/wifi_networks.hpp"
 
 namespace xreader
 {
@@ -121,8 +121,8 @@ transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* disp
 
 static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* display,
                       const char* book_path, const epub::book_t* book,
-                      const epub::document_t* document, uint8_t page,
-                      uint8_t page_count, const ui::reader_settings_t* settings)
+                      const epub::document_t* document, uint8_t page, uint8_t page_count,
+                      const ui::reader_settings_t* settings)
 {
     if (book_path != nullptr)
         active_book_path = book_path;
@@ -175,7 +175,6 @@ static bool load_spine(const char* path, const epub::book_t* book, uint8_t spine
     return false;
 }
 
-
 static void refresh_battery_status()
 {
     uint16_t millivolts = 0;
@@ -188,8 +187,7 @@ static void refresh_battery_status()
     }
     const uint8_t percent = board::m5paper::battery_percent(millivolts);
     ui::chrome::set_battery_status(true, percent);
-    XR_LOGI("battery %umV %u%%", static_cast<unsigned>(millivolts),
-            static_cast<unsigned>(percent));
+    XR_LOGI("battery %umV %u%%", static_cast<unsigned>(millivolts), static_cast<unsigned>(percent));
 }
 
 static void enter_sleep(const char* book_path, uint32_t spine, uint32_t page)
@@ -212,16 +210,17 @@ static void enter_sleep(const char* book_path, uint32_t spine, uint32_t page)
 
 static TickType_t idle_timeout_ticks(const storage::persistence::settings_t& settings)
 {
-    const uint64_t milliseconds = static_cast<uint64_t>(settings.sleep_timeout_minutes) * 60ULL * 1000ULL;
+    const uint64_t milliseconds =
+        static_cast<uint64_t>(settings.sleep_timeout_minutes) * 60ULL * 1000ULL;
     const uint64_t ticks = milliseconds / portTICK_PERIOD_MS;
-    return static_cast<TickType_t>(ticks > static_cast<uint64_t>(portMAX_DELAY - 1)
-                                       ? portMAX_DELAY - 1
-                                       : ticks);
+    return static_cast<TickType_t>(
+        ticks > static_cast<uint64_t>(portMAX_DELAY - 1) ? portMAX_DELAY - 1 : ticks);
 }
 
 static bool idle_expired(TickType_t last_activity, const storage::persistence::settings_t& settings)
 {
-    return static_cast<TickType_t>(xTaskGetTickCount() - last_activity) >= idle_timeout_ticks(settings);
+    return static_cast<TickType_t>(xTaskGetTickCount() - last_activity) >=
+           idle_timeout_ticks(settings);
 }
 // Value editing now lives on the Display and Reading settings screens.  A touch
 // on a slider or segmented control carries the chosen value; a physical select
@@ -265,12 +264,14 @@ static void apply_reading_setting(storage::persistence::settings_t* settings,
     switch (item)
     {
     case ui::reading_setting_font_size:
-        settings->text_scale = has_value ? static_cast<uint8_t>(value != 0U ? 2U : 1U)
-                                         : static_cast<uint8_t>(settings->text_scale == 1U ? 2U : 1U);
+        settings->text_scale = has_value
+                                   ? static_cast<uint8_t>(value != 0U ? 2U : 1U)
+                                   : static_cast<uint8_t>(settings->text_scale == 1U ? 2U : 1U);
         break;
     case ui::reading_setting_line_spacing:
-        settings->line_spacing = has_value ? static_cast<uint8_t>(value != 0U ? 1U : 0U)
-                                           : static_cast<uint8_t>(settings->line_spacing == 0U ? 1U : 0U);
+        settings->line_spacing = has_value
+                                     ? static_cast<uint8_t>(value != 0U ? 1U : 0U)
+                                     : static_cast<uint8_t>(settings->line_spacing == 0U ? 1U : 0U);
         break;
     case ui::reading_setting_margins:
         settings->margin_mode = has_value ? static_cast<uint8_t>(value > 2U ? 2U : value)
@@ -280,8 +281,9 @@ static void apply_reading_setting(storage::persistence::settings_t* settings,
         settings->paragraph_spacing = settings->paragraph_spacing == 0 ? 1 : 0;
         break;
     case ui::reading_setting_alignment:
-        settings->text_alignment = has_value ? static_cast<uint8_t>(value > 2U ? 0U : value)
-                                             : static_cast<uint8_t>((settings->text_alignment + 1U) % 3U);
+        settings->text_alignment = has_value
+                                       ? static_cast<uint8_t>(value > 2U ? 0U : value)
+                                       : static_cast<uint8_t>((settings->text_alignment + 1U) % 3U);
         break;
     case ui::reading_setting_page_turn:
         settings->reverse_page_turn = settings->reverse_page_turn == 0 ? 1 : 0;
@@ -291,8 +293,7 @@ static void apply_reading_setting(storage::persistence::settings_t* settings,
     }
 }
 
-static void draw_connectivity_state(gfx::framebuffer_t* framebuffer,
-                                    ui::connectivity_item_t focus)
+static void draw_connectivity_state(gfx::framebuffer_t* framebuffer, ui::connectivity_item_t focus)
 {
     const services::connectivity::state_t network = services::connectivity::snapshot();
     const services::book_sync::state_t sync = services::book_sync::snapshot();
@@ -304,8 +305,8 @@ static void draw_connectivity_state(gfx::framebuffer_t* framebuffer,
 static uint8_t draw_wifi_networks_state(gfx::framebuffer_t* framebuffer, uint8_t focus)
 {
     services::connectivity::scan_result_t results[services::connectivity::max_scan_results] = {};
-    const uint8_t count = services::connectivity::scan_results(
-        results, services::connectivity::max_scan_results);
+    const uint8_t count =
+        services::connectivity::scan_results(results, services::connectivity::max_scan_results);
     ui::wifi_network_view_t views[services::connectivity::max_scan_results] = {};
     for (uint8_t index = 0; index < count; ++index)
     {
@@ -334,8 +335,8 @@ static bool handle_connectivity_ui_command(ui::screen_command_t command,
         screen_state->book_sync_focus == ui::book_sync_server)
     {
         const services::book_sync::state_t sync = services::book_sync::snapshot();
-        ui::keyboard_begin(&screen_state->keyboard, ui::keyboard_purpose_sync_server,
-                           "SYNC SERVER", sync.server, false, ui::keyboard_qwerty);
+        ui::keyboard_begin(&screen_state->keyboard, ui::keyboard_purpose_sync_server, "SYNC SERVER",
+                           sync.server, false, ui::keyboard_qwerty);
         screen_state->return_screen = ui::screen_book_sync;
         screen_state->screen = ui::screen_keyboard;
         ui::draw_keyboard(framebuffer, &screen_state->keyboard);
@@ -387,14 +388,15 @@ static bool handle_connectivity_ui_command(ui::screen_command_t command,
 
     if (command == ui::screen_command_select_wifi_network)
     {
-        services::connectivity::scan_result_t results[services::connectivity::max_scan_results] = {};
-        const uint8_t count = services::connectivity::scan_results(
-            results, services::connectivity::max_scan_results);
+        services::connectivity::scan_result_t results[services::connectivity::max_scan_results] =
+            {};
+        const uint8_t count =
+            services::connectivity::scan_results(results, services::connectivity::max_scan_results);
         const uint8_t selected = screen_state->wifi_network_focus;
         if (selected < count && selected < 6U)
         {
-            snprintf(screen_state->pending_wifi_ssid, sizeof(screen_state->pending_wifi_ssid),
-                     "%s", results[selected].ssid);
+            snprintf(screen_state->pending_wifi_ssid, sizeof(screen_state->pending_wifi_ssid), "%s",
+                     results[selected].ssid);
             if (results[selected].secured)
             {
                 ui::keyboard_begin(&screen_state->keyboard, ui::keyboard_purpose_wifi_password,
@@ -505,16 +507,13 @@ static void draw_book_sync_state(gfx::framebuffer_t* framebuffer, ui::book_sync_
 {
     const services::connectivity::state_t network = services::connectivity::snapshot();
     const services::book_sync::state_t sync = services::book_sync::snapshot();
-    ui::draw_book_sync(framebuffer, focus, network.connected, sync.sync_books,
-                       sync.sync_progress, sync.server[0] != '\0',
-                       sync.last_sync[0] == '\0' ? "NEVER" : sync.last_sync,
-                       sync.activity, sync.books_completed, sync.books_total,
-                       sync.pending_retry, sync.retry_count, sync.last_result,
-                       sync.bytes_downloaded, sync.bytes_total,
+    ui::draw_book_sync(framebuffer, focus, network.connected, sync.sync_books, sync.sync_progress,
+                       sync.server[0] != '\0', sync.last_sync[0] == '\0' ? "NEVER" : sync.last_sync,
+                       sync.activity, sync.books_completed, sync.books_total, sync.pending_retry,
+                       sync.retry_count, sync.last_result, sync.bytes_downloaded, sync.bytes_total,
                        sync.history_count > 1U ? sync.history[1] : nullptr,
                        sync.history_count > 2U ? sync.history[2] : nullptr);
 }
-
 
 static size_t refresh_library_catalog(const char* mount_path,
                                       services::library_index::catalog_t* catalog,
@@ -523,9 +522,8 @@ static size_t refresh_library_catalog(const char* mount_path,
 {
     if (mount_path == nullptr || catalog == nullptr || book_paths == nullptr || capacity == 0U)
         return 0U;
-    const esp_err_t error = force_rebuild
-                                ? services::library_index::rebuild(mount_path, catalog)
-                                : services::library_index::load(mount_path, catalog);
+    const esp_err_t error = force_rebuild ? services::library_index::rebuild(mount_path, catalog)
+                                          : services::library_index::load(mount_path, catalog);
     if (error != ESP_OK)
         return 0U;
     const size_t count = catalog->count < capacity ? catalog->count : capacity;
@@ -533,7 +531,6 @@ static size_t refresh_library_catalog(const char* mount_path,
         snprintf(book_paths[index], ui::book_path_length, "%s", catalog->entries[index].path);
     return count;
 }
-
 
 static void refresh_book_paths(const services::library_index::catalog_t* catalog,
                                char book_paths[][ui::book_path_length], size_t capacity,
@@ -561,13 +558,13 @@ static uint16_t selected_catalog_index(ui::screen_t source_screen, uint8_t focus
     return static_cast<uint16_t>(static_cast<size_t>(focus) % book_count);
 }
 
-
 static const char* path_basename(const char* path)
 {
     const char* result = path == nullptr ? "" : path;
     if (path != nullptr)
         for (const char* cursor = path; *cursor != '\0'; ++cursor)
-            if (*cursor == '/') result = cursor + 1;
+            if (*cursor == '/')
+                result = cursor + 1;
     return result;
 }
 
@@ -650,8 +647,8 @@ static cover_bitmap_t load_book_cover(const services::library_index::catalog_t* 
 
     const size_t pixel_bytes =
         (static_cast<size_t>(entry.cover_width) * entry.cover_height + 1U) / 2U;
-    uint8_t* pixels = static_cast<uint8_t*>(
-        heap_caps_malloc(pixel_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    uint8_t* pixels =
+        static_cast<uint8_t*>(heap_caps_malloc(pixel_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (pixels == nullptr)
     {
         heap_caps_free(encoded);
@@ -671,8 +668,8 @@ static cover_bitmap_t load_book_cover(const services::library_index::catalog_t* 
 }
 
 static void draw_book_manager_state(gfx::framebuffer_t* framebuffer,
-                                    const ui::screen_state_t* state,
-                                    size_t book_count, bool mounted, uint16_t duplicate_count)
+                                    const ui::screen_state_t* state, size_t book_count,
+                                    bool mounted, uint16_t duplicate_count)
 {
     ui::draw_book_manager(framebuffer,
                           state == nullptr ? ui::book_manager_library : state->book_manager_focus,
@@ -718,8 +715,7 @@ static void draw_library_view(gfx::framebuffer_t* framebuffer, bool mounted,
                              recent_mode ? "Recent books" : "Library");
 }
 
-static bool handle_dialog_ui_command(ui::screen_command_t command,
-                                     ui::screen_state_t* screen_state,
+static bool handle_dialog_ui_command(ui::screen_command_t command, ui::screen_state_t* screen_state,
                                      gfx::framebuffer_t* framebuffer,
                                      drivers::it8951e::device_t* display)
 {
@@ -757,8 +753,7 @@ static bool handle_dialog_ui_command(ui::screen_command_t command,
         return true;
     }
 
-    if (command != ui::screen_command_dialog_accept &&
-        command != ui::screen_command_dialog_cancel)
+    if (command != ui::screen_command_dialog_accept && command != ui::screen_command_dialog_cancel)
         return false;
 
     if (screen_state->dialog_action == ui::dialog_action_delete_book)
@@ -872,7 +867,6 @@ static void simulate_navigation_task(void* argument)
 }
 #endif
 
-
 static void draw_storage_state(gfx::framebuffer_t* framebuffer, const char* mount_path,
                                bool mounted, uint16_t book_count)
 {
@@ -888,8 +882,7 @@ static void draw_storage_state(gfx::framebuffer_t* framebuffer, const char* moun
 static void draw_about_state(gfx::framebuffer_t* framebuffer)
 {
     const esp_app_desc_t* description = esp_app_get_description();
-    ui::draw_about(framebuffer,
-                   description == nullptr ? "UNKNOWN" : description->version,
+    ui::draw_about(framebuffer, description == nullptr ? "UNKNOWN" : description->version,
                    "M5PAPER", esp_get_idf_version(), __DATE__);
 }
 
@@ -1051,9 +1044,8 @@ static void run()
         return;
     }
     services::library_index::catalog_t* library_catalog =
-        static_cast<services::library_index::catalog_t*>(
-            heap_caps_calloc(1, sizeof(services::library_index::catalog_t),
-                             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        static_cast<services::library_index::catalog_t*>(heap_caps_calloc(
+            1, sizeof(services::library_index::catalog_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (library_catalog == nullptr)
         library_catalog = static_cast<services::library_index::catalog_t*>(
             heap_caps_calloc(1, sizeof(services::library_index::catalog_t), MALLOC_CAP_8BIT));
@@ -1064,10 +1056,10 @@ static void run()
         return;
     }
     char book_paths[services::library_index::max_books][ui::book_path_length] = {};
-    size_t book_count = sd_card.mounted
-                            ? refresh_library_catalog(sd_config.mount_path, library_catalog,
-                                                      book_paths, services::library_index::max_books, false)
-                            : 0U;
+    size_t book_count =
+        sd_card.mounted ? refresh_library_catalog(sd_config.mount_path, library_catalog, book_paths,
+                                                  services::library_index::max_books, false)
+                        : 0U;
     uint16_t library_search_indices[services::library_index::max_books] = {};
     size_t library_search_count = 0U;
     char library_search_query[96] = {};
@@ -1099,7 +1091,8 @@ static void run()
         ESP_LOGW(tag, "no valid EPUB book available; starting with an empty library");
         book_path[0] = '\0';
     }
-    ui::draw_home(&framebuffer, sd_card.mounted, book_path[0] != '\0' ? book->title : nullptr, screen_state.home_focus);
+    ui::draw_home(&framebuffer, sd_card.mounted, book_path[0] != '\0' ? book->title : nullptr,
+                  screen_state.home_focus);
     error = transfer_dirty(&framebuffer, &display);
     if (error != ESP_OK)
     {
@@ -1124,7 +1117,8 @@ static void run()
                                     screen_state.screen == ui::screen_ota ||
                                     screen_state.screen == ui::screen_book_sync ||
                                     screen_state.screen == ui::screen_book_manager;
-        const TickType_t wait_ticks = service_screen ? pdMS_TO_TICKS(500U) : idle_timeout_ticks(settings);
+        const TickType_t wait_ticks =
+            service_screen ? pdMS_TO_TICKS(500U) : idle_timeout_ticks(settings);
         if (xQueueReceive(events, &event, wait_ticks) != pdTRUE)
         {
             if (service_screen)
@@ -1135,7 +1129,8 @@ static void run()
                     continue;
                 }
                 services::connectivity::poll();
-                const services::connectivity::state_t net_state = services::connectivity::snapshot();
+                const services::connectivity::state_t net_state =
+                    services::connectivity::snapshot();
                 services::book_sync::poll(net_state.connected);
                 if (screen_state.screen == ui::screen_wifi_networks && net_state.connected &&
                     screen_state.pending_wifi_ssid[0] != '\0')
@@ -1149,12 +1144,12 @@ static void run()
                 if (screen_state.screen == ui::screen_book_manager)
                 {
                     const bool busy_now = services::library_scan::busy();
-                    const bool applied = apply_library_scan_result(library_catalog, book_paths,
-                                                                    &book_count, &duplicate_book_count);
+                    const bool applied = apply_library_scan_result(
+                        library_catalog, book_paths, &book_count, &duplicate_book_count);
                     if (applied || busy_now != library_scan_was_busy)
                     {
-                        draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
-                                                duplicate_book_count);
+                        draw_book_manager_state(&framebuffer, &screen_state, book_count,
+                                                sd_card.mounted, duplicate_book_count);
                         transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
                     }
                     library_scan_was_busy = busy_now;
@@ -1203,7 +1198,9 @@ static void run()
         }
         const ui::screen_context_t context = {
             .viewport = {framebuffer.width, framebuffer.height},
-            .library_count = static_cast<uint8_t>(screen_state.screen == ui::screen_library_search_results ? library_search_count : book_count),
+            .library_count = static_cast<uint8_t>(
+                screen_state.screen == ui::screen_library_search_results ? library_search_count
+                                                                         : book_count),
             .page = 0,
             .page_count = 1,
             .spine_index = 0,
@@ -1234,13 +1231,15 @@ static void run()
                 deleted_current = strcmp(book_path, deleted_path) == 0;
                 if (services::book_manager::delete_book(deleted_path) == ESP_OK)
                 {
-                    book_count = refresh_library_catalog(sd_config.mount_path, library_catalog,
-                                                         book_paths, services::library_index::max_books, true);
+                    book_count =
+                        refresh_library_catalog(sd_config.mount_path, library_catalog, book_paths,
+                                                services::library_index::max_books, true);
                     library_search_count = 0U;
                     library_search_query[0] = '\0';
                     if (deleted_current && book_count > 0U &&
                         load_book_file(library_catalog->entries[0].path, book, document))
-                        snprintf(book_path, sizeof(book_path), "%s", library_catalog->entries[0].path);
+                        snprintf(book_path, sizeof(book_path), "%s",
+                                 library_catalog->entries[0].path);
                     else if (deleted_current && book_count == 0U)
                         book_path[0] = '\0';
                 }
@@ -1318,8 +1317,9 @@ static void run()
                     storage::persistence::copy_book_state(old_path, renamed_path);
                     if (strcmp(book_path, old_path) == 0)
                         snprintf(book_path, sizeof(book_path), "%s", renamed_path);
-                    book_count = refresh_library_catalog(sd_config.mount_path, library_catalog,
-                                                         book_paths, services::library_index::max_books, true);
+                    book_count =
+                        refresh_library_catalog(sd_config.mount_path, library_catalog, book_paths,
+                                                services::library_index::max_books, true);
                     library_detail_index = catalog_index_for_path(library_catalog, renamed_path);
                 }
             }
@@ -1346,13 +1346,17 @@ static void run()
         if (command == ui::screen_command_library_cycle_sort)
         {
             auto mode = library_catalog->sort_mode;
-            mode = mode == services::library_index::sort_title ? services::library_index::sort_author
-                 : mode == services::library_index::sort_author ? services::library_index::sort_recent_added
-                 : mode == services::library_index::sort_recent_added ? services::library_index::sort_recent_read
-                 : services::library_index::sort_title;
+            mode = mode == services::library_index::sort_title
+                       ? services::library_index::sort_author
+                   : mode == services::library_index::sort_author
+                       ? services::library_index::sort_recent_added
+                   : mode == services::library_index::sort_recent_added
+                       ? services::library_index::sort_recent_read
+                       : services::library_index::sort_title;
             services::library_index::sort(library_catalog, mode);
             services::library_index::save(sd_config.mount_path, library_catalog);
-            refresh_book_paths(library_catalog, book_paths, services::library_index::max_books, &book_count);
+            refresh_book_paths(library_catalog, book_paths, services::library_index::max_books,
+                               &book_count);
             if (screen_state.screen == ui::screen_library_search_results)
                 library_search_count = services::library_index::filter(
                     library_catalog, library_search_query, library_search_indices,
@@ -1366,12 +1370,13 @@ static void run()
         }
         if (command == ui::screen_command_show_library_details)
         {
-            const uint16_t selected = selected_catalog_index(previous_screen, screen_state.library_focus,
-                                                             library_search_indices, library_search_count,
-                                                             book_count);
+            const uint16_t selected =
+                selected_catalog_index(previous_screen, screen_state.library_focus,
+                                       library_search_indices, library_search_count, book_count);
             library_detail_index = selected;
-            ui::draw_library_details(&framebuffer,
-                                     selected < library_catalog->count ? &library_catalog->entries[selected] : nullptr);
+            ui::draw_library_details(&framebuffer, selected < library_catalog->count
+                                                       ? &library_catalog->entries[selected]
+                                                       : nullptr);
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -1384,14 +1389,15 @@ static void run()
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
-        if (command == ui::screen_command_book_rename && library_detail_index < library_catalog->count)
+        if (command == ui::screen_command_book_rename &&
+            library_detail_index < library_catalog->count)
         {
             char current_name[96] = {};
-            book_name_stem(library_catalog->entries[library_detail_index].path,
-                           current_name, sizeof(current_name));
+            book_name_stem(library_catalog->entries[library_detail_index].path, current_name,
+                           sizeof(current_name));
             screen_state.return_screen = ui::screen_book_actions;
-            ui::keyboard_begin(&screen_state.keyboard, ui::keyboard_purpose_rename,
-                               "RENAME BOOK", current_name, false, ui::keyboard_qwerty);
+            ui::keyboard_begin(&screen_state.keyboard, ui::keyboard_purpose_rename, "RENAME BOOK",
+                               current_name, false, ui::keyboard_qwerty);
             screen_state.screen = ui::screen_keyboard;
             ui::draw_keyboard(&framebuffer, &screen_state.keyboard);
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
@@ -1400,8 +1406,10 @@ static void run()
         if (command == ui::screen_command_show_recent_library)
         {
             library_recent_mode = true;
-            services::library_index::sort(library_catalog, services::library_index::sort_recent_read);
-            refresh_book_paths(library_catalog, book_paths, services::library_index::max_books, &book_count);
+            services::library_index::sort(library_catalog,
+                                          services::library_index::sort_recent_read);
+            refresh_book_paths(library_catalog, book_paths, services::library_index::max_books,
+                               &book_count);
             screen_state.library_focus = 0U;
             draw_library_view(&framebuffer, sd_card.mounted, library_catalog, &screen_state,
                               book_count, library_search_indices, library_search_count,
@@ -1413,19 +1421,29 @@ static void run()
             continue;
         if (command == ui::screen_command_open_reader)
         {
-            if ((previous_screen == ui::screen_library || previous_screen == ui::screen_library_search_results || previous_screen == ui::screen_library_details || previous_screen == ui::screen_book_actions) && book_count > 0U)
+            if ((previous_screen == ui::screen_library ||
+                 previous_screen == ui::screen_library_search_results ||
+                 previous_screen == ui::screen_library_details ||
+                 previous_screen == ui::screen_book_actions) &&
+                book_count > 0U)
             {
-                const uint16_t selected = (previous_screen == ui::screen_library_details || previous_screen == ui::screen_book_actions)
-                                              ? library_detail_index
-                                              : selected_catalog_index(previous_screen, screen_state.library_focus,
-                                                                       library_search_indices, library_search_count,
-                                                                       book_count);
-                if (selected < library_catalog->count && load_book_file(library_catalog->entries[selected].path, book, document))
+                const uint16_t selected =
+                    (previous_screen == ui::screen_library_details ||
+                     previous_screen == ui::screen_book_actions)
+                        ? library_detail_index
+                        : selected_catalog_index(previous_screen, screen_state.library_focus,
+                                                 library_search_indices, library_search_count,
+                                                 book_count);
+                if (selected < library_catalog->count &&
+                    load_book_file(library_catalog->entries[selected].path, book, document))
                 {
-                    snprintf(book_path, sizeof(book_path), "%s", library_catalog->entries[selected].path);
-                    services::library_index::mark_read(sd_config.mount_path, library_catalog, book_path);
+                    snprintf(book_path, sizeof(book_path), "%s",
+                             library_catalog->entries[selected].path);
+                    services::library_index::mark_read(sd_config.mount_path, library_catalog,
+                                                       book_path);
                     services::library_index::sort(library_catalog, library_catalog->sort_mode);
-                    refresh_book_paths(library_catalog, book_paths, services::library_index::max_books, &book_count);
+                    refresh_book_paths(library_catalog, book_paths,
+                                       services::library_index::max_books, &book_count);
                 }
                 else
                 {
@@ -1453,7 +1471,9 @@ static void run()
         else if (command == ui::screen_command_redraw)
         {
             if (screen_state.screen == ui::screen_home)
-                ui::draw_home(&framebuffer, sd_card.mounted, book_path[0] != '\0' ? book->title : nullptr, screen_state.home_focus);
+                ui::draw_home(&framebuffer, sd_card.mounted,
+                              book_path[0] != '\0' ? book->title : nullptr,
+                              screen_state.home_focus);
             else if (screen_state.screen == ui::screen_library ||
                      screen_state.screen == ui::screen_library_search_results)
                 draw_library_view(&framebuffer, sd_card.mounted, library_catalog, &screen_state,
@@ -1462,7 +1482,8 @@ static void run()
             else if (screen_state.screen == ui::screen_settings)
                 ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
             else if (screen_state.screen == ui::screen_storage)
-                draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted, static_cast<uint16_t>(book_count));
+                draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted,
+                                   static_cast<uint16_t>(book_count));
             else if (screen_state.screen == ui::screen_about)
                 draw_about_state(&framebuffer);
             else if (screen_state.screen == ui::screen_dialog)
@@ -1478,7 +1499,8 @@ static void run()
             else if (screen_state.screen == ui::screen_book_manager)
             {
                 duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
-                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted, duplicate_book_count);
+                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
+                                        duplicate_book_count);
             }
             else if (screen_state.screen == ui::screen_file_browser)
                 ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
@@ -1506,7 +1528,8 @@ static void run()
         }
         else if (command == ui::screen_command_show_storage)
         {
-            draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted, static_cast<uint16_t>(book_count));
+            draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted,
+                               static_cast<uint16_t>(book_count));
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_show_about)
@@ -1527,7 +1550,8 @@ static void run()
         else if (command == ui::screen_command_show_book_manager)
         {
             duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
-            draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted, duplicate_book_count);
+            draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
+                                    duplicate_book_count);
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_show_file_browser)
@@ -1542,7 +1566,8 @@ static void run()
             if (services::file_browser::at_root(&file_listing))
             {
                 screen_state.screen = ui::screen_book_manager;
-                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted, duplicate_book_count);
+                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
+                                        duplicate_book_count);
             }
             else
             {
@@ -1561,7 +1586,8 @@ static void run()
                 {
                     services::file_browser::open(file_listing.root, selected.path, &file_listing);
                     screen_state.file_browser_focus = 0U;
-                    ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
+                    ui::draw_file_browser(&framebuffer, &file_listing,
+                                          screen_state.file_browser_focus);
                     transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
                 }
                 else if (selected.epub && load_book_file(selected.path, book, document))
@@ -1579,15 +1605,16 @@ static void run()
         }
         else if (command == ui::screen_command_show_home)
         {
-            ui::draw_home(&framebuffer, sd_card.mounted, book_path[0] != '\0' ? book->title : nullptr, screen_state.home_focus);
+            ui::draw_home(&framebuffer, sd_card.mounted,
+                          book_path[0] != '\0' ? book->title : nullptr, screen_state.home_focus);
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_ota_action ||
                  command == ui::screen_command_book_manager_action ||
                  command == ui::screen_command_book_sync_action)
         {
-            perform_service_action(&screen_state, sd_config.mount_path, library_catalog, book_paths, &book_count,
-                                   book_path, 0, 0);
+            perform_service_action(&screen_state, sd_config.mount_path, library_catalog, book_paths,
+                                   &book_count, book_path, 0, 0);
             if (screen_state.screen == ui::screen_connectivity)
                 draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
             else if (screen_state.screen == ui::screen_ota)
@@ -1595,7 +1622,8 @@ static void run()
             else if (screen_state.screen == ui::screen_book_manager)
             {
                 duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
-                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted, duplicate_book_count);
+                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
+                                        duplicate_book_count);
                 library_scan_was_busy = services::library_scan::busy();
             }
             else if (screen_state.screen == ui::screen_file_browser)
@@ -1685,19 +1713,19 @@ static void run()
     {
         spine_index = 0;
     }
-    total_pages =
-        ui::page_count(document, &reader_settings, framebuffer.width, framebuffer.height);
+    total_pages = ui::page_count(document, &reader_settings, framebuffer.width, framebuffer.height);
     uint8_t page = saved_page < total_pages ? static_cast<uint8_t>(saved_page) : 0;
     screen_state.screen = ui::screen_reader;
     show(&framebuffer, &display, book_path, book, document, page, total_pages, &reader_settings);
     input::flush(events);
     ui::bookmark_view_t bookmarks[storage::persistence::max_bookmarks_per_book] = {};
     uint8_t bookmark_count = 0;
-    storage::persistence::bookmark_t saved_bookmarks[storage::persistence::max_bookmarks_per_book] = {};
+    storage::persistence::bookmark_t saved_bookmarks[storage::persistence::max_bookmarks_per_book] =
+        {};
     uint8_t saved_bookmark_count = 0;
-    if (storage::persistence::load_bookmarks_for_book(
-            book_path, saved_bookmarks, storage::persistence::max_bookmarks_per_book,
-            &saved_bookmark_count) == ESP_OK)
+    if (storage::persistence::load_bookmarks_for_book(book_path, saved_bookmarks,
+                                                      storage::persistence::max_bookmarks_per_book,
+                                                      &saved_bookmark_count) == ESP_OK)
     {
         bookmark_count = saved_bookmark_count;
         for (uint8_t index = 0; index < bookmark_count; ++index)
@@ -1730,7 +1758,8 @@ static void run()
                                     screen_state.screen == ui::screen_ota ||
                                     screen_state.screen == ui::screen_book_sync ||
                                     screen_state.screen == ui::screen_book_manager;
-        const TickType_t wait_ticks = service_screen ? pdMS_TO_TICKS(500U) : idle_timeout_ticks(settings);
+        const TickType_t wait_ticks =
+            service_screen ? pdMS_TO_TICKS(500U) : idle_timeout_ticks(settings);
         if (xQueueReceive(events, &event, wait_ticks) != pdTRUE)
         {
             if (service_screen)
@@ -1741,7 +1770,8 @@ static void run()
                     continue;
                 }
                 services::connectivity::poll();
-                const services::connectivity::state_t net_state = services::connectivity::snapshot();
+                const services::connectivity::state_t net_state =
+                    services::connectivity::snapshot();
                 services::book_sync::poll(net_state.connected);
                 if (screen_state.screen == ui::screen_wifi_networks && net_state.connected &&
                     screen_state.pending_wifi_ssid[0] != '\0')
@@ -1755,12 +1785,12 @@ static void run()
                 if (screen_state.screen == ui::screen_book_manager)
                 {
                     const bool busy_now = services::library_scan::busy();
-                    const bool applied = apply_library_scan_result(library_catalog, book_paths,
-                                                                    &book_count, &duplicate_book_count);
+                    const bool applied = apply_library_scan_result(
+                        library_catalog, book_paths, &book_count, &duplicate_book_count);
                     if (applied || busy_now != library_scan_was_busy)
                     {
-                        draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
-                                                duplicate_book_count);
+                        draw_book_manager_state(&framebuffer, &screen_state, book_count,
+                                                sd_card.mounted, duplicate_book_count);
                         transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
                     }
                     library_scan_was_busy = busy_now;
@@ -1796,7 +1826,9 @@ static void run()
         }
         const ui::screen_context_t context = {
             .viewport = {framebuffer.width, framebuffer.height},
-            .library_count = static_cast<uint8_t>(screen_state.screen == ui::screen_library_search_results ? library_search_count : book_count),
+            .library_count = static_cast<uint8_t>(
+                screen_state.screen == ui::screen_library_search_results ? library_search_count
+                                                                         : book_count),
             .page = page,
             .page_count = total_pages,
             .spine_index = spine_index,
@@ -1827,13 +1859,15 @@ static void run()
                 deleted_current = strcmp(book_path, deleted_path) == 0;
                 if (services::book_manager::delete_book(deleted_path) == ESP_OK)
                 {
-                    book_count = refresh_library_catalog(sd_config.mount_path, library_catalog,
-                                                         book_paths, services::library_index::max_books, true);
+                    book_count =
+                        refresh_library_catalog(sd_config.mount_path, library_catalog, book_paths,
+                                                services::library_index::max_books, true);
                     library_search_count = 0U;
                     library_search_query[0] = '\0';
                     if (deleted_current && book_count > 0U &&
                         load_book_file(library_catalog->entries[0].path, book, document))
-                        snprintf(book_path, sizeof(book_path), "%s", library_catalog->entries[0].path);
+                        snprintf(book_path, sizeof(book_path), "%s",
+                                 library_catalog->entries[0].path);
                     else if (deleted_current && book_count == 0U)
                         book_path[0] = '\0';
                 }
@@ -1881,21 +1915,22 @@ static void run()
             {
                 // Continue after the previous match in the current chapter first.
                 found = ui::find_page(document, reader_search_query, &reader_settings,
-                                      framebuffer.width, framebuffer.height,
-                                      reader_search_offset, &found_page, &found_offset);
+                                      framebuffer.width, framebuffer.height, reader_search_offset,
+                                      &found_page, &found_offset);
                 if (!found)
                 {
                     // Search following chapters, then wrap to chapters before the current one.
                     for (uint8_t pass = 0; pass < 2U && !found; ++pass)
                     {
-                        const uint8_t begin = pass == 0U ? static_cast<uint8_t>(original_spine + 1U) : 0U;
+                        const uint8_t begin =
+                            pass == 0U ? static_cast<uint8_t>(original_spine + 1U) : 0U;
                         const uint8_t end = pass == 0U ? book->spine_count : original_spine;
                         for (uint8_t target = begin; target < end && !found; ++target)
                         {
                             if (!load_spine(book_path, book, target, book, document))
                                 continue;
-                            const uint8_t pages = ui::page_count(document, &reader_settings,
-                                                                 framebuffer.width, framebuffer.height);
+                            const uint8_t pages = ui::page_count(
+                                document, &reader_settings, framebuffer.width, framebuffer.height);
                             (void)pages;
                             found = ui::find_page(document, reader_search_query, &reader_settings,
                                                   framebuffer.width, framebuffer.height, 0U,
@@ -1925,7 +1960,8 @@ static void run()
                 total_pages = ui::page_count(document, &reader_settings, framebuffer.width,
                                              framebuffer.height);
                 screen_state.screen = ui::screen_reader;
-                show(&framebuffer, &display, book_path, book, document, page, total_pages, &reader_settings);
+                show(&framebuffer, &display, book_path, book, document, page, total_pages,
+                     &reader_settings);
                 reader_search_offset = 0U;
             }
             else
@@ -1935,7 +1971,8 @@ static void run()
                 page = found_page < total_pages ? found_page : 0U;
                 reader_search_offset = found_offset + strlen(reader_search_query);
                 screen_state.screen = ui::screen_reader;
-                show(&framebuffer, &display, book_path, book, document, page, total_pages, &reader_settings);
+                show(&framebuffer, &display, book_path, book, document, page, total_pages,
+                     &reader_settings);
             }
             continue;
         }
@@ -1943,7 +1980,8 @@ static void run()
             screen_state.keyboard.purpose == ui::keyboard_purpose_reader_search)
         {
             screen_state.screen = ui::screen_reader;
-            show(&framebuffer, &display, book_path, book, document, page, total_pages, &reader_settings);
+            show(&framebuffer, &display, book_path, book, document, page, total_pages,
+                 &reader_settings);
             continue;
         }
         if (command == ui::screen_command_library_search)
@@ -1998,8 +2036,9 @@ static void run()
                     storage::persistence::copy_book_state(old_path, renamed_path);
                     if (strcmp(book_path, old_path) == 0)
                         snprintf(book_path, sizeof(book_path), "%s", renamed_path);
-                    book_count = refresh_library_catalog(sd_config.mount_path, library_catalog,
-                                                         book_paths, services::library_index::max_books, true);
+                    book_count =
+                        refresh_library_catalog(sd_config.mount_path, library_catalog, book_paths,
+                                                services::library_index::max_books, true);
                     library_detail_index = catalog_index_for_path(library_catalog, renamed_path);
                 }
             }
@@ -2026,13 +2065,17 @@ static void run()
         if (command == ui::screen_command_library_cycle_sort)
         {
             auto mode = library_catalog->sort_mode;
-            mode = mode == services::library_index::sort_title ? services::library_index::sort_author
-                 : mode == services::library_index::sort_author ? services::library_index::sort_recent_added
-                 : mode == services::library_index::sort_recent_added ? services::library_index::sort_recent_read
-                 : services::library_index::sort_title;
+            mode = mode == services::library_index::sort_title
+                       ? services::library_index::sort_author
+                   : mode == services::library_index::sort_author
+                       ? services::library_index::sort_recent_added
+                   : mode == services::library_index::sort_recent_added
+                       ? services::library_index::sort_recent_read
+                       : services::library_index::sort_title;
             services::library_index::sort(library_catalog, mode);
             services::library_index::save(sd_config.mount_path, library_catalog);
-            refresh_book_paths(library_catalog, book_paths, services::library_index::max_books, &book_count);
+            refresh_book_paths(library_catalog, book_paths, services::library_index::max_books,
+                               &book_count);
             if (screen_state.screen == ui::screen_library_search_results)
                 library_search_count = services::library_index::filter(
                     library_catalog, library_search_query, library_search_indices,
@@ -2046,12 +2089,13 @@ static void run()
         }
         if (command == ui::screen_command_show_library_details)
         {
-            const uint16_t selected = selected_catalog_index(previous_screen, screen_state.library_focus,
-                                                             library_search_indices, library_search_count,
-                                                             book_count);
+            const uint16_t selected =
+                selected_catalog_index(previous_screen, screen_state.library_focus,
+                                       library_search_indices, library_search_count, book_count);
             library_detail_index = selected;
-            ui::draw_library_details(&framebuffer,
-                                     selected < library_catalog->count ? &library_catalog->entries[selected] : nullptr);
+            ui::draw_library_details(&framebuffer, selected < library_catalog->count
+                                                       ? &library_catalog->entries[selected]
+                                                       : nullptr);
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -2064,14 +2108,15 @@ static void run()
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
-        if (command == ui::screen_command_book_rename && library_detail_index < library_catalog->count)
+        if (command == ui::screen_command_book_rename &&
+            library_detail_index < library_catalog->count)
         {
             char current_name[96] = {};
-            book_name_stem(library_catalog->entries[library_detail_index].path,
-                           current_name, sizeof(current_name));
+            book_name_stem(library_catalog->entries[library_detail_index].path, current_name,
+                           sizeof(current_name));
             screen_state.return_screen = ui::screen_book_actions;
-            ui::keyboard_begin(&screen_state.keyboard, ui::keyboard_purpose_rename,
-                               "RENAME BOOK", current_name, false, ui::keyboard_qwerty);
+            ui::keyboard_begin(&screen_state.keyboard, ui::keyboard_purpose_rename, "RENAME BOOK",
+                               current_name, false, ui::keyboard_qwerty);
             screen_state.screen = ui::screen_keyboard;
             ui::draw_keyboard(&framebuffer, &screen_state.keyboard);
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
@@ -2080,8 +2125,10 @@ static void run()
         if (command == ui::screen_command_show_recent_library)
         {
             library_recent_mode = true;
-            services::library_index::sort(library_catalog, services::library_index::sort_recent_read);
-            refresh_book_paths(library_catalog, book_paths, services::library_index::max_books, &book_count);
+            services::library_index::sort(library_catalog,
+                                          services::library_index::sort_recent_read);
+            refresh_book_paths(library_catalog, book_paths, services::library_index::max_books,
+                               &book_count);
             screen_state.library_focus = 0U;
             draw_library_view(&framebuffer, sd_card.mounted, library_catalog, &screen_state,
                               book_count, library_search_indices, library_search_count,
@@ -2098,7 +2145,8 @@ static void run()
         }
         if (command == ui::screen_command_show_home)
         {
-            ui::draw_home(&framebuffer, sd_card.mounted, book_path[0] != '\0' ? book->title : nullptr, screen_state.home_focus);
+            ui::draw_home(&framebuffer, sd_card.mounted,
+                          book_path[0] != '\0' ? book->title : nullptr, screen_state.home_focus);
             transfer_dirty(&framebuffer, &display);
             continue;
         }
@@ -2119,7 +2167,8 @@ static void run()
         }
         if (command == ui::screen_command_show_storage)
         {
-            draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted, static_cast<uint16_t>(book_count));
+            draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted,
+                               static_cast<uint16_t>(book_count));
             transfer_dirty(&framebuffer, &display);
             continue;
         }
@@ -2144,7 +2193,8 @@ static void run()
         if (command == ui::screen_command_show_book_manager)
         {
             duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
-            draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted, duplicate_book_count);
+            draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
+                                    duplicate_book_count);
             transfer_dirty(&framebuffer, &display);
             continue;
         }
@@ -2161,7 +2211,8 @@ static void run()
             if (services::file_browser::at_root(&file_listing))
             {
                 screen_state.screen = ui::screen_book_manager;
-                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted, duplicate_book_count);
+                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
+                                        duplicate_book_count);
             }
             else
             {
@@ -2181,7 +2232,8 @@ static void run()
                 {
                     services::file_browser::open(file_listing.root, selected.path, &file_listing);
                     screen_state.file_browser_focus = 0U;
-                    ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
+                    ui::draw_file_browser(&framebuffer, &file_listing,
+                                          screen_state.file_browser_focus);
                     transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
                 }
                 else if (selected.epub)
@@ -2202,9 +2254,11 @@ static void run()
                             spine_index = 0U;
                         total_pages = ui::page_count(document, &reader_settings, framebuffer.width,
                                                      framebuffer.height);
-                        page = restored_page < total_pages ? static_cast<uint8_t>(restored_page) : 0U;
+                        page =
+                            restored_page < total_pages ? static_cast<uint8_t>(restored_page) : 0U;
                         screen_state.screen = ui::screen_reader;
-                        show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+                        show(&framebuffer, &display, book, document, page, total_pages,
+                             &reader_settings);
                     }
                 }
             }
@@ -2220,8 +2274,8 @@ static void run()
             command == ui::screen_command_book_manager_action ||
             command == ui::screen_command_book_sync_action)
         {
-            perform_service_action(&screen_state, sd_config.mount_path, library_catalog, book_paths, &book_count,
-                                   book_path, spine_index, page);
+            perform_service_action(&screen_state, sd_config.mount_path, library_catalog, book_paths,
+                                   &book_count, book_path, spine_index, page);
             if (screen_state.screen == ui::screen_connectivity)
                 draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
             else if (screen_state.screen == ui::screen_ota)
@@ -2229,7 +2283,8 @@ static void run()
             else if (screen_state.screen == ui::screen_book_manager)
             {
                 duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
-                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted, duplicate_book_count);
+                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
+                                        duplicate_book_count);
                 library_scan_was_busy = services::library_scan::busy();
             }
             else if (screen_state.screen == ui::screen_file_browser)
@@ -2246,15 +2301,22 @@ static void run()
         }
         if (command == ui::screen_command_open_reader)
         {
-            if ((previous_screen == ui::screen_library || previous_screen == ui::screen_library_search_results || previous_screen == ui::screen_library_details || previous_screen == ui::screen_book_actions) && book_count > 0U)
+            if ((previous_screen == ui::screen_library ||
+                 previous_screen == ui::screen_library_search_results ||
+                 previous_screen == ui::screen_library_details ||
+                 previous_screen == ui::screen_book_actions) &&
+                book_count > 0U)
             {
                 storage::persistence::save_position_for_book(book_path, spine_index, page);
-                const uint16_t selected = (previous_screen == ui::screen_library_details || previous_screen == ui::screen_book_actions)
-                                              ? library_detail_index
-                                              : selected_catalog_index(previous_screen, screen_state.library_focus,
-                                                                       library_search_indices, library_search_count,
-                                                                       book_count);
-                if (selected >= library_catalog->count || !load_book_file(library_catalog->entries[selected].path, book, document))
+                const uint16_t selected =
+                    (previous_screen == ui::screen_library_details ||
+                     previous_screen == ui::screen_book_actions)
+                        ? library_detail_index
+                        : selected_catalog_index(previous_screen, screen_state.library_focus,
+                                                 library_search_indices, library_search_count,
+                                                 book_count);
+                if (selected >= library_catalog->count ||
+                    !load_book_file(library_catalog->entries[selected].path, book, document))
                 {
                     screen_state.screen = ui::screen_library;
                     draw_library_view(&framebuffer, sd_card.mounted, library_catalog, &screen_state,
@@ -2263,10 +2325,13 @@ static void run()
                     transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
                     continue;
                 }
-                snprintf(book_path, sizeof(book_path), "%s", library_catalog->entries[selected].path);
-                services::library_index::mark_read(sd_config.mount_path, library_catalog, book_path);
+                snprintf(book_path, sizeof(book_path), "%s",
+                         library_catalog->entries[selected].path);
+                services::library_index::mark_read(sd_config.mount_path, library_catalog,
+                                                   book_path);
                 services::library_index::sort(library_catalog, library_catalog->sort_mode);
-                refresh_book_paths(library_catalog, book_paths, services::library_index::max_books, &book_count);
+                refresh_book_paths(library_catalog, book_paths, services::library_index::max_books,
+                                   &book_count);
                 spine_index = 0U;
                 uint32_t restored_spine = 0U;
                 uint32_t restored_page = 0U;
@@ -2274,15 +2339,15 @@ static void run()
                                                              &restored_page);
                 if (restored_spine < book->spine_count)
                     spine_index = static_cast<uint8_t>(restored_spine);
-                if (spine_index != 0U &&
-                    !load_spine(book_path, book, spine_index, book, document))
+                if (spine_index != 0U && !load_spine(book_path, book, spine_index, book, document))
                     spine_index = 0U;
                 total_pages = ui::page_count(document, &reader_settings, framebuffer.width,
                                              framebuffer.height);
                 page = restored_page < total_pages ? static_cast<uint8_t>(restored_page) : 0U;
 
                 bookmark_count = 0U;
-                storage::persistence::bookmark_t persisted[storage::persistence::max_bookmarks_per_book] = {};
+                storage::persistence::bookmark_t
+                    persisted[storage::persistence::max_bookmarks_per_book] = {};
                 uint8_t persisted_count = 0U;
                 if (storage::persistence::load_bookmarks_for_book(
                         book_path, persisted, storage::persistence::max_bookmarks_per_book,
@@ -2301,7 +2366,9 @@ static void run()
         if (command == ui::screen_command_redraw)
         {
             if (screen_state.screen == ui::screen_home)
-                ui::draw_home(&framebuffer, sd_card.mounted, book_path[0] != '\0' ? book->title : nullptr, screen_state.home_focus);
+                ui::draw_home(&framebuffer, sd_card.mounted,
+                              book_path[0] != '\0' ? book->title : nullptr,
+                              screen_state.home_focus);
             else if (screen_state.screen == ui::screen_library ||
                      screen_state.screen == ui::screen_library_search_results)
                 draw_library_view(&framebuffer, sd_card.mounted, library_catalog, &screen_state,
@@ -2310,7 +2377,8 @@ static void run()
             else if (screen_state.screen == ui::screen_settings)
                 ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
             else if (screen_state.screen == ui::screen_storage)
-                draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted, static_cast<uint16_t>(book_count));
+                draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted,
+                                   static_cast<uint16_t>(book_count));
             else if (screen_state.screen == ui::screen_about)
                 draw_about_state(&framebuffer);
             else if (screen_state.screen == ui::screen_dialog)
@@ -2326,7 +2394,8 @@ static void run()
             else if (screen_state.screen == ui::screen_book_manager)
             {
                 duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
-                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted, duplicate_book_count);
+                draw_book_manager_state(&framebuffer, &screen_state, book_count, sd_card.mounted,
+                                        duplicate_book_count);
             }
             else if (screen_state.screen == ui::screen_file_browser)
                 ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
@@ -2342,7 +2411,8 @@ static void run()
             else if (screen_state.screen == ui::screen_contents)
                 ui::draw_contents(&framebuffer, book, screen_state.contents_focus);
             else if (screen_state.screen == ui::screen_bookmarks)
-                ui::draw_bookmarks(&framebuffer, bookmarks, bookmark_count, screen_state.bookmarks_focus);
+                ui::draw_bookmarks(&framebuffer, bookmarks, bookmark_count,
+                                   screen_state.bookmarks_focus);
             else if (screen_state.screen == ui::screen_book_info)
             {
                 const cover_bitmap_t cover = load_book_cover(library_catalog, book_path);
@@ -2361,7 +2431,8 @@ static void run()
         }
         if (command == ui::screen_command_show_bookmarks)
         {
-            ui::draw_bookmarks(&framebuffer, bookmarks, bookmark_count, screen_state.bookmarks_focus);
+            ui::draw_bookmarks(&framebuffer, bookmarks, bookmark_count,
+                               screen_state.bookmarks_focus);
             transfer_dirty(&framebuffer, &display);
             continue;
         }
@@ -2378,17 +2449,20 @@ static void run()
         {
             bool exists = false;
             for (uint8_t i = 0; i < bookmark_count; ++i)
-                if (bookmarks[i].spine == spine_index && bookmarks[i].page == page) exists = true;
+                if (bookmarks[i].spine == spine_index && bookmarks[i].page == page)
+                    exists = true;
             if (!exists && bookmark_count < storage::persistence::max_bookmarks_per_book)
             {
                 bookmarks[bookmark_count++] = {true, spine_index, page};
-                storage::persistence::bookmark_t persistent[storage::persistence::max_bookmarks_per_book] = {};
+                storage::persistence::bookmark_t
+                    persistent[storage::persistence::max_bookmarks_per_book] = {};
                 for (uint8_t index = 0; index < bookmark_count; ++index)
                 {
                     persistent[index].spine = bookmarks[index].spine;
                     persistent[index].page = bookmarks[index].page;
                 }
-                storage::persistence::save_bookmarks_for_book(book_path, persistent, bookmark_count);
+                storage::persistence::save_bookmarks_for_book(book_path, persistent,
+                                                              bookmark_count);
             }
             ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values);
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
@@ -2397,11 +2471,14 @@ static void run()
         if (command == ui::screen_command_open_contents_item)
         {
             uint8_t target = screen_state.contents_focus;
-            if (book->toc_count && target < book->toc_count) target = book->toc[target].spine_index;
+            if (book->toc_count && target < book->toc_count)
+                target = book->toc[target].spine_index;
             if (target < book->spine_count && load_spine(book_path, book, target, book, document))
             {
-                spine_index = target; page = 0;
-                total_pages = ui::page_count(document, &reader_settings, framebuffer.width, framebuffer.height);
+                spine_index = target;
+                page = 0;
+                total_pages = ui::page_count(document, &reader_settings, framebuffer.width,
+                                             framebuffer.height);
                 screen_state.screen = ui::screen_reader;
                 show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
             }
@@ -2412,13 +2489,16 @@ static void run()
             if (bookmark_count && screen_state.bookmarks_focus < bookmark_count)
             {
                 const auto mark = bookmarks[screen_state.bookmarks_focus];
-                if (mark.spine < book->spine_count && load_spine(book_path, book, mark.spine, book, document))
+                if (mark.spine < book->spine_count &&
+                    load_spine(book_path, book, mark.spine, book, document))
                 {
                     spine_index = mark.spine;
-                    total_pages = ui::page_count(document, &reader_settings, framebuffer.width, framebuffer.height);
+                    total_pages = ui::page_count(document, &reader_settings, framebuffer.width,
+                                                 framebuffer.height);
                     page = mark.page < total_pages ? mark.page : 0;
                     screen_state.screen = ui::screen_reader;
-                    show(&framebuffer, &display, book, document, page, total_pages, &reader_settings);
+                    show(&framebuffer, &display, book, document, page, total_pages,
+                         &reader_settings);
                 }
             }
             continue;
@@ -2493,8 +2573,8 @@ static void run()
             quick_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
             drivers::it8951e::set_inverted(&display, settings.invert_colors != 0U);
             ui::chrome::set_clock_visible(settings.show_clock != 0U);
-            total_pages = ui::page_count(document, &reader_settings, framebuffer.width,
-                                         framebuffer.height);
+            total_pages =
+                ui::page_count(document, &reader_settings, framebuffer.width, framebuffer.height);
             if (page >= total_pages)
                 page = static_cast<uint8_t>(total_pages - 1);
             if (screen_state.screen == ui::screen_display_settings)

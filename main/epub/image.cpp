@@ -33,8 +33,7 @@ static uint32_t read_u32(const uint8_t* data)
 
 static esp_err_t parse_png(const uint8_t* data, size_t size, png_t* png)
 {
-    if (data == nullptr || png == nullptr || size < 8 ||
-        memcmp(data, "\x89PNG\r\n\x1a\n", 8) != 0)
+    if (data == nullptr || png == nullptr || size < 8 || memcmp(data, "\x89PNG\r\n\x1a\n", 8) != 0)
         return ESP_ERR_INVALID_RESPONSE;
     *png = {};
     size_t offset = 8;
@@ -59,17 +58,16 @@ static esp_err_t parse_png(const uint8_t* data, size_t size, png_t* png)
             png->height = static_cast<uint16_t>(height);
             png->bit_depth = chunk[8];
             png->color_type = chunk[9];
-            if (png->bit_depth != 8 ||
-                (png->color_type != 0 && png->color_type != 2 && png->color_type != 4 &&
-                 png->color_type != 6))
+            if (png->bit_depth != 8 || (png->color_type != 0 && png->color_type != 2 &&
+                                        png->color_type != 4 && png->color_type != 6))
                 return ESP_ERR_NOT_SUPPORTED;
         }
         else if (memcmp(type, "IDAT", 4) == 0)
         {
             if (length > SIZE_MAX - png->compressed_size)
                 return ESP_ERR_INVALID_SIZE;
-            uint8_t* expanded = static_cast<uint8_t*>(
-                realloc(png->compressed, png->compressed_size + length));
+            uint8_t* expanded =
+                static_cast<uint8_t*>(realloc(png->compressed, png->compressed_size + length));
             if (expanded == nullptr)
                 return ESP_ERR_NO_MEM;
             png->compressed = expanded;
@@ -112,14 +110,13 @@ static esp_err_t inspect_jpeg(const uint8_t* data, size_t size, info_t* info)
             continue;
         if (offset + 2U > size)
             return ESP_ERR_INVALID_SIZE;
-        const uint16_t length = static_cast<uint16_t>((static_cast<uint16_t>(data[offset]) << 8U) |
-                                                       data[offset + 1U]);
+        const uint16_t length =
+            static_cast<uint16_t>((static_cast<uint16_t>(data[offset]) << 8U) | data[offset + 1U]);
         if (length < 2U || offset + length > size)
             return ESP_ERR_INVALID_SIZE;
-        const bool sof = (marker >= 0xc0U && marker <= 0xc3U) ||
-                         (marker >= 0xc5U && marker <= 0xc7U) ||
-                         (marker >= 0xc9U && marker <= 0xcbU) ||
-                         (marker >= 0xcdU && marker <= 0xcfU);
+        const bool sof =
+            (marker >= 0xc0U && marker <= 0xc3U) || (marker >= 0xc5U && marker <= 0xc7U) ||
+            (marker >= 0xc9U && marker <= 0xcbU) || (marker >= 0xcdU && marker <= 0xcfU);
         if (sof)
         {
             if (length < 7U)
@@ -142,15 +139,17 @@ static esp_err_t inspect_jpeg(const uint8_t* data, size_t size, info_t* info)
 
 static uint8_t sample(const uint8_t* row, uint8_t color_type, uint16_t x)
 {
-    const uint8_t* pixel = row + static_cast<size_t>(x) * (color_type == 0 ? 1 : color_type == 2 ? 3
-                                                                                                  : color_type == 4 ? 2
-                                                                                                                    : 4);
-    const uint16_t luminance = color_type == 0 || color_type == 4
-                                   ? static_cast<uint16_t>(pixel[0])
-                                   : static_cast<uint16_t>((static_cast<uint32_t>(pixel[0]) * 77U +
-                                                            static_cast<uint32_t>(pixel[1]) * 150U +
-                                                            static_cast<uint32_t>(pixel[2]) * 29U) >>
-                                                           8);
+    const uint8_t* pixel = row + static_cast<size_t>(x) * (color_type == 0   ? 1
+                                                           : color_type == 2 ? 3
+                                                           : color_type == 4 ? 2
+                                                                             : 4);
+    const uint16_t luminance =
+        color_type == 0 || color_type == 4
+            ? static_cast<uint16_t>(pixel[0])
+            : static_cast<uint16_t>((static_cast<uint32_t>(pixel[0]) * 77U +
+                                     static_cast<uint32_t>(pixel[1]) * 150U +
+                                     static_cast<uint32_t>(pixel[2]) * 29U) >>
+                                    8);
     return static_cast<uint8_t>(15U - (luminance * 15U / 255U));
 }
 
@@ -188,7 +187,10 @@ esp_err_t decode_mono(const uint8_t* data, size_t size, uint8_t* output, size_t 
         free(png.compressed);
         return error;
     }
-    const size_t channels = png.color_type == 0 ? 1 : png.color_type == 2 ? 3 : png.color_type == 4 ? 2 : 4;
+    const size_t channels = png.color_type == 0   ? 1
+                            : png.color_type == 2 ? 3
+                            : png.color_type == 4 ? 2
+                                                  : 4;
     const size_t row_size = static_cast<size_t>(png.width) * channels;
     if (row_size > SIZE_MAX - 1 || static_cast<size_t>(png.height) > SIZE_MAX / (row_size + 1) ||
         output_size < (static_cast<size_t>(png.width) * png.height + 1) / 2)
@@ -196,7 +198,8 @@ esp_err_t decode_mono(const uint8_t* data, size_t size, uint8_t* output, size_t 
         free(png.compressed);
         return ESP_ERR_INVALID_SIZE;
     }
-    uint8_t* filtered = static_cast<uint8_t*>(malloc(static_cast<size_t>(png.height) * (row_size + 1)));
+    uint8_t* filtered =
+        static_cast<uint8_t*>(malloc(static_cast<size_t>(png.height) * (row_size + 1)));
     uint8_t* previous = static_cast<uint8_t*>(calloc(row_size, 1));
     if (filtered == nullptr || previous == nullptr)
     {
@@ -206,9 +209,10 @@ esp_err_t decode_mono(const uint8_t* data, size_t size, uint8_t* output, size_t 
         return ESP_ERR_NO_MEM;
     }
     size_t decoded_size = 0;
-    if (png.compressed_size < 6 || inflate::decode(png.compressed + 2, png.compressed_size - 6,
-                                                   filtered, static_cast<size_t>(png.height) * (row_size + 1),
-                                                   &decoded_size) != ESP_OK ||
+    if (png.compressed_size < 6 ||
+        inflate::decode(png.compressed + 2, png.compressed_size - 6, filtered,
+                        static_cast<size_t>(png.height) * (row_size + 1),
+                        &decoded_size) != ESP_OK ||
         decoded_size != static_cast<size_t>(png.height) * (row_size + 1))
         error = ESP_ERR_INVALID_RESPONSE;
     memset(output, 0, (static_cast<size_t>(png.width) * png.height + 1) / 2);
@@ -238,8 +242,9 @@ esp_err_t decode_mono(const uint8_t* data, size_t size, uint8_t* output, size_t 
         {
             const size_t pixel = static_cast<size_t>(y) * png.width + x;
             const uint8_t value = sample(row + 1, png.color_type, x);
-            output[pixel / 2] = static_cast<uint8_t>((x & 1U) == 0 ? (value << 4) | (output[pixel / 2] & 0x0f)
-                                                                  : (output[pixel / 2] & 0xf0) | value);
+            output[pixel / 2] =
+                static_cast<uint8_t>((x & 1U) == 0 ? (value << 4) | (output[pixel / 2] & 0x0f)
+                                                   : (output[pixel / 2] & 0xf0) | value);
         }
         memcpy(previous, row + 1, row_size);
     }

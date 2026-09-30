@@ -46,8 +46,8 @@ static layout::rect_t home_row(layout::viewport_t vp, uint8_t index)
     // the list floating in the middle of the screen.
     const uint16_t gap = m.gap;
     const uint32_t gaps = static_cast<uint32_t>(home_action_count - 1U) * gap;
-    const uint16_t fill = static_cast<uint16_t>(
-        (area.height > gaps ? area.height - gaps : 0) / home_action_count);
+    const uint16_t fill =
+        static_cast<uint16_t>((area.height > gaps ? area.height - gaps : 0) / home_action_count);
     uint16_t height = fill < 48U ? 48U : fill;
     if (height > 72U)
         height = 72U;
@@ -58,9 +58,12 @@ static const char* subtitle_for(uint8_t index, const char* book_title)
 {
     if (index == home_continue_reading)
         return book_title == nullptr || book_title[0] == '\0' ? "No book opened" : book_title;
-    if (index == home_library) return "Browse books on SD card";
-    if (index == home_recent_books) return "Recently opened books";
-    if (index == home_settings) return "Display, reading, books and network";
+    if (index == home_library)
+        return "Browse books on SD card";
+    if (index == home_recent_books)
+        return "Recently opened books";
+    if (index == home_settings)
+        return "Display, reading, books and network";
     return "Suspend the device";
 }
 
@@ -82,18 +85,19 @@ static void draw_home_row(gfx::framebuffer_t* framebuffer, layout::rect_t row, u
     gfx::draw_icon(framebuffer, icon_x, icon_y, icons[index], 1, 0x00);
 
     const uint16_t text_x = static_cast<uint16_t>(icon_x + glyph + 12U);
-    const uint16_t title_y = row.height >= 44U ? static_cast<uint16_t>(row.y + 5U)
-                                               : static_cast<uint16_t>(row.y + (row.height - 16U) / 2U);
+    const uint16_t title_y = row.height >= 44U
+                                 ? static_cast<uint16_t>(row.y + 5U)
+                                 : static_cast<uint16_t>(row.y + (row.height - 16U) / 2U);
     gfx::draw_text(framebuffer, text_x, title_y, menu_labels[index], 1, 0x00);
     if (row.height >= 44U && subtitle != nullptr && subtitle[0] != '\0')
         gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(row.y + 25U), subtitle, 1, 0x06);
 
     if (index != home_sleep)
     {
-        const uint16_t arrow_x = row.width > glyph + 8U
-                                     ? static_cast<uint16_t>(row.x + row.width - glyph - 8U)
-                                     : row.x;
-        gfx::draw_icon(framebuffer, arrow_x, static_cast<uint16_t>(row.y + (row.height - glyph) / 2U),
+        const uint16_t arrow_x =
+            row.width > glyph + 8U ? static_cast<uint16_t>(row.x + row.width - glyph - 8U) : row.x;
+        gfx::draw_icon(framebuffer, arrow_x,
+                       static_cast<uint16_t>(row.y + (row.height - glyph) / 2U),
                        gfx::icon_chevron_right, 1, 0x06);
     }
 }
@@ -112,8 +116,7 @@ void draw_home(gfx::framebuffer_t* framebuffer, bool storage_mounted, const char
         draw_home_row(framebuffer, home_row(vp, index), index, subtitle_for(index, book_title),
                       index == static_cast<uint8_t>(focus));
 
-    chrome::draw_indication_bar(framebuffer, {"Library", gfx::icon_list},
-                                {"Open", gfx::icon_book},
+    chrome::draw_indication_bar(framebuffer, {"Library", gfx::icon_list}, {"Open", gfx::icon_book},
                                 {"Settings", gfx::icon_settings});
 }
 

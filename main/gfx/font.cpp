@@ -63,8 +63,8 @@ static size_t decode_utf8_impl(const char* text, uint32_t* codepoint)
     return 1;
 }
 
-static int compare_composition(const unicode_composition_t* entry, uint32_t first,
-                               uint32_t second, uint32_t third, uint8_t length)
+static int compare_composition(const unicode_composition_t* entry, uint32_t first, uint32_t second,
+                               uint32_t third, uint8_t length)
 {
     if (entry->first != first)
         return entry->first < first ? -1 : 1;

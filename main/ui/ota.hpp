@@ -1,11 +1,21 @@
 #pragma once
-#include <stdint.h>
 #include "gfx/framebuffer.hpp"
-namespace xreader { namespace ui {
-enum ota_item_t : uint8_t { ota_check_update, ota_install, ota_back, ota_item_count };
+#include <stdint.h>
+namespace xreader
+{
+namespace ui
+{
+enum ota_item_t : uint8_t
+{
+    ota_check_update,
+    ota_install,
+    ota_back,
+    ota_item_count
+};
 void draw_ota(gfx::framebuffer_t* framebuffer, ota_item_t focus, const char* current_version,
               const char* available_version, const char* status, bool update_available,
               const char* release_notes = nullptr, uint8_t progress_percent = 0,
               const char* last_result = nullptr, bool rollback_pending = false);
-bool ota_touch_item(uint16_t width,uint16_t height,uint16_t x,uint16_t y,ota_item_t* item);
-} }
+bool ota_touch_item(uint16_t width, uint16_t height, uint16_t x, uint16_t y, ota_item_t* item);
+} // namespace ui
+} // namespace xreader

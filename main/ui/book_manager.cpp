@@ -44,14 +44,16 @@ void draw_book_manager(gfx::framebuffer_t* framebuffer, book_manager_item_t focu
         "BROWSE SD CARD",
         scanning ? "SCANNING..." : "FROM /IMPORT",
         storage_mounted ? "AVAILABLE" : "UNAVAILABLE",
-        scanning ? "SCANNING..." : (duplicate_count > 0U ? "TEMP FILES / DUPES" : "REMOVE TEMP FILES"),
+        scanning ? "SCANNING..."
+                 : (duplicate_count > 0U ? "TEMP FILES / DUPES" : "REMOVE TEMP FILES"),
         "RETURN",
     };
 
     const layout::rect_t area = items_area(viewport);
-    const uint16_t available = area.height > static_cast<uint16_t>((book_manager_item_count - 1U) * metrics.gap)
-                                   ? static_cast<uint16_t>(area.height - (book_manager_item_count - 1U) * metrics.gap)
-                                   : area.height;
+    const uint16_t available =
+        area.height > static_cast<uint16_t>((book_manager_item_count - 1U) * metrics.gap)
+            ? static_cast<uint16_t>(area.height - (book_manager_item_count - 1U) * metrics.gap)
+            : area.height;
     const uint16_t row_height = static_cast<uint16_t>(available / book_manager_item_count);
     for (uint8_t index = 0; index < book_manager_item_count; ++index)
     {
@@ -74,8 +76,7 @@ void draw_book_manager(gfx::framebuffer_t* framebuffer, book_manager_item_t focu
                        static_cast<uint16_t>(item.y + (item.height - 16U) / 2U), values[index], 1,
                        secondary);
     }
-    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
-                                {"Open", gfx::icon_check},
+    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Open", gfx::icon_check},
                                 {"Back", gfx::icon_arrow_back});
 }
 
@@ -87,13 +88,13 @@ bool book_manager_touch_item(uint16_t display_width, uint16_t display_height, ui
     const layout::viewport_t viewport = {display_width, display_height};
     const layout::metrics_t metrics = layout::metrics(viewport);
     const layout::rect_t area = items_area(viewport);
-    const uint16_t available = area.height > static_cast<uint16_t>((book_manager_item_count - 1U) * metrics.gap)
-                                   ? static_cast<uint16_t>(area.height - (book_manager_item_count - 1U) * metrics.gap)
-                                   : area.height;
+    const uint16_t available =
+        area.height > static_cast<uint16_t>((book_manager_item_count - 1U) * metrics.gap)
+            ? static_cast<uint16_t>(area.height - (book_manager_item_count - 1U) * metrics.gap)
+            : area.height;
     const uint16_t row_height = static_cast<uint16_t>(available / book_manager_item_count);
     uint8_t index = 0;
-    if (!focus::hit_rows(area, book_manager_item_count, row_height, metrics.gap, x, y,
-                         &index))
+    if (!focus::hit_rows(area, book_manager_item_count, row_height, metrics.gap, x, y, &index))
         return false;
     *item = static_cast<book_manager_item_t>(index);
     return true;

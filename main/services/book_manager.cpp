@@ -20,11 +20,8 @@ static bool ends_with(const char* text, const char* suffix)
         return false;
     const size_t text_length = strlen(text);
     const size_t suffix_length = strlen(suffix);
-    return text_length >= suffix_length &&
-           strcmp(text + text_length - suffix_length, suffix) == 0;
+    return text_length >= suffix_length && strcmp(text + text_length - suffix_length, suffix) == 0;
 }
-
-
 
 static uint64_t file_hash(const char* path)
 {
@@ -155,8 +152,8 @@ result_t cleanup(const char* mount_path)
     return result;
 }
 
-
-esp_err_t rename_book(const char* path, const char* new_name, char* new_path, size_t new_path_capacity)
+esp_err_t rename_book(const char* path, const char* new_name, char* new_path,
+                      size_t new_path_capacity)
 {
     if (path == nullptr || !safe_name(new_name))
         return ESP_ERR_INVALID_ARG;

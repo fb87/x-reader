@@ -218,10 +218,10 @@ void fill_rect(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t widt
         y >= framebuffer->height || width == 0 || height == 0)
         return;
 
-    const uint16_t right = width > framebuffer->width - x ? framebuffer->width
-                                                           : static_cast<uint16_t>(x + width);
-    const uint16_t bottom = height > framebuffer->height - y ? framebuffer->height
-                                                              : static_cast<uint16_t>(y + height);
+    const uint16_t right =
+        width > framebuffer->width - x ? framebuffer->width : static_cast<uint16_t>(x + width);
+    const uint16_t bottom =
+        height > framebuffer->height - y ? framebuffer->height : static_cast<uint16_t>(y + height);
     const uint8_t nibble = static_cast<uint8_t>(value & 0x0fU);
     const uint8_t packed = static_cast<uint8_t>((nibble << 4) | nibble);
     const size_t stride = (static_cast<size_t>(framebuffer->width) + 1U) / 2U;
@@ -280,27 +280,24 @@ void blit_4bpp_scaled(framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16
         width == 0U || height == 0U || source_width == 0U || source_height == 0U ||
         x >= framebuffer->width || y >= framebuffer->height)
         return;
-    const uint16_t draw_width = width > framebuffer->width - x
-                                    ? static_cast<uint16_t>(framebuffer->width - x)
-                                    : width;
-    const uint16_t draw_height = height > framebuffer->height - y
-                                     ? static_cast<uint16_t>(framebuffer->height - y)
-                                     : height;
+    const uint16_t draw_width =
+        width > framebuffer->width - x ? static_cast<uint16_t>(framebuffer->width - x) : width;
+    const uint16_t draw_height =
+        height > framebuffer->height - y ? static_cast<uint16_t>(framebuffer->height - y) : height;
     for (uint16_t dy = 0; dy < draw_height; ++dy)
     {
-        const uint16_t sy = static_cast<uint16_t>(
-            (static_cast<uint32_t>(dy) * source_height) / height);
+        const uint16_t sy =
+            static_cast<uint16_t>((static_cast<uint32_t>(dy) * source_height) / height);
         for (uint16_t dx = 0; dx < draw_width; ++dx)
         {
-            const uint16_t sx = static_cast<uint16_t>(
-                (static_cast<uint32_t>(dx) * source_width) / width);
+            const uint16_t sx =
+                static_cast<uint16_t>((static_cast<uint32_t>(dx) * source_width) / width);
             const size_t source_pixel = static_cast<size_t>(sy) * source_width + sx;
             const uint8_t packed = source[source_pixel / 2U];
-            const uint8_t value = (source_pixel & 1U) == 0U
-                                      ? static_cast<uint8_t>(packed >> 4U)
-                                      : static_cast<uint8_t>(packed & 0x0fU);
-            set_pixel(framebuffer, static_cast<uint16_t>(x + dx),
-                      static_cast<uint16_t>(y + dy), value);
+            const uint8_t value = (source_pixel & 1U) == 0U ? static_cast<uint8_t>(packed >> 4U)
+                                                            : static_cast<uint8_t>(packed & 0x0fU);
+            set_pixel(framebuffer, static_cast<uint16_t>(x + dx), static_cast<uint16_t>(y + dy),
+                      value);
         }
     }
 }

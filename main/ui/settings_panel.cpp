@@ -134,8 +134,7 @@ void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
     }
 
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
-                                {"Change", gfx::icon_swap_horiz},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Change", gfx::icon_swap_horiz}, {"Back", gfx::icon_arrow_back});
 }
 
 bool settings_panel_hit(layout::viewport_t viewport, const settings_row_t* rows, uint8_t count,

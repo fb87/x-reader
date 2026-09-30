@@ -1,15 +1,15 @@
 #include "screen.hpp"
 
-#include "ui/chrome.hpp"
-#include "ui/contents.hpp"
-#include "ui/bookmarks.hpp"
-#include "ui/connectivity.hpp"
-#include "ui/ota.hpp"
 #include "ui/book_manager.hpp"
 #include "ui/book_sync.hpp"
+#include "ui/bookmarks.hpp"
+#include "ui/chrome.hpp"
+#include "ui/connectivity.hpp"
+#include "ui/contents.hpp"
 #include "ui/library.hpp"
 #include "ui/navigation.hpp"
 #include "ui/navigation/focus.hpp"
+#include "ui/ota.hpp"
 
 namespace xreader
 {
@@ -137,21 +137,22 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
             footer_event.action = input::action_none;
 
             if (state->screen == screen_reader)
-                footer_event.action = zone == layout::footer_left ? input::action_page_prev
+                footer_event.action = zone == layout::footer_left     ? input::action_page_prev
                                       : zone == layout::footer_center ? input::action_menu
-                                                                     : input::action_page_next;
-            else if (state->screen == screen_library || state->screen == screen_library_search_results)
-                footer_event.action = zone == layout::footer_left ? input::action_left
+                                                                      : input::action_page_next;
+            else if (state->screen == screen_library ||
+                     state->screen == screen_library_search_results)
+                footer_event.action = zone == layout::footer_left     ? input::action_left
                                       : zone == layout::footer_center ? input::action_select
-                                                                     : input::action_right;
+                                                                      : input::action_right;
             else if (state->screen == screen_library_details)
-                footer_event.action = zone == layout::footer_left ? input::action_menu
+                footer_event.action = zone == layout::footer_left     ? input::action_menu
                                       : zone == layout::footer_center ? input::action_select
-                                                                     : input::action_back;
+                                                                      : input::action_back;
             else if (state->screen == screen_book_info || state->screen == screen_storage ||
                      state->screen == screen_about)
-                footer_event.action = zone == layout::footer_right ? input::action_back
-                                                                   : input::action_none;
+                footer_event.action =
+                    zone == layout::footer_right ? input::action_back : input::action_none;
             else if (zone == layout::footer_center)
                 footer_event.action = input::action_select;
             else if (zone == layout::footer_right)
@@ -236,7 +237,8 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
         {
             uint8_t index = 0;
             if (!library_touch_index(context->viewport.width, context->viewport.height, event->x,
-                                     event->y, context->library_count, state->library_focus, &index))
+                                     event->y, context->library_count, state->library_focus,
+                                     &index))
                 return screen_command_none;
             state->library_focus = index;
         }
@@ -273,14 +275,14 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
     {
         if (event->action == input::action_down)
         {
-            state->book_action_focus = static_cast<book_action_item_t>(
-                focus::next(static_cast<uint8_t>(state->book_action_focus), book_action_item_count));
+            state->book_action_focus = static_cast<book_action_item_t>(focus::next(
+                static_cast<uint8_t>(state->book_action_focus), book_action_item_count));
             return screen_command_redraw;
         }
         if (event->action == input::action_up)
         {
-            state->book_action_focus = static_cast<book_action_item_t>(
-                focus::previous(static_cast<uint8_t>(state->book_action_focus), book_action_item_count));
+            state->book_action_focus = static_cast<book_action_item_t>(focus::previous(
+                static_cast<uint8_t>(state->book_action_focus), book_action_item_count));
             return screen_command_redraw;
         }
         if (event->action == input::action_back || event->action == input::action_left)
@@ -392,13 +394,38 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
 
     if (state->screen == screen_connectivity)
     {
-        if (event->action == input::action_down) { state->connectivity_focus = static_cast<connectivity_item_t>(focus::next(static_cast<uint8_t>(state->connectivity_focus), connectivity_item_count)); return screen_command_redraw; }
-        if (event->action == input::action_up) { state->connectivity_focus = static_cast<connectivity_item_t>(focus::previous(static_cast<uint8_t>(state->connectivity_focus), connectivity_item_count)); return screen_command_redraw; }
-        if (event->action == input::action_back || event->action == input::action_left) { state->screen = screen_settings; return screen_command_show_settings; }
+        if (event->action == input::action_down)
+        {
+            state->connectivity_focus = static_cast<connectivity_item_t>(focus::next(
+                static_cast<uint8_t>(state->connectivity_focus), connectivity_item_count));
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_up)
+        {
+            state->connectivity_focus = static_cast<connectivity_item_t>(focus::previous(
+                static_cast<uint8_t>(state->connectivity_focus), connectivity_item_count));
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_back || event->action == input::action_left)
+        {
+            state->screen = screen_settings;
+            return screen_command_show_settings;
+        }
         connectivity_item_t item = state->connectivity_focus;
-        if (event->action == input::action_pointer) { if (!connectivity_touch_item(context->viewport.width, context->viewport.height, event->x, event->y, &item)) return screen_command_none; state->connectivity_focus = item; }
-        else if (event->action != input::action_select && event->action != input::action_right) return screen_command_none;
-        if (item == connectivity_back) { state->screen = screen_settings; return screen_command_show_settings; }
+        if (event->action == input::action_pointer)
+        {
+            if (!connectivity_touch_item(context->viewport.width, context->viewport.height,
+                                         event->x, event->y, &item))
+                return screen_command_none;
+            state->connectivity_focus = item;
+        }
+        else if (event->action != input::action_select && event->action != input::action_right)
+            return screen_command_none;
+        if (item == connectivity_back)
+        {
+            state->screen = screen_settings;
+            return screen_command_show_settings;
+        }
         if (item == connectivity_network)
         {
             state->screen = screen_wifi_networks;
@@ -456,7 +483,8 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
 
     if (state->screen == screen_keyboard)
     {
-        const keyboard_result_t result = keyboard_handle(&state->keyboard, event, context->viewport);
+        const keyboard_result_t result =
+            keyboard_handle(&state->keyboard, event, context->viewport);
         if (result == keyboard_result_redraw)
             return screen_command_redraw;
         if (result == keyboard_result_submit)
@@ -483,13 +511,38 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
 
     if (state->screen == screen_ota)
     {
-        if (event->action == input::action_down) { state->ota_focus = static_cast<ota_item_t>(focus::next(static_cast<uint8_t>(state->ota_focus), ota_item_count)); return screen_command_redraw; }
-        if (event->action == input::action_up) { state->ota_focus = static_cast<ota_item_t>(focus::previous(static_cast<uint8_t>(state->ota_focus), ota_item_count)); return screen_command_redraw; }
-        if (event->action == input::action_back || event->action == input::action_left) { state->screen = screen_settings; return screen_command_show_settings; }
+        if (event->action == input::action_down)
+        {
+            state->ota_focus = static_cast<ota_item_t>(
+                focus::next(static_cast<uint8_t>(state->ota_focus), ota_item_count));
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_up)
+        {
+            state->ota_focus = static_cast<ota_item_t>(
+                focus::previous(static_cast<uint8_t>(state->ota_focus), ota_item_count));
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_back || event->action == input::action_left)
+        {
+            state->screen = screen_settings;
+            return screen_command_show_settings;
+        }
         ota_item_t item = state->ota_focus;
-        if (event->action == input::action_pointer) { if (!ota_touch_item(context->viewport.width, context->viewport.height, event->x, event->y, &item)) return screen_command_none; state->ota_focus = item; }
-        else if (event->action != input::action_select && event->action != input::action_right) return screen_command_none;
-        if (item == ota_back) { state->screen = screen_settings; return screen_command_show_settings; }
+        if (event->action == input::action_pointer)
+        {
+            if (!ota_touch_item(context->viewport.width, context->viewport.height, event->x,
+                                event->y, &item))
+                return screen_command_none;
+            state->ota_focus = item;
+        }
+        else if (event->action != input::action_select && event->action != input::action_right)
+            return screen_command_none;
+        if (item == ota_back)
+        {
+            state->screen = screen_settings;
+            return screen_command_show_settings;
+        }
         if (item == ota_install)
         {
             state->return_screen = screen_ota;
@@ -502,24 +555,71 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
 
     if (state->screen == screen_book_manager)
     {
-        if (event->action == input::action_down) { state->book_manager_focus = static_cast<book_manager_item_t>(focus::next(static_cast<uint8_t>(state->book_manager_focus), book_manager_item_count)); return screen_command_redraw; }
-        if (event->action == input::action_up) { state->book_manager_focus = static_cast<book_manager_item_t>(focus::previous(static_cast<uint8_t>(state->book_manager_focus), book_manager_item_count)); return screen_command_redraw; }
-        if (event->action == input::action_back || event->action == input::action_left) { state->screen = screen_settings; return screen_command_show_settings; }
+        if (event->action == input::action_down)
+        {
+            state->book_manager_focus = static_cast<book_manager_item_t>(focus::next(
+                static_cast<uint8_t>(state->book_manager_focus), book_manager_item_count));
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_up)
+        {
+            state->book_manager_focus = static_cast<book_manager_item_t>(focus::previous(
+                static_cast<uint8_t>(state->book_manager_focus), book_manager_item_count));
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_back || event->action == input::action_left)
+        {
+            state->screen = screen_settings;
+            return screen_command_show_settings;
+        }
         book_manager_item_t item = state->book_manager_focus;
-        if (event->action == input::action_pointer) { if (!book_manager_touch_item(context->viewport.width, context->viewport.height, event->x, event->y, &item)) return screen_command_none; state->book_manager_focus = item; }
-        else if (event->action != input::action_select && event->action != input::action_right) return screen_command_none;
-        if (item == book_manager_back) { state->screen = screen_settings; return screen_command_show_settings; }
-        if (item == book_manager_library) { state->screen = screen_library; return screen_command_show_library; }
-        if (item == book_manager_files) { state->screen = screen_file_browser; state->file_browser_focus = 0U; return screen_command_show_file_browser; }
-        if (item == book_manager_storage) { state->return_screen = screen_book_manager; state->screen = screen_storage; return screen_command_show_storage; }
+        if (event->action == input::action_pointer)
+        {
+            if (!book_manager_touch_item(context->viewport.width, context->viewport.height,
+                                         event->x, event->y, &item))
+                return screen_command_none;
+            state->book_manager_focus = item;
+        }
+        else if (event->action != input::action_select && event->action != input::action_right)
+            return screen_command_none;
+        if (item == book_manager_back)
+        {
+            state->screen = screen_settings;
+            return screen_command_show_settings;
+        }
+        if (item == book_manager_library)
+        {
+            state->screen = screen_library;
+            return screen_command_show_library;
+        }
+        if (item == book_manager_files)
+        {
+            state->screen = screen_file_browser;
+            state->file_browser_focus = 0U;
+            return screen_command_show_file_browser;
+        }
+        if (item == book_manager_storage)
+        {
+            state->return_screen = screen_book_manager;
+            state->screen = screen_storage;
+            return screen_command_show_storage;
+        }
         return screen_command_book_manager_action;
     }
 
     if (state->screen == screen_file_browser)
     {
         const uint8_t count = context->file_browser_count == 0U ? 1U : context->file_browser_count;
-        if (event->action == input::action_down) { state->file_browser_focus = focus::next(state->file_browser_focus, count); return screen_command_redraw; }
-        if (event->action == input::action_up) { state->file_browser_focus = focus::previous(state->file_browser_focus, count); return screen_command_redraw; }
+        if (event->action == input::action_down)
+        {
+            state->file_browser_focus = focus::next(state->file_browser_focus, count);
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_up)
+        {
+            state->file_browser_focus = focus::previous(state->file_browser_focus, count);
+            return screen_command_redraw;
+        }
         if (event->action == input::action_back || event->action == input::action_left)
             return screen_command_file_browser_back;
         uint8_t index = state->file_browser_focus;
@@ -533,7 +633,8 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
         }
         else if (event->action != input::action_select && event->action != input::action_right)
             return screen_command_none;
-        return context->file_browser_count == 0U ? screen_command_none : screen_command_file_browser_open;
+        return context->file_browser_count == 0U ? screen_command_none
+                                                 : screen_command_file_browser_open;
     }
 
     if (state->screen == screen_storage || state->screen == screen_about)
@@ -562,13 +663,38 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
 
     if (state->screen == screen_book_sync)
     {
-        if (event->action == input::action_down) { state->book_sync_focus = static_cast<book_sync_item_t>(focus::next(static_cast<uint8_t>(state->book_sync_focus), book_sync_item_count)); return screen_command_redraw; }
-        if (event->action == input::action_up) { state->book_sync_focus = static_cast<book_sync_item_t>(focus::previous(static_cast<uint8_t>(state->book_sync_focus), book_sync_item_count)); return screen_command_redraw; }
-        if (event->action == input::action_back || event->action == input::action_left) { state->screen = screen_settings; return screen_command_show_settings; }
+        if (event->action == input::action_down)
+        {
+            state->book_sync_focus = static_cast<book_sync_item_t>(
+                focus::next(static_cast<uint8_t>(state->book_sync_focus), book_sync_item_count));
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_up)
+        {
+            state->book_sync_focus = static_cast<book_sync_item_t>(focus::previous(
+                static_cast<uint8_t>(state->book_sync_focus), book_sync_item_count));
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_back || event->action == input::action_left)
+        {
+            state->screen = screen_settings;
+            return screen_command_show_settings;
+        }
         book_sync_item_t item = state->book_sync_focus;
-        if (event->action == input::action_pointer) { if (!book_sync_touch_item(context->viewport.width, context->viewport.height, event->x, event->y, &item)) return screen_command_none; state->book_sync_focus = item; }
-        else if (event->action != input::action_select && event->action != input::action_right) return screen_command_none;
-        if (item == book_sync_back) { state->screen = screen_settings; return screen_command_show_settings; }
+        if (event->action == input::action_pointer)
+        {
+            if (!book_sync_touch_item(context->viewport.width, context->viewport.height, event->x,
+                                      event->y, &item))
+                return screen_command_none;
+            state->book_sync_focus = item;
+        }
+        else if (event->action != input::action_select && event->action != input::action_right)
+            return screen_command_none;
+        if (item == book_sync_back)
+        {
+            state->screen = screen_settings;
+            return screen_command_show_settings;
+        }
         return screen_command_book_sync_action;
     }
 
@@ -596,8 +722,8 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
             // A tap on a row must activate it exactly like a physical select.  Returning
             // edit_setting unconditionally left the navigation entries (Contents,
             // Bookmarks, Book Info, Add Bookmark, Search) inert under touch.
-            if (quick_settings_touch(context->viewport.width, context->viewport.height, state->quick_focus,
-                                     event->x, event->y, &state->quick_focus))
+            if (quick_settings_touch(context->viewport.width, context->viewport.height,
+                                     state->quick_focus, event->x, event->y, &state->quick_focus))
                 return activate_quick_setting(state);
             if (!quick_settings_contains(context->viewport.width, context->viewport.height,
                                          event->x, event->y))
@@ -616,28 +742,75 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
     if (state->screen == screen_contents)
     {
         const uint8_t count = context->toc_count ? context->toc_count : context->spine_count;
-        if (event->action == input::action_down) { state->contents_focus = focus::next(state->contents_focus, count ? count : 1); return screen_command_redraw; }
-        if (event->action == input::action_up) { state->contents_focus = focus::previous(state->contents_focus, count ? count : 1); return screen_command_redraw; }
-        if (event->action == input::action_back || event->action == input::action_left) { state->screen = screen_reader; return screen_command_close_quick_settings; }
-        if (event->action == input::action_pointer) { uint8_t index = 0; if (!contents_touch_index(context->viewport.width, context->viewport.height, event->x, event->y, count, &index)) return screen_command_none; state->contents_focus = index; return screen_command_open_contents_item; }
-        if (event->action == input::action_select || event->action == input::action_right) return screen_command_open_contents_item;
+        if (event->action == input::action_down)
+        {
+            state->contents_focus = focus::next(state->contents_focus, count ? count : 1);
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_up)
+        {
+            state->contents_focus = focus::previous(state->contents_focus, count ? count : 1);
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_back || event->action == input::action_left)
+        {
+            state->screen = screen_reader;
+            return screen_command_close_quick_settings;
+        }
+        if (event->action == input::action_pointer)
+        {
+            uint8_t index = 0;
+            if (!contents_touch_index(context->viewport.width, context->viewport.height, event->x,
+                                      event->y, count, &index))
+                return screen_command_none;
+            state->contents_focus = index;
+            return screen_command_open_contents_item;
+        }
+        if (event->action == input::action_select || event->action == input::action_right)
+            return screen_command_open_contents_item;
         return screen_command_none;
     }
 
     if (state->screen == screen_bookmarks)
     {
         const uint8_t count = context->bookmark_count ? context->bookmark_count : 1;
-        if (event->action == input::action_down) { state->bookmarks_focus = focus::next(state->bookmarks_focus, count); return screen_command_redraw; }
-        if (event->action == input::action_up) { state->bookmarks_focus = focus::previous(state->bookmarks_focus, count); return screen_command_redraw; }
-        if (event->action == input::action_back || event->action == input::action_left) { state->screen = screen_reader; return screen_command_close_quick_settings; }
-        if (event->action == input::action_pointer) { uint8_t index = 0; if (!bookmarks_touch_index(context->viewport.width, context->viewport.height, event->x, event->y, context->bookmark_count, &index)) return screen_command_none; state->bookmarks_focus = index; return screen_command_open_bookmark; }
-        if (event->action == input::action_select && context->bookmark_count) return screen_command_open_bookmark;
+        if (event->action == input::action_down)
+        {
+            state->bookmarks_focus = focus::next(state->bookmarks_focus, count);
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_up)
+        {
+            state->bookmarks_focus = focus::previous(state->bookmarks_focus, count);
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_back || event->action == input::action_left)
+        {
+            state->screen = screen_reader;
+            return screen_command_close_quick_settings;
+        }
+        if (event->action == input::action_pointer)
+        {
+            uint8_t index = 0;
+            if (!bookmarks_touch_index(context->viewport.width, context->viewport.height, event->x,
+                                       event->y, context->bookmark_count, &index))
+                return screen_command_none;
+            state->bookmarks_focus = index;
+            return screen_command_open_bookmark;
+        }
+        if (event->action == input::action_select && context->bookmark_count)
+            return screen_command_open_bookmark;
         return screen_command_none;
     }
 
     if (state->screen == screen_book_info)
     {
-        if (event->action == input::action_back || event->action == input::action_left || event->action == input::action_select || event->action == input::action_pointer) { state->screen = screen_reader; return screen_command_close_quick_settings; }
+        if (event->action == input::action_back || event->action == input::action_left ||
+            event->action == input::action_select || event->action == input::action_pointer)
+        {
+            state->screen = screen_reader;
+            return screen_command_close_quick_settings;
+        }
         return screen_command_none;
     }
 
@@ -657,8 +830,8 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
         }
         if (event->action == input::action_back || event->action == input::action_left)
         {
-            state->screen = state->return_screen == screen_quick_settings ? screen_reader
-                                                                         : screen_settings;
+            state->screen =
+                state->return_screen == screen_quick_settings ? screen_reader : screen_settings;
             return state->screen == screen_reader ? screen_command_close_quick_settings
                                                   : screen_command_show_settings;
         }
@@ -677,8 +850,8 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
             state->has_pending_value = false;
         if (state->display_focus == display_setting_back)
         {
-            state->screen = state->return_screen == screen_quick_settings ? screen_reader
-                                                                         : screen_settings;
+            state->screen =
+                state->return_screen == screen_quick_settings ? screen_reader : screen_settings;
             return state->screen == screen_reader ? screen_command_close_quick_settings
                                                   : screen_command_show_settings;
         }
@@ -701,8 +874,8 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
         }
         if (event->action == input::action_back || event->action == input::action_left)
         {
-            state->screen = state->return_screen == screen_quick_settings ? screen_reader
-                                                                         : screen_settings;
+            state->screen =
+                state->return_screen == screen_quick_settings ? screen_reader : screen_settings;
             return state->screen == screen_reader ? screen_command_close_quick_settings
                                                   : screen_command_show_settings;
         }
@@ -721,8 +894,8 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
             state->has_pending_value = false;
         if (state->reading_focus == reading_setting_back)
         {
-            state->screen = state->return_screen == screen_quick_settings ? screen_reader
-                                                                         : screen_settings;
+            state->screen =
+                state->return_screen == screen_quick_settings ? screen_reader : screen_settings;
             return state->screen == screen_reader ? screen_command_close_quick_settings
                                                   : screen_command_show_settings;
         }
@@ -738,8 +911,8 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
         }
         if (event->action == input::action_select || event->action == input::action_menu ||
             (event->action == input::action_pointer &&
-             event->y >= context->viewport.height -
-                             layout::metrics(context->viewport).footer_height &&
+             event->y >=
+                 context->viewport.height - layout::metrics(context->viewport).footer_height &&
              event->x > context->viewport.width / 3U &&
              event->x < context->viewport.width * 2U / 3U))
         {

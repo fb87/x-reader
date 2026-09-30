@@ -54,8 +54,8 @@ static esp_err_t locate_end_record(FILE* file, uint32_t* central_offset, uint16_
     const size_t search_size = (static_cast<unsigned long>(file_size) < max_search_size)
                                    ? static_cast<size_t>(file_size)
                                    : max_search_size;
-    uint8_t* search_buffer = static_cast<uint8_t*>(
-        heap_caps_malloc(search_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    uint8_t* search_buffer =
+        static_cast<uint8_t*>(heap_caps_malloc(search_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (search_buffer == nullptr)
     {
         return ESP_ERR_NO_MEM;

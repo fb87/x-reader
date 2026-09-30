@@ -25,16 +25,15 @@ void draw_about(gfx::framebuffer_t* framebuffer, const char* version, const char
                                   build_date == nullptr ? "UNKNOWN" : build_date};
     for (uint8_t index = 0; index < 4; ++index)
     {
-        const auto row = layout::row(area, index, 4,
-                                     static_cast<uint16_t>(metrics.row_height + 8U), metrics.gap);
+        const auto row = layout::row(area, index, 4, static_cast<uint16_t>(metrics.row_height + 8U),
+                                     metrics.gap);
         gfx::draw_text(framebuffer, static_cast<uint16_t>(row.x + 12U),
                        static_cast<uint16_t>(row.y + 12U), labels[index], 1, 0x00);
         const uint16_t width = gfx::measure_text(values[index], 1);
         gfx::draw_text(framebuffer, static_cast<uint16_t>(row.x + row.width - (width + 12U)),
                        static_cast<uint16_t>(row.y + 12U), values[index], 1, 0x05);
     }
-    chrome::draw_indication_bar(framebuffer, {nullptr, gfx::icon_none},
-                                {nullptr, gfx::icon_none},
+    chrome::draw_indication_bar(framebuffer, {nullptr, gfx::icon_none}, {nullptr, gfx::icon_none},
                                 {"Back", gfx::icon_arrow_back});
 }
 } // namespace ui

@@ -35,27 +35,27 @@ void draw_splash(gfx::framebuffer_t* framebuffer, const char* status)
     // than each line centred independently, so the block sits in the same
     // visual centre regardless of which lines are present.
     const uint16_t block_height = static_cast<uint16_t>(icon_side + 16U + 28U + 10U + 16U);
-    uint16_t y = static_cast<uint16_t>(vp.height > block_height ? (vp.height - block_height) / 2U : 0U);
+    uint16_t y =
+        static_cast<uint16_t>(vp.height > block_height ? (vp.height - block_height) / 2U : 0U);
 
-    gfx::draw_icon(framebuffer, static_cast<uint16_t>((vp.width - icon_side) / 2U), y, gfx::icon_book,
-                   icon_scale, ink);
+    gfx::draw_icon(framebuffer, static_cast<uint16_t>((vp.width - icon_side) / 2U), y,
+                   gfx::icon_book, icon_scale, ink);
     y = static_cast<uint16_t>(y + icon_side + 16U);
 
     gfx::draw_text(framebuffer, static_cast<uint16_t>((vp.width - title_width) / 2U), y, title, 2,
                    ink);
     y = static_cast<uint16_t>(y + 28U);
 
-    gfx::draw_text(framebuffer, static_cast<uint16_t>((vp.width - subtitle_width) / 2U), y, subtitle,
-                   1, mid);
+    gfx::draw_text(framebuffer, static_cast<uint16_t>((vp.width - subtitle_width) / 2U), y,
+                   subtitle, 1, mid);
     y = static_cast<uint16_t>(y + 10U);
 
     // A plain rule rather than an animated progress bar: boot has no real
     // percentage to report, and an unfilled/looping bar on e-paper just means
     // extra partial refreshes for no information.
     const uint16_t rule_width = static_cast<uint16_t>(vp.width / 3U);
-    widgets::draw_progress(framebuffer, {static_cast<uint16_t>((vp.width - rule_width) / 2U), y,
-                                        rule_width, 3},
-                           1, 1);
+    widgets::draw_progress(
+        framebuffer, {static_cast<uint16_t>((vp.width - rule_width) / 2U), y, rule_width, 3}, 1, 1);
 
     if (status != nullptr && status[0] != '\0')
     {

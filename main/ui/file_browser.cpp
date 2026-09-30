@@ -5,8 +5,8 @@
 
 #include "gfx/font.hpp"
 #include "ui/chrome.hpp"
-#include "ui/widgets.hpp"
 #include "ui/layout/layout.hpp"
+#include "ui/widgets.hpp"
 
 namespace xreader
 {
@@ -95,16 +95,14 @@ void draw_file_browser(gfx::framebuffer_t* framebuffer,
     {
         gfx::draw_text(framebuffer, area.x, area.y, "EMPTY FOLDER", 2, 0x00);
         chrome::draw_indication_bar(framebuffer, {nullptr, gfx::icon_none},
-                                {nullptr, gfx::icon_none},
-                                {"Back", gfx::icon_arrow_back});
+                                    {nullptr, gfx::icon_none}, {"Back", gfx::icon_arrow_back});
         return;
     }
 
     const uint8_t visible = visible_rows(viewport);
     const uint8_t first = first_visible(listing->count, focus, visible);
-    const uint8_t shown = static_cast<uint8_t>(listing->count - first < visible
-                                                   ? listing->count - first
-                                                   : visible);
+    const uint8_t shown =
+        static_cast<uint8_t>(listing->count - first < visible ? listing->count - first : visible);
     for (uint8_t row = 0; row < shown; ++row)
     {
         const uint8_t index = static_cast<uint8_t>(first + row);
@@ -126,22 +124,21 @@ void draw_file_browser(gfx::framebuffer_t* framebuffer,
         {
             char size[24] = {};
             if (entry.size >= 1024U * 1024U)
-                snprintf(size, sizeof(size), "%lu.%lu MB",
-                         static_cast<unsigned long>(entry.size / (1024U * 1024U)),
-                         static_cast<unsigned long>((entry.size % (1024U * 1024U)) / (105U * 1024U)));
+                snprintf(
+                    size, sizeof(size), "%lu.%lu MB",
+                    static_cast<unsigned long>(entry.size / (1024U * 1024U)),
+                    static_cast<unsigned long>((entry.size % (1024U * 1024U)) / (105U * 1024U)));
             else
                 snprintf(size, sizeof(size), "%lu KB",
                          static_cast<unsigned long>(entry.size / 1024U));
             const uint16_t width = gfx::measure_text(size, 1);
             if (item.width > width + 12U)
-                gfx::draw_text(framebuffer,
-                               static_cast<uint16_t>(item.x + item.width - width - 10U),
-                               static_cast<uint16_t>(item.y + item.height - 22U), size, 1,
-                               secondary);
+                gfx::draw_text(
+                    framebuffer, static_cast<uint16_t>(item.x + item.width - width - 10U),
+                    static_cast<uint16_t>(item.y + item.height - 22U), size, 1, secondary);
         }
     }
-    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
-                                {"Open", gfx::icon_folder},
+    chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Open", gfx::icon_folder},
                                 {"Back", gfx::icon_arrow_back});
 }
 

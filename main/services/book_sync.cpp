@@ -92,7 +92,8 @@ static void url_encode(const char* source, char* output, size_t capacity)
     size_t used = 0;
     if (capacity == 0)
         return;
-    for (const unsigned char* cursor = reinterpret_cast<const unsigned char*>(source == nullptr ? "" : source);
+    for (const unsigned char* cursor =
+             reinterpret_cast<const unsigned char*>(source == nullptr ? "" : source);
          *cursor != '\0' && used + 1U < capacity; ++cursor)
     {
         const unsigned char value = *cursor;
@@ -112,7 +113,6 @@ static void url_encode(const char* source, char* output, size_t capacity)
     }
     output[used] = '\0';
 }
-
 
 static void persist_pending(const request_t* request)
 {
@@ -196,8 +196,8 @@ static esp_err_t http_read_json(const char* url, char* buffer, size_t capacity, 
     size_t total = 0;
     while (error == ESP_OK && total + 1U < capacity)
     {
-        const int read = esp_http_client_read(client, buffer + total,
-                                              static_cast<int>(capacity - total - 1U));
+        const int read =
+            esp_http_client_read(client, buffer + total, static_cast<int>(capacity - total - 1U));
         if (read < 0)
         {
             error = ESP_FAIL;
@@ -295,7 +295,7 @@ static esp_err_t reconcile_progress(const request_t* request)
                               (remote_spine == request->spine && remote_page > request->page);
     if (remote_ahead)
         return storage::persistence::save_position_for_book(request->book_path, remote_spine,
-                                                             remote_page);
+                                                            remote_page);
     return post_progress(request);
 }
 
@@ -330,7 +330,8 @@ static esp_err_t sync_bookmarks(const request_t* request)
     if (error == ESP_OK && status >= 200 && status < 300)
     {
         cJSON* root = cJSON_Parse(response);
-        const cJSON* list = root == nullptr ? nullptr : cJSON_GetObjectItemCaseSensitive(root, "bookmarks");
+        const cJSON* list =
+            root == nullptr ? nullptr : cJSON_GetObjectItemCaseSensitive(root, "bookmarks");
         if (cJSON_IsArray(list))
         {
             const cJSON* item = nullptr;
@@ -478,7 +479,8 @@ static esp_err_t download_book(const remote_book_t& book, const char* directory)
     uint8_t buffer[4096] = {};
     while (error == ESP_OK)
     {
-        const int count = esp_http_client_read(client, reinterpret_cast<char*>(buffer), sizeof(buffer));
+        const int count =
+            esp_http_client_read(client, reinterpret_cast<char*>(buffer), sizeof(buffer));
         if (count < 0)
         {
             error = ESP_FAIL;
@@ -647,7 +649,8 @@ static void sync_task(void* argument)
     else
     {
         snprintf(state.activity, sizeof(state.activity), "ERROR: %s", esp_err_to_name(error));
-        snprintf(state.last_result, sizeof(state.last_result), "FAILED: %s", esp_err_to_name(error));
+        snprintf(state.last_result, sizeof(state.last_result), "FAILED: %s",
+                 esp_err_to_name(error));
         append_history(state.last_result);
         persist_pending(request);
         state.pending_retry = true;

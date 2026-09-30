@@ -43,8 +43,8 @@ style_t parse_inline(const char* text)
         const char* declaration_end = strchr(cursor, ';');
         if (declaration_end == nullptr)
             declaration_end = cursor + strlen(cursor);
-        const char* colon = static_cast<const char*>(memchr(cursor, ':',
-            static_cast<size_t>(declaration_end - cursor)));
+        const char* colon = static_cast<const char*>(
+            memchr(cursor, ':', static_cast<size_t>(declaration_end - cursor)));
         if (colon != nullptr)
         {
             const char* name_begin = cursor;
@@ -75,10 +75,14 @@ style_t parse_inline(const char* text)
             }
             else if (equal_ci(name_begin, name_length, "text-align"))
             {
-                if (equal_ci(value_begin, value_length, "left")) result.text_align = align_left;
-                else if (equal_ci(value_begin, value_length, "center")) result.text_align = align_center;
-                else if (equal_ci(value_begin, value_length, "right")) result.text_align = align_right;
-                else if (equal_ci(value_begin, value_length, "justify")) result.text_align = align_justify;
+                if (equal_ci(value_begin, value_length, "left"))
+                    result.text_align = align_left;
+                else if (equal_ci(value_begin, value_length, "center"))
+                    result.text_align = align_center;
+                else if (equal_ci(value_begin, value_length, "right"))
+                    result.text_align = align_right;
+                else if (equal_ci(value_begin, value_length, "justify"))
+                    result.text_align = align_justify;
             }
             else if (equal_ci(name_begin, name_length, "page-break-before") ||
                      equal_ci(name_begin, name_length, "break-before"))

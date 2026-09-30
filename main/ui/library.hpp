@@ -15,8 +15,8 @@ void draw_library(gfx::framebuffer_t* framebuffer, bool storage_mounted, const c
 void draw_library_list(gfx::framebuffer_t* framebuffer, bool storage_mounted,
                        const char paths[][book_path_length], size_t count, uint8_t focus);
 void draw_library_catalog(gfx::framebuffer_t* framebuffer, bool storage_mounted,
-                          const services::library_index::catalog_t* catalog, size_t count, uint8_t focus,
-                          const char* title = "LIBRARY");
+                          const services::library_index::catalog_t* catalog, size_t count,
+                          uint8_t focus, const char* title = "LIBRARY");
 void draw_library_catalog_view(gfx::framebuffer_t* framebuffer, bool storage_mounted,
                                const services::library_index::catalog_t* catalog,
                                const uint16_t* indices, size_t count, uint8_t focus,

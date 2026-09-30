@@ -5,10 +5,10 @@
 #include <string.h>
 #include <strings.h>
 
-#include "esp_heap_caps.h"
-#include "inflate.hpp"
 #include "css.hpp"
+#include "esp_heap_caps.h"
 #include "image.hpp"
+#include "inflate.hpp"
 #include "xml.hpp"
 #include "zip.hpp"
 
@@ -157,12 +157,36 @@ static bool parse_entity(const char* source, size_t length, uint32_t* codepoint)
     if (source == nullptr || length < 3U || source[0] != '&' || source[length - 1U] != ';' ||
         codepoint == nullptr)
         return false;
-    if (length == 5U && memcmp(source, "&amp;", 5U) == 0) { *codepoint = '&'; return true; }
-    if (length == 4U && memcmp(source, "&lt;", 4U) == 0) { *codepoint = '<'; return true; }
-    if (length == 4U && memcmp(source, "&gt;", 4U) == 0) { *codepoint = '>'; return true; }
-    if (length == 6U && memcmp(source, "&quot;", 6U) == 0) { *codepoint = '"'; return true; }
-    if (length == 6U && memcmp(source, "&apos;", 6U) == 0) { *codepoint = '\''; return true; }
-    if (length == 6U && memcmp(source, "&nbsp;", 6U) == 0) { *codepoint = 0x00a0U; return true; }
+    if (length == 5U && memcmp(source, "&amp;", 5U) == 0)
+    {
+        *codepoint = '&';
+        return true;
+    }
+    if (length == 4U && memcmp(source, "&lt;", 4U) == 0)
+    {
+        *codepoint = '<';
+        return true;
+    }
+    if (length == 4U && memcmp(source, "&gt;", 4U) == 0)
+    {
+        *codepoint = '>';
+        return true;
+    }
+    if (length == 6U && memcmp(source, "&quot;", 6U) == 0)
+    {
+        *codepoint = '"';
+        return true;
+    }
+    if (length == 6U && memcmp(source, "&apos;", 6U) == 0)
+    {
+        *codepoint = '\'';
+        return true;
+    }
+    if (length == 6U && memcmp(source, "&nbsp;", 6U) == 0)
+    {
+        *codepoint = 0x00a0U;
+        return true;
+    }
     if (source[1] != '#')
         return false;
     uint32_t value = 0;
@@ -179,9 +203,12 @@ static bool parse_entity(const char* source, size_t length, uint32_t* codepoint)
     {
         int digit = -1;
         const char c = source[index];
-        if (c >= '0' && c <= '9') digit = c - '0';
-        else if (base == 16 && c >= 'a' && c <= 'f') digit = c - 'a' + 10;
-        else if (base == 16 && c >= 'A' && c <= 'F') digit = c - 'A' + 10;
+        if (c >= '0' && c <= '9')
+            digit = c - '0';
+        else if (base == 16 && c >= 'a' && c <= 'f')
+            digit = c - 'a' + 10;
+        else if (base == 16 && c >= 'A' && c <= 'F')
+            digit = c - 'A' + 10;
         if (digit < 0 || digit >= base)
             return false;
         if (value > (0x10ffffU - static_cast<uint32_t>(digit)) / static_cast<uint32_t>(base))
@@ -198,7 +225,8 @@ static void append_codepoint(document_t* document, uint32_t codepoint, bool* las
 {
     if (document == nullptr || last_space == nullptr)
         return;
-    if (codepoint == 0x00a0U || (codepoint <= 0x7fU && isspace(static_cast<unsigned char>(codepoint))))
+    if (codepoint == 0x00a0U ||
+        (codepoint <= 0x7fU && isspace(static_cast<unsigned char>(codepoint))))
     {
         if (!*last_space && document->length + 1U < document_text_length)
             document->text[document->length++] = ' ';
@@ -281,9 +309,8 @@ static void append_text(document_t* document, const char* source, size_t length,
 
         uint32_t composed = 0;
         size_t consumed_codepoints = 0;
-        if (second_bytes > 0U &&
-            gfx::compose_unicode(first, second, third_bytes > 0U ? third : 0U, &composed,
-                                 &consumed_codepoints))
+        if (second_bytes > 0U && gfx::compose_unicode(first, second, third_bytes > 0U ? third : 0U,
+                                                      &composed, &consumed_codepoints))
         {
             append_codepoint(document, composed, last_space);
             index += first_bytes + second_bytes;
@@ -826,7 +853,8 @@ esp_err_t load_document(const char* path, const book_t* book, uint8_t spine_inde
             {
                 zip::entry_t image_entry = {};
                 if (zip::find(&archive, image_href, &image_entry) == ESP_OK &&
-                    image_entry.uncompressed_size > 0U && image_entry.uncompressed_size <= 2U * 1024U * 1024U)
+                    image_entry.uncompressed_size > 0U &&
+                    image_entry.uncompressed_size <= 2U * 1024U * 1024U)
                 {
                     uint8_t* image_data = static_cast<uint8_t*>(heap_caps_malloc(
                         image_entry.uncompressed_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
@@ -834,8 +862,8 @@ esp_err_t load_document(const char* path, const book_t* book, uint8_t spine_inde
                     {
                         size_t image_size = 0;
                         image::info_t info = {};
-                        if (zip::read(&archive, &image_entry, image_data, image_entry.uncompressed_size,
-                                      &image_size) == ESP_OK &&
+                        if (zip::read(&archive, &image_entry, image_data,
+                                      image_entry.uncompressed_size, &image_size) == ESP_OK &&
                             image::inspect(image_data, image_size, &info) == ESP_OK)
                         {
                             append_break(document, &last_space);

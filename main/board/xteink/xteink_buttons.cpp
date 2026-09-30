@@ -5,8 +5,8 @@
 #include "esp_log.h"
 #include "freertos/task.h"
 
-#include "xteink_pins.hpp"
 #include "xteink_button_decode.hpp"
+#include "xteink_pins.hpp"
 
 namespace xreader
 {
@@ -89,9 +89,12 @@ static void update_repeat(task_context_t* context)
     if (!repeatable(context->active) || context->config.repeat_interval_ms == 0U)
         return;
     const TickType_t now = xTaskGetTickCount();
-    const uint32_t held_ms = static_cast<uint32_t>((now - context->navigation_press_tick) * portTICK_PERIOD_MS);
-    const uint32_t since_repeat_ms = static_cast<uint32_t>((now - context->navigation_repeat_tick) * portTICK_PERIOD_MS);
-    if (held_ms < context->config.repeat_delay_ms || since_repeat_ms < context->config.repeat_interval_ms)
+    const uint32_t held_ms =
+        static_cast<uint32_t>((now - context->navigation_press_tick) * portTICK_PERIOD_MS);
+    const uint32_t since_repeat_ms =
+        static_cast<uint32_t>((now - context->navigation_repeat_tick) * portTICK_PERIOD_MS);
+    if (held_ms < context->config.repeat_delay_ms ||
+        since_repeat_ms < context->config.repeat_interval_ms)
         return;
     input::enqueue_key_repeat(context->events, context->active);
     context->navigation_repeat_tick = now;
@@ -173,7 +176,8 @@ esp_err_t start_buttons(QueueHandle_t events, const button_config_t* config)
     };
     error = adc_oneshot_config_channel(task_context.adc, button_ladder1_channel, &channel_config);
     if (error == ESP_OK)
-        error = adc_oneshot_config_channel(task_context.adc, button_ladder2_channel, &channel_config);
+        error =
+            adc_oneshot_config_channel(task_context.adc, button_ladder2_channel, &channel_config);
     if (error != ESP_OK)
     {
         adc_oneshot_del_unit(task_context.adc);
