@@ -6,6 +6,7 @@ result-*
 
 # ESP-IDF build output
 build/
+build-*/
 build-host-tests*/
 sdkconfig
 sdkconfig.old

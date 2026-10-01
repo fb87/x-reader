@@ -14,8 +14,15 @@ namespace epub
 static constexpr size_t book_text_length = 128;
 static constexpr size_t book_spine_length = 32;
 static constexpr size_t book_toc_length = 32;
-static constexpr size_t document_text_length = 24576;
 static constexpr size_t document_image_count = 8;
+// Cache file path: dirname(book path, up to 512) + "/.xreader-chapters/" (19)
+// + an 8-hex-digit book hash + "/ch###.txt" (10), rounded up with headroom.
+static constexpr size_t document_cache_path_length = 576;
+// Sanity ceiling on a single cached chapter's decoded text, enforced while
+// streaming it to disk. Unlike the old fixed in-RAM buffer this replaced,
+// this is not a RAM cost -- it only bounds how large one chapter's SD cache
+// file (and therefore one book) is allowed to get.
+static constexpr size_t chapter_text_length_limit = 4U * 1024U * 1024U;
 
 struct spine_item_t
 {
@@ -53,9 +60,13 @@ struct document_image_t
     uint16_t height;
 };
 
+// A loaded chapter's decoded plain text lives in an SD-card cache file (see
+// epub/book.cpp and epub/chapter_stream.hpp), not in RAM -- this struct is
+// just a handle to it, plus the small always-resident image index. This is
+// what lets a chapter of any size be "open" without a per-chapter RAM cap.
 struct document_t
 {
-    char text[document_text_length];
+    char cache_path[document_cache_path_length];
     size_t length;
     uint8_t image_count;
     document_image_t images[document_image_count];

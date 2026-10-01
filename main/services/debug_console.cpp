@@ -8,7 +8,11 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#if defined(XREADER_BOARD_XTEINK)
+#include "driver/usb_serial_jtag.h"
+#else
 #include "driver/uart.h"
+#endif
 #include "esp_log.h"
 #include "esp_system.h"
 #include "freertos/task.h"
@@ -28,9 +32,25 @@ namespace
 {
 static const char* const tag = "xrcon";
 
+#if !defined(XREADER_BOARD_XTEINK)
 static constexpr uart_port_t console_port = UART_NUM_0;
+#endif
 static constexpr size_t line_capacity = 512;
 static constexpr size_t receive_chunk = 384;
+
+// XTeink X4 has no UART0 wired out to the host -- its only USB connection is
+// the ESP32-C3's native USB-Serial-JTAG peripheral, which is what the log
+// output already goes over (see CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG).
+// M5Paper's USB-UART bridge chip is wired to UART0, so it keeps using the
+// uart.h driver directly.
+static int console_read_bytes(uint8_t* buffer, size_t length, TickType_t ticks_to_wait)
+{
+#if defined(XREADER_BOARD_XTEINK)
+    return usb_serial_jtag_read_bytes(buffer, length, ticks_to_wait);
+#else
+    return uart_read_bytes(console_port, buffer, length, ticks_to_wait);
+#endif
+}
 
 static QueueHandle_t active_events = nullptr;
 static const ui::screen_state_t* active_state = nullptr;
@@ -278,6 +298,12 @@ static void handle_command(char* line)
         reply("btn %s", send_event({input::event_button_up, 0, 0, input::key_none}) ? "OK" : "ERR");
         return;
     }
+    if (strcmp(verb, "btnlong") == 0)
+    {
+        reply("btnlong %s",
+              send_event({input::event_button_long_press, 0, 0, input::key_none}) ? "OK" : "ERR");
+        return;
+    }
     if (strcmp(verb, "ls") == 0)
     {
         const char* path = strtok_r(nullptr, " \t", &saved);
@@ -334,8 +360,7 @@ static void console_task(void* argument)
     uint8_t chunk[receive_chunk];
     while (true)
     {
-        const int received =
-            uart_read_bytes(console_port, chunk, sizeof(chunk), pdMS_TO_TICKS(100));
+        const int received = console_read_bytes(chunk, sizeof(chunk), pdMS_TO_TICKS(100));
         for (int index = 0; index < received; ++index)
         {
             const char character = static_cast<char>(chunk[index]);
@@ -371,6 +396,13 @@ void set_ui_state(const void* screen_state, uint16_t width, uint16_t height)
 
 esp_err_t start()
 {
+#if defined(XREADER_BOARD_XTEINK)
+    usb_serial_jtag_driver_config_t config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+    config.rx_buffer_size = 2048;
+    const esp_err_t error = usb_serial_jtag_driver_install(&config);
+    if (error != ESP_OK && error != ESP_ERR_INVALID_STATE)
+        return error;
+#else
     const uart_config_t config = {
         .baud_rate = 115200,
         .data_bits = UART_DATA_8_BITS,
@@ -387,6 +419,7 @@ esp_err_t start()
     error = uart_param_config(console_port, &config);
     if (error != ESP_OK)
         return error;
+#endif
     if (xTaskCreate(console_task, "xrcon", 4096, nullptr, 4, nullptr) != pdPASS)
         return ESP_ERR_NO_MEM;
     ESP_LOGI(tag, "debug console ready");

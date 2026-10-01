@@ -13,9 +13,15 @@
 #include <stdio.h>
 #include <string.h>
 
+#if defined(XREADER_BOARD_XTEINK)
+#include "board/xteink/xteink_board.hpp"
+#include "board/xteink/xteink_buttons.hpp"
+#include "board/xteink/xteink_pins.hpp"
+#else
 #include "board/m5paper/m5paper_board.hpp"
 #include "board/m5paper/m5paper_pins.hpp"
 #include "drivers/gt911/gt911.hpp"
+#endif
 #include "drivers/it8951e/it8951e.hpp"
 #include "epub/book.hpp"
 #include "epub/image.hpp"
@@ -66,6 +72,16 @@ namespace app
 
 static const char* const tag = "xreader";
 static const char* active_book_path = nullptr;
+
+// battery_voltage_mv/battery_percent/enter_deep_sleep have identical
+// signatures on both boards; power_on/power_off and the hardware setup
+// sequence differ enough (XTeink has no power rails to sequence, no touch,
+// a different display protocol) that those stay as explicit #if blocks below.
+#if defined(XREADER_BOARD_XTEINK)
+namespace board_impl = xreader::board::xteink;
+#else
+namespace board_impl = xreader::board::m5paper;
+#endif
 
 #if XREADER_DIAGNOSTICS
 #define XR_LOGI(...) ESP_LOGI(tag, __VA_ARGS__)
@@ -130,16 +146,45 @@ transfer_dirty(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_t* disp
     uint8_t* transfer =
         static_cast<uint8_t*>(heap_caps_malloc(transfer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (transfer == nullptr)
-        return ESP_ERR_NO_MEM;
-    error = gfx::copy_region_4bpp(framebuffer, dirty_x, dirty_y, dirty_width, dirty_height,
-                                  transfer, transfer_size);
-    if (error == ESP_OK)
-        error = drivers::it8951e::write_image_4bpp(display, transfer, dirty_x, dirty_y, dirty_width,
-                                                   dirty_height);
+        transfer = static_cast<uint8_t*>(heap_caps_malloc(transfer_size, MALLOC_CAP_8BIT));
+    if (transfer != nullptr)
+    {
+        error = gfx::copy_region_4bpp(framebuffer, dirty_x, dirty_y, dirty_width, dirty_height,
+                                      transfer, transfer_size);
+        if (error == ESP_OK)
+            error = drivers::it8951e::write_image_4bpp(display, transfer, dirty_x, dirty_y,
+                                                       dirty_width, dirty_height);
+        heap_caps_free(transfer);
+    }
+    else
+    {
+        // The whole dirty rect doesn't fit in one contiguous scratch buffer --
+        // expected on XTeink's PSRAM-less heap for large/full-screen refreshes,
+        // where a single 800x480 4bpp buffer alone is ~190KB. Write it in
+        // narrow horizontal bands off a small static buffer instead; the
+        // panel driver only needs write_image_4bpp called enough times to
+        // cover the region before one refresh() call.
+        static constexpr uint16_t band_rows = 8;
+        static uint8_t band_buffer[4096];
+        for (uint16_t offset = 0; offset < dirty_height;
+             offset = static_cast<uint16_t>(offset + band_rows))
+        {
+            const uint16_t remaining = static_cast<uint16_t>(dirty_height - offset);
+            const uint16_t band_height = remaining < band_rows ? remaining : band_rows;
+            const uint16_t band_y = static_cast<uint16_t>(dirty_y + offset);
+            const size_t band_size = gfx::size(dirty_width, band_height);
+            error = gfx::copy_region_4bpp(framebuffer, dirty_x, band_y, dirty_width, band_height,
+                                          band_buffer, band_size);
+            if (error == ESP_OK)
+                error = drivers::it8951e::write_image_4bpp(display, band_buffer, dirty_x, band_y,
+                                                           dirty_width, band_height);
+            if (error != ESP_OK)
+                break;
+        }
+    }
     if (error == ESP_OK)
         error = drivers::it8951e::refresh(display, dirty_x, dirty_y, dirty_width, dirty_height,
                                           refresh_mode);
-    heap_caps_free(transfer);
     XR_LOGI("graphics transfer done error=%s elapsed_us=%lld", esp_err_to_name(error),
             static_cast<long long>(XR_TIME_US() - transfer_start));
     return error;
@@ -206,14 +251,14 @@ static bool load_spine(const char* path, const epub::book_t* book, uint8_t spine
 static void refresh_battery_status()
 {
     uint16_t millivolts = 0;
-    const esp_err_t error = board::m5paper::battery_voltage_mv(&millivolts);
+    const esp_err_t error = board_impl::battery_voltage_mv(&millivolts);
     if (error != ESP_OK)
     {
         ui::chrome::set_battery_status(false, 0);
         XR_LOGI("battery unavailable: %s", esp_err_to_name(error));
         return;
     }
-    const uint8_t percent = board::m5paper::battery_percent(millivolts);
+    const uint8_t percent = board_impl::battery_percent(millivolts);
     ui::chrome::set_battery_status(true, percent);
     XR_LOGI("battery %umV %u%%", static_cast<unsigned>(millivolts), static_cast<unsigned>(percent));
 }
@@ -231,7 +276,7 @@ static void enter_sleep(const char* book_path, uint32_t spine, uint32_t page)
 
     // The power key is the primary wake source. Keep a 24-hour timer as a
     // recovery fallback rather than waking every hour and wasting battery.
-    const esp_err_t error = board::m5paper::enter_deep_sleep(24ULL * 60ULL * 60ULL * 1000000ULL);
+    const esp_err_t error = board_impl::enter_deep_sleep(24ULL * 60ULL * 60ULL * 1000000ULL);
     if (error != ESP_OK)
         ESP_LOGE(tag, "deep sleep failed: %s", esp_err_to_name(error));
 }
@@ -796,7 +841,7 @@ static bool handle_dialog_ui_command(ui::screen_command_t command, ui::screen_st
         else if (screen_state->dialog_action == ui::dialog_action_ota_install)
         {
             uint16_t battery_mv = 0;
-            if (board::m5paper::battery_voltage_mv(&battery_mv) == ESP_OK && battery_mv < 3600U)
+            if (board_impl::battery_voltage_mv(&battery_mv) == ESP_OK && battery_mv < 3600U)
             {
                 screen_state->dialog_action = ui::dialog_action_none;
                 ui::dialog_begin(&screen_state->dialog, ui::dialog_warning, "LOW BATTERY",
@@ -911,7 +956,12 @@ static void draw_about_state(gfx::framebuffer_t* framebuffer)
 {
     const esp_app_desc_t* description = esp_app_get_description();
     ui::draw_about(framebuffer, description == nullptr ? "UNKNOWN" : description->version,
-                   "M5PAPER", esp_get_idf_version(), __DATE__);
+#if defined(XREADER_BOARD_XTEINK)
+                   "XTEINK X4",
+#else
+                   "M5PAPER",
+#endif
+                   esp_get_idf_version(), __DATE__);
 }
 
 static void run()
@@ -944,24 +994,46 @@ static void run()
         .show_clock = settings.show_clock,
         .sleep_timeout_minutes = settings.sleep_timeout_minutes,
     };
+#if !defined(XREADER_BOARD_XTEINK)
+    // XTeink X4 has no power-rail GPIOs to sequence -- the panel and SD card
+    // are always powered when the chip is.
     error = board::m5paper::power_on();
     if (error != ESP_OK)
     {
         ESP_LOGE(tag, "M5Paper power initialization failed: %s", esp_err_to_name(error));
         return;
     }
+#endif
     refresh_battery_status();
     uint16_t startup_battery_mv = 0;
-    if (board::m5paper::battery_voltage_mv(&startup_battery_mv) == ESP_OK &&
+    if (board_impl::battery_voltage_mv(&startup_battery_mv) == ESP_OK &&
         startup_battery_mv <= 3300U)
     {
         ESP_LOGW(tag, "battery critically low (%umV); entering safe sleep",
                  static_cast<unsigned>(startup_battery_mv));
         services::connectivity::set_enabled(false);
-        board::m5paper::enter_deep_sleep(60ULL * 60ULL * 1000000ULL);
+        board_impl::enter_deep_sleep(60ULL * 60ULL * 1000000ULL);
         return;
     }
 
+#if defined(XREADER_BOARD_XTEINK)
+    const drivers::it8951e::config_t display_config = {
+        .spi_host = board::xteink::spi_host,
+        .sck_pin = board::xteink::spi_sck_pin,
+        .mosi_pin = board::xteink::spi_mosi_pin,
+        .miso_pin = board::xteink::spi_miso_pin,
+        .cs_pin = board::xteink::epd_cs_pin,
+        .busy_pin = board::xteink::epd_busy_pin,
+        .width = board::xteink::display_width,
+        .height = board::xteink::display_height,
+        // This board is held portrait; the panel itself is wired native
+        // landscape (800x480), so the shim transposes logical portrait
+        // coordinates onto the native panel buffer (see
+        // it8951e_ssd1677_shim.cpp's write_image_4bpp()).
+        .rotation = 1,
+        .spi_frequency_hz = 10000000,
+    };
+#else
     const drivers::it8951e::config_t display_config = {
         .spi_host = board::m5paper::epd_spi_host,
         .sck_pin = board::m5paper::epd_sck_pin,
@@ -974,12 +1046,15 @@ static void run()
         .rotation = settings.orientation,
         .spi_frequency_hz = 10000000,
     };
+#endif
     drivers::it8951e::device_t display = {};
     error = drivers::it8951e::init(&display, &display_config);
     if (error != ESP_OK)
     {
         ESP_LOGE(tag, "Display initialization failed: %s", esp_err_to_name(error));
+#if !defined(XREADER_BOARD_XTEINK)
         board::m5paper::power_off();
+#endif
         return;
     }
 
@@ -997,12 +1072,17 @@ static void run()
     if (error != ESP_OK)
     {
         ESP_LOGE(tag, "Unable to allocate display framebuffer: %s", esp_err_to_name(error));
+#if !defined(XREADER_BOARD_XTEINK)
         board::m5paper::power_off();
+#endif
         return;
     }
     ui::draw_splash(&framebuffer, "Starting...");
     (void)transfer_dirty(&framebuffer, &display);
 
+#if !defined(XREADER_BOARD_XTEINK)
+    // XTeink X4 has no touch controller; navigation is entirely physical
+    // buttons, wired up via board::xteink::start_buttons() below instead.
     const drivers::gt911::config_t touch_config = {
         .port = I2C_NUM_0,
         .sda_pin = board::m5paper::touch_sda_pin,
@@ -1015,16 +1095,26 @@ static void run()
     {
         ESP_LOGW(tag, "Touch initialization failed: %s", esp_err_to_name(error));
     }
+#endif
 
     ui::draw_splash(&framebuffer, "Mounting SD card...");
     (void)transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
 
+#if defined(XREADER_BOARD_XTEINK)
+    const storage::sdcard::config_t sd_config = {
+        .spi_host = board::xteink::spi_host,
+        .cs_pin = board::xteink::sd_cs_pin,
+        .mount_path = "/sdcard",
+        .max_files = 4,
+    };
+#else
     const storage::sdcard::config_t sd_config = {
         .spi_host = board::m5paper::epd_spi_host,
         .cs_pin = board::m5paper::sd_cs_pin,
         .mount_path = "/sdcard",
         .max_files = 4,
     };
+#endif
     storage::sdcard::device_t sd_card = {};
     error = storage::sdcard::mount(&sd_card, &sd_config);
     if (error != ESP_OK)
@@ -1044,6 +1134,9 @@ static void run()
     QueueHandle_t events = xQueueCreate(8, sizeof(input::event_t));
     if (events != nullptr)
     {
+#if defined(XREADER_BOARD_XTEINK)
+        board::xteink::start_buttons(events);
+#else
         const input::config_t input_config = {
             .rotary_right_pin = board::m5paper::rotary_right_pin,
             .rotary_press_pin = board::m5paper::rotary_press_pin,
@@ -1055,22 +1148,43 @@ static void run()
             .touch_rotation = 1,
         };
         input::start(&input_config, events);
+#endif
     }
 #if XREADER_DEBUG_CONSOLE
     services::debug_console::set_event_queue(events);
     services::debug_console::set_ui_state(&screen_state, framebuffer.width, framebuffer.height);
 #endif
 
-    epub::book_t* book = static_cast<epub::book_t*>(
-        heap_caps_calloc(1, sizeof(epub::book_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    epub::document_t* document = static_cast<epub::document_t*>(
-        heap_caps_calloc(1, sizeof(epub::document_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    if (book == nullptr || document == nullptr)
+    epub::book_t* book = nullptr;
+    epub::document_t* document = nullptr;
+#if defined(XREADER_BOARD_XTEINK)
+    // No PSRAM on this board, and book_t+document_t together need ~46KB of
+    // the ~139KB internal RAM region -- most of which is already spent on
+    // the display framebuffer/shadow buffer and the WiFi stack. Skip the
+    // allocation when there's no SD card to load a book from; nothing below
+    // dereferences book/document unless sd_card.mounted is also true.
+    if (sd_card.mounted)
     {
-        heap_caps_free(book);
-        heap_caps_free(document);
-        return;
+#endif
+        book = static_cast<epub::book_t*>(
+            heap_caps_calloc(1, sizeof(epub::book_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (book == nullptr)
+            book = static_cast<epub::book_t*>(heap_caps_calloc(1, sizeof(epub::book_t), MALLOC_CAP_8BIT));
+        document = static_cast<epub::document_t*>(
+            heap_caps_calloc(1, sizeof(epub::document_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (document == nullptr)
+            document = static_cast<epub::document_t*>(
+                heap_caps_calloc(1, sizeof(epub::document_t), MALLOC_CAP_8BIT));
+        if (book == nullptr || document == nullptr)
+        {
+            ESP_LOGE(tag, "Unable to allocate EPUB book/document buffers");
+            heap_caps_free(book);
+            heap_caps_free(document);
+            return;
+        }
+#if defined(XREADER_BOARD_XTEINK)
     }
+#endif
     services::library_index::catalog_t* library_catalog =
         static_cast<services::library_index::catalog_t*>(heap_caps_calloc(
             1, sizeof(services::library_index::catalog_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
@@ -1079,6 +1193,7 @@ static void run()
             heap_caps_calloc(1, sizeof(services::library_index::catalog_t), MALLOC_CAP_8BIT));
     if (library_catalog == nullptr)
     {
+        ESP_LOGE(tag, "Unable to allocate library catalog buffer");
         heap_caps_free(book);
         heap_caps_free(document);
         return;
@@ -1128,7 +1243,9 @@ static void run()
         heap_caps_free(book);
         heap_caps_free(document);
         gfx::destroy(&framebuffer);
+#if !defined(XREADER_BOARD_XTEINK)
         board::m5paper::power_off();
+#endif
         return;
     }
     input::flush(events);
@@ -1198,9 +1315,9 @@ static void run()
             continue;
         }
         last_activity = xTaskGetTickCount();
-        XR_LOGI("screen input type=%u x=%u y=%u screen=%u", static_cast<unsigned>(event.type),
-                static_cast<unsigned>(event.x), static_cast<unsigned>(event.y),
-                static_cast<unsigned>(screen_state.screen));
+        XR_LOGI("screen input type=%u key=%u x=%u y=%u screen=%u", static_cast<unsigned>(event.type),
+                static_cast<unsigned>(event.key), static_cast<unsigned>(event.x),
+                static_cast<unsigned>(event.y), static_cast<unsigned>(screen_state.screen));
         input::action_event_t action_event = {};
         if (!input::map_event(&event, &action_event))
             continue;
@@ -1241,8 +1358,11 @@ static void run()
             .page = 0,
             .page_count = 1,
             .spine_index = 0,
-            .spine_count = book->spine_count,
-            .toc_count = book->toc_count,
+            // book is null when this board skipped allocating it because
+            // there's no SD card to ever load one from (see run()); every
+            // screen reachable without a loaded book tolerates a 0 here.
+            .spine_count = book != nullptr ? book->spine_count : uint8_t{0},
+            .toc_count = book != nullptr ? book->toc_count : uint8_t{0},
             .bookmark_count = 0,
             .wifi_network_count = services::connectivity::snapshot().scan_count,
             .file_browser_count = file_listing.count,

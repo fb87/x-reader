@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "epub/chapter_stream.hpp"
 #include "epub/image.hpp"
 #include "esp_heap_caps.h"
 
@@ -168,17 +169,21 @@ static const uint8_t* load_image_pixels(const char* book_path, const epub::docum
     return image_cache.pixels;
 }
 
-static size_t next_codepoint(const char* text, size_t length, size_t offset, uint32_t* codepoint)
+static size_t next_codepoint(epub::chapter_stream_t* stream, size_t offset, uint32_t* codepoint)
 {
-    size_t consumed = gfx::decode_utf8(text + offset, codepoint);
+    const size_t length = stream->total_length;
+    size_t consumed = gfx::decode_utf8(epub::chapter_stream_at(stream, offset), codepoint);
     uint32_t second = 0;
     uint32_t third = 0;
     const size_t second_bytes =
-        offset + consumed < length ? gfx::decode_utf8(text + offset + consumed, &second) : 0;
+        offset + consumed < length
+            ? gfx::decode_utf8(epub::chapter_stream_at(stream, offset + consumed), &second)
+            : 0;
     const size_t third_bytes =
         second_bytes > 0 && second >= 0x0300U && second <= 0x036fU &&
                 offset + consumed + second_bytes < length
-            ? gfx::decode_utf8(text + offset + consumed + second_bytes, &third)
+            ? gfx::decode_utf8(epub::chapter_stream_at(stream, offset + consumed + second_bytes),
+                               &third)
             : 0;
     uint32_t composed = 0;
     size_t consumed_codepoints = 0;
@@ -192,10 +197,10 @@ static size_t next_codepoint(const char* text, size_t length, size_t offset, uin
     }
     return consumed;
 }
-static uint16_t next_glyph_width(const char* text, size_t length, size_t offset, uint8_t scale,
+static uint16_t next_glyph_width(epub::chapter_stream_t* stream, size_t offset, uint8_t scale,
                                  size_t* consumed, uint32_t* codepoint)
 {
-    *consumed = next_codepoint(text, length, offset, codepoint);
+    *consumed = next_codepoint(stream, offset, codepoint);
     return gfx::glyph_advance(*codepoint, scale, gfx::font_reader);
 }
 // Finds where the current line ends: at a literal '\n' (left unconsumed so
@@ -205,8 +210,8 @@ static uint16_t next_glyph_width(const char* text, size_t length, size_t offset,
 // falls back to a hard character break when a single run has no space at all
 // (e.g. a long URL) and is itself wider than the line, so pagination cannot
 // stall.
-static size_t next_line_break(const epub::document_t* document, size_t offset,
-                              const reader_layout_t& reader)
+static size_t next_line_break(const epub::document_t* document, epub::chapter_stream_t* stream,
+                              size_t offset, const reader_layout_t& reader)
 {
     uint16_t x = 0;
     size_t break_offset = offset;
@@ -217,8 +222,7 @@ static size_t next_line_break(const epub::document_t* document, size_t offset,
             break;
         uint32_t codepoint = 0;
         size_t consumed = 0;
-        const uint16_t width = next_glyph_width(document->text, document->length, offset,
-                                                reader.scale, &consumed, &codepoint);
+        const uint16_t width = next_glyph_width(stream, offset, reader.scale, &consumed, &codepoint);
         if (codepoint == '\n')
             break;
         if (x > 0 && x + width > reader.text_width)
@@ -234,8 +238,9 @@ static size_t next_line_break(const epub::document_t* document, size_t offset,
     return offset;
 }
 
-static size_t next_page_offset(const epub::document_t* document, size_t offset,
-                               const reader_settings_t* settings, layout::viewport_t vp)
+static size_t next_page_offset(const epub::document_t* document, epub::chapter_stream_t* stream,
+                               size_t offset, const reader_settings_t* settings,
+                               layout::viewport_t vp)
 {
     const reader_layout_t reader = reader_layout(settings, vp);
     size_t lines = 0;
@@ -254,15 +259,16 @@ static size_t next_page_offset(const epub::document_t* document, size_t offset,
                 break;
             lines += image_lines;
             uint32_t marker = 0;
-            offset += gfx::decode_utf8(document->text + offset, &marker);
+            offset += gfx::decode_utf8(epub::chapter_stream_at(stream, offset), &marker);
             continue;
         }
-        offset = next_line_break(document, offset, reader);
+        offset = next_line_break(document, stream, offset, reader);
         ++lines;
         if (offset < document->length)
         {
             uint32_t marker = 0;
-            const size_t marker_bytes = gfx::decode_utf8(document->text + offset, &marker);
+            const size_t marker_bytes =
+                gfx::decode_utf8(epub::chapter_stream_at(stream, offset), &marker);
             if (marker == '\n')
             {
                 offset += marker_bytes;
@@ -308,8 +314,8 @@ static bool pagination_matches(const epub::document_t* document, const reader_se
            pagination_cache.display_height == vp.height && pagination_cache.count != 0;
 }
 
-static void build_pagination(const epub::document_t* document, const reader_settings_t* settings,
-                             layout::viewport_t vp)
+static void build_pagination(const epub::document_t* document, epub::chapter_stream_t* stream,
+                             const reader_settings_t* settings, layout::viewport_t vp)
 {
     pagination_cache.document = document;
     pagination_cache.length = document != nullptr ? document->length : 0;
@@ -329,7 +335,7 @@ static void build_pagination(const epub::document_t* document, const reader_sett
     uint16_t pages = 0;
     while (offset < document->length && pages < 255)
     {
-        const size_t next = next_page_offset(document, offset, settings, vp);
+        const size_t next = next_page_offset(document, stream, offset, settings, vp);
         ++pages;
         pagination_cache.offsets[pages] = next;
         if (next <= offset)
@@ -339,29 +345,28 @@ static void build_pagination(const epub::document_t* document, const reader_sett
     pagination_cache.count = static_cast<uint8_t>(pages == 0 ? 1 : pages);
 }
 
-static void ensure_pagination(const epub::document_t* document, const reader_settings_t* settings,
-                              layout::viewport_t vp)
+static void ensure_pagination(const epub::document_t* document, epub::chapter_stream_t* stream,
+                              const reader_settings_t* settings, layout::viewport_t vp)
 {
     if (document == nullptr)
         return;
     if (!pagination_matches(document, settings, vp))
-        build_pagination(document, settings, vp);
+        build_pagination(document, stream, settings, vp);
 }
 
-static uint16_t visual_line_width(const epub::document_t* document, size_t offset,
-                                  const reader_layout_t& reader)
+static uint16_t visual_line_width(const epub::document_t* document, epub::chapter_stream_t* stream,
+                                  size_t offset, const reader_layout_t& reader)
 {
     if (document == nullptr)
         return 0;
-    const size_t line_end = next_line_break(document, offset, reader);
+    const size_t line_end = next_line_break(document, stream, offset, reader);
     uint16_t width = 0;
     while (offset < line_end)
     {
         uint32_t codepoint = 0;
         size_t consumed = 0;
         width = static_cast<uint16_t>(
-            width + next_glyph_width(document->text, document->length, offset, reader.scale,
-                                     &consumed, &codepoint));
+            width + next_glyph_width(stream, offset, reader.scale, &consumed, &codepoint));
         offset += consumed;
     }
     return width;
@@ -378,15 +383,46 @@ static uint16_t aligned_line_x(const reader_settings_t* settings, const reader_l
     return static_cast<uint16_t>(reader.text_width - line_width);
 }
 
-static size_t page_start(const epub::document_t* document, uint8_t page,
-                         const reader_settings_t* settings, layout::viewport_t vp)
+static size_t page_start(const epub::document_t* document, epub::chapter_stream_t* stream,
+                         uint8_t page, const reader_settings_t* settings, layout::viewport_t vp)
 {
-    ensure_pagination(document, settings, vp);
+    ensure_pagination(document, stream, settings, vp);
     if (pagination_cache.count == 0)
         return 0;
     const uint8_t index =
         page < pagination_cache.count ? page : static_cast<uint8_t>(pagination_cache.count - 1);
     return pagination_cache.offsets[index];
+}
+
+// strstr()-equivalent over a chapter_stream_t: since chapter_stream_at() can
+// seek to any offset (not just scan forward), a match spanning a window
+// refill boundary is found correctly without any special carry-over logic --
+// each candidate position just re-checks its own query_length bytes through
+// the stream, which transparently refills as needed.
+static bool stream_find(epub::chapter_stream_t* stream, size_t start_offset, const char* query,
+                        size_t* match_offset)
+{
+    const size_t query_length = strlen(query);
+    if (query_length == 0U || stream->total_length < query_length)
+        return false;
+    for (size_t offset = start_offset; offset + query_length <= stream->total_length; ++offset)
+    {
+        bool matched = true;
+        for (size_t index = 0; index < query_length; ++index)
+        {
+            if (*epub::chapter_stream_at(stream, offset + index) != query[index])
+            {
+                matched = false;
+                break;
+            }
+        }
+        if (matched)
+        {
+            *match_offset = offset;
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace
@@ -396,10 +432,14 @@ uint8_t page_count(const epub::document_t* document, const reader_settings_t* se
 {
     if (document == nullptr || document->length == 0)
         return 1;
+    epub::chapter_stream_t stream = {};
+    if (!epub::chapter_stream_open(&stream, document))
+        return 1;
     // page_count() is called when a document/spine is loaded or layout settings change.
     // Rebuild here unconditionally so reusing the same document_t buffer for a new spine
     // cannot accidentally reuse offsets when the new text happens to have the same length.
-    build_pagination(document, settings, {display_width, display_height});
+    build_pagination(document, &stream, settings, {display_width, display_height});
+    epub::chapter_stream_close(&stream);
     return pagination_cache.count;
 }
 
@@ -411,12 +451,17 @@ bool find_page(const epub::document_t* document, const char* query,
         return false;
     if (start_offset >= document->length)
         start_offset = 0;
-    const char* match = strstr(document->text + start_offset, query);
-    if (match == nullptr)
+    epub::chapter_stream_t stream = {};
+    if (!epub::chapter_stream_open(&stream, document))
         return false;
-    const size_t offset = static_cast<size_t>(match - document->text);
+    size_t offset = 0;
+    if (!stream_find(&stream, start_offset, query, &offset))
+    {
+        epub::chapter_stream_close(&stream);
+        return false;
+    }
     const layout::viewport_t vp = {display_width, display_height};
-    ensure_pagination(document, settings, vp);
+    ensure_pagination(document, &stream, settings, vp);
     uint8_t found_page = 0;
     for (uint8_t index = 0; index < pagination_cache.count; ++index)
     {
@@ -430,6 +475,7 @@ bool find_page(const epub::document_t* document, const char* query,
             break;
         }
     }
+    epub::chapter_stream_close(&stream);
     *page = found_page;
     if (match_offset != nullptr)
         *match_offset = offset;
@@ -442,6 +488,9 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
 {
     if (framebuffer == nullptr || book == nullptr || document == nullptr)
         return;
+    epub::chapter_stream_t stream = {};
+    if (!epub::chapter_stream_open(&stream, document))
+        return;
     const layout::viewport_t vp = {framebuffer->width, framebuffer->height};
     const reader_layout_t reader = reader_layout(settings, vp);
     // A page turn repaints almost the whole screen. Clearing the packed framebuffer is
@@ -449,11 +498,11 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
     // compares against the front buffer and transfers only pixels that actually changed.
     gfx::clear(framebuffer, 0x0f);
     chrome::draw_status_bar(framebuffer, book->title);
-    const size_t start = page_start(document, page, settings, vp);
+    const size_t start = page_start(document, &stream, page, settings, vp);
     size_t offset = start;
     uint16_t line = 0;
     uint16_t line_origin =
-        aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
+        aligned_line_x(settings, reader, visual_line_width(document, &stream, offset, reader));
     uint16_t x = line_origin;
     while (offset < document->length && line < reader.lines_per_screen)
     {
@@ -491,19 +540,19 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
             }
             line = static_cast<uint16_t>(line + image_lines);
             uint32_t marker = 0;
-            offset += gfx::decode_utf8(document->text + offset, &marker);
-            line_origin =
-                aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
+            offset += gfx::decode_utf8(epub::chapter_stream_at(&stream, offset), &marker);
+            line_origin = aligned_line_x(settings, reader,
+                                         visual_line_width(document, &stream, offset, reader));
             x = line_origin;
             continue;
         }
-        const size_t line_end = next_line_break(document, offset, reader);
+        const size_t line_end = next_line_break(document, &stream, offset, reader);
         while (offset < line_end)
         {
             uint32_t codepoint = 0;
             size_t consumed = 0;
-            const uint16_t width = next_glyph_width(document->text, document->length, offset,
-                                                    reader.scale, &consumed, &codepoint);
+            const uint16_t width =
+                next_glyph_width(&stream, offset, reader.scale, &consumed, &codepoint);
             gfx::draw_codepoint(framebuffer, static_cast<uint16_t>(reader.text_left + x),
                                 static_cast<uint16_t>(reader.text_top + line * reader.line_step),
                                 codepoint, reader.scale, 0x00, gfx::font_reader);
@@ -514,7 +563,8 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
         if (offset < document->length)
         {
             uint32_t marker = 0;
-            const size_t marker_bytes = gfx::decode_utf8(document->text + offset, &marker);
+            const size_t marker_bytes =
+                gfx::decode_utf8(epub::chapter_stream_at(&stream, offset), &marker);
             if (marker == '\n')
             {
                 offset += marker_bytes;
@@ -522,9 +572,11 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
                     ++line;
             }
         }
-        line_origin = aligned_line_x(settings, reader, visual_line_width(document, offset, reader));
+        line_origin =
+            aligned_line_x(settings, reader, visual_line_width(document, &stream, offset, reader));
         x = line_origin;
     }
+    epub::chapter_stream_close(&stream);
     // navigation_result() (navigation.cpp) already refuses to move past these same
     // bounds, so tapping a disabled cell was already a silent no-op; this just
     // shows that up front instead of only after an unexplained non-reaction.

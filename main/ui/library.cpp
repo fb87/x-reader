@@ -275,9 +275,8 @@ static const char* basename_from_path(const char* path)
 }
 
 static void draw_book_icon(gfx::framebuffer_t* framebuffer, uint16_t x, uint16_t y, uint16_t w,
-                           uint16_t h)
+                           uint16_t h, uint8_t fg = 0x00)
 {
-    const uint8_t fg = 0x00;
     gfx::draw_rect(framebuffer, x, y, w, h, fg);
     if (w > 12 && h > 12)
     {
@@ -307,25 +306,28 @@ static void draw_library_rows(gfx::framebuffer_t* framebuffer, const char* const
         const layout::rect_t item =
             layout::row(area, index, visible, static_cast<uint16_t>(m.row_height + 8U), m.gap);
         const bool selected = index == static_cast<uint8_t>(focus_index % count);
-        if (selected)
-            gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height, 0x0d);
-        else
-            gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height, 0x0f);
-        gfx::draw_rect(framebuffer, item.x, item.y, item.width, item.height,
-                       selected ? 0x08 : 0x0d);
+        // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
+        // which thresholds every pixel to pure black/white -- a subtle gray
+        // wash is invisible under it. Inverting to a solid black row with
+        // white content survives that threshold instead.
+        gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height,
+                       selected ? 0x00 : 0x0f);
+        if (!selected)
+            gfx::draw_rect(framebuffer, item.x, item.y, item.width, item.height, 0x0d);
 
         const uint16_t icon_h =
             item.height > 16 ? static_cast<uint16_t>(item.height - 16U) : item.height;
         const uint16_t icon_w = static_cast<uint16_t>(icon_h * 3U / 4U);
         draw_book_icon(framebuffer, static_cast<uint16_t>(item.x + 12U),
-                       static_cast<uint16_t>(item.y + (item.height - icon_h) / 2U), icon_w, icon_h);
+                       static_cast<uint16_t>(item.y + (item.height - icon_h) / 2U), icon_w, icon_h,
+                       selected ? 0x0f : 0x00);
 
         const uint16_t text_x = static_cast<uint16_t>(item.x + 24U + icon_w);
         gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 11U), titles[index], 1,
-                       0x00);
+                       selected ? 0x0f : 0x00);
         if (item.height >= 60)
             gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 35U), "EPUB", 1,
-                           selected ? 0x04 : 0x07);
+                           selected ? 0x0f : 0x07);
     }
 }
 } // namespace
@@ -458,10 +460,15 @@ void draw_library_catalog_view(gfx::framebuffer_t* framebuffer, bool storage_mou
         if (item.height == 0U)
             break;
         const bool selected = view_index == selected_index;
+        // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
+        // which thresholds every pixel to pure black/white -- a subtle gray
+        // wash is invisible under it. Inverting to a solid black row with
+        // white content survives that threshold instead.
         gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height,
-                       selected ? 0x0d : 0x0f);
-        gfx::fill_rect(framebuffer, item.x, static_cast<uint16_t>(item.y + item.height - 1U),
-                       item.width, 1, 0x0c);
+                       selected ? 0x00 : 0x0f);
+        if (!selected)
+            gfx::fill_rect(framebuffer, item.x, static_cast<uint16_t>(item.y + item.height - 1U),
+                           item.width, 1, 0x0c);
 
         // The cached cover is a still-encoded JPEG/PNG; decoding one per row on
         // every redraw would cost more than the e-paper refresh itself, so the
@@ -470,21 +477,22 @@ void draw_library_catalog_view(gfx::framebuffer_t* framebuffer, bool storage_mou
             item.height > 18U ? static_cast<uint16_t>(item.height - 18U) : item.height;
         const uint16_t icon_w = static_cast<uint16_t>(icon_h * 3U / 4U);
         draw_book_icon(framebuffer, static_cast<uint16_t>(item.x + 10U),
-                       static_cast<uint16_t>(item.y + (item.height - icon_h) / 2U), icon_w, icon_h);
+                       static_cast<uint16_t>(item.y + (item.height - icon_h) / 2U), icon_w, icon_h,
+                       selected ? 0x0f : 0x00);
 
         const uint16_t text_x = static_cast<uint16_t>(item.x + 20U + icon_w);
         const auto& entry = catalog->entries[catalog_index];
         gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 6U), entry.title, 1,
-                       0x00);
+                       selected ? 0x0f : 0x00);
         if (item.height >= 56U)
             gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 32U), entry.author,
-                           1, selected ? 0x04 : 0x06);
+                           1, selected ? 0x0f : 0x06);
         if (item.height >= 75U)
         {
             char size_text[32] = {};
             format_size(entry.file_size, size_text, sizeof(size_text));
             gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 58U), size_text, 1,
-                           selected ? 0x05 : 0x07);
+                           selected ? 0x0f : 0x07);
         }
     }
 }

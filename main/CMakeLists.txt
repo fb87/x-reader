@@ -1,14 +1,35 @@
+# XREADER_BOARD selects which board's entry point and display/touch drivers
+# get compiled in; everything else (UI, EPUB, storage, services, input queue,
+# xteink's own button driver) is shared and built for both. Defaulting to
+# m5paper keeps every existing build/flash invocation unchanged.
+if(NOT DEFINED XREADER_BOARD)
+    set(XREADER_BOARD "m5paper")
+endif()
+
+set(XREADER_BOARD_SRCS)
+if(XREADER_BOARD STREQUAL "xteink")
+    list(APPEND XREADER_BOARD_SRCS
+        "drivers/ssd1677/ssd1677.cpp"
+        "drivers/it8951e/it8951e_ssd1677_shim.cpp"
+    )
+else()
+    list(APPEND XREADER_BOARD_SRCS
+        "board/m5paper/m5paper_board.cpp"
+        "drivers/gt911/gt911.cpp"
+        "drivers/it8951e/it8951e.cpp"
+    )
+endif()
+
 idf_component_register(
     SRCS
         "main.cpp"
-        "board/m5paper/m5paper_board.cpp"
+        ${XREADER_BOARD_SRCS}
         "board/xteink/xteink_board.cpp"
         "board/xteink/xteink_buttons.cpp"
-        "drivers/gt911/gt911.cpp"
-        "drivers/it8951e/it8951e.cpp"
         "epub/zip.cpp"
         "epub/inflate.cpp"
         "epub/book.cpp"
+        "epub/chapter_stream.cpp"
         "epub/css.cpp"
         "epub/xml.cpp"
         "epub/image.cpp"
@@ -68,6 +89,7 @@ idf_component_register(
         "board/xteink"
         "drivers/gt911"
         "drivers/it8951e"
+        "drivers/ssd1677"
         "epub"
         "gfx"
         "input"
@@ -77,6 +99,7 @@ idf_component_register(
     REQUIRES
         driver
         esp_adc
+        esp_driver_usb_serial_jtag
         esp_timer
         fatfs
         vfs
@@ -90,6 +113,10 @@ idf_component_register(
         json
         mbedtls
 )
+
+if(XREADER_BOARD STREQUAL "xteink")
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE XREADER_BOARD_XTEINK=1)
+endif()
 
 target_compile_features(${COMPONENT_LIB} PRIVATE cxx_std_17)
 target_compile_options(${COMPONENT_LIB} PRIVATE

@@ -33,6 +33,13 @@
             url = "https://github.com/espressif/crosstool-NG/releases/download/esp-14.2.0_20251107/xtensa-esp-elf-14.2.0_20251107-x86_64-linux-gnu.tar.xz";
             sha256 = "b0065b3b28d2b5d3bf4868f2fda6bc95d6081025583d1c17b286884bead0305d";
           };
+          riscv_archive = if pkgs.system == "aarch64-linux" then {
+            url = "https://github.com/espressif/crosstool-NG/releases/download/esp-14.2.0_20251107/riscv32-esp-elf-14.2.0_20251107-aarch64-linux-gnu.tar.xz";
+            sha256 = "072a553453691fbd98fe82b6efa9a2fa6beb7d2c90aed4463353bc33378e83bf";
+          } else {
+            url = "https://github.com/espressif/crosstool-NG/releases/download/esp-14.2.0_20251107/riscv32-esp-elf-14.2.0_20251107-x86_64-linux-gnu.tar.xz";
+            sha256 = "e2f84f9ec72a37d2ff9cf16a1b38dd813501e490fc72f2cfad5a7be85f73ece2";
+          };
           ulp_archive = if pkgs.system == "aarch64-linux" then {
             url = "https://github.com/espressif/binutils-gdb/releases/download/esp32ulp-elf-2.38_20240113/esp32ulp-elf-2.38_20240113-linux-arm64.tar.gz";
             sha256 = "ecce0788ce1000e5c669c5adaf2fd5bf7f9bf96dcdbd3555d1d9ce4dcb311038";
@@ -50,6 +57,21 @@
             nativeBuildInputs = [ pkgs.autoPatchelfHook ];
             buildInputs = [ pkgs.stdenv.cc.cc.lib pkgs.zlib ];
             sourceRoot = "xtensa-esp-elf";
+            installPhase = ''
+              mkdir -p "$out"
+              cp -r ./* "$out/"
+            '';
+          };
+
+          riscv32_esp_elf = pkgs.stdenv.mkDerivation {
+            pname = "riscv32-esp-elf";
+            version = "14.2.0_20251107";
+            src = pkgs.fetchurl {
+              inherit (riscv_archive) url sha256;
+            };
+            nativeBuildInputs = [ pkgs.autoPatchelfHook ];
+            buildInputs = [ pkgs.stdenv.cc.cc.lib pkgs.zlib ];
+            sourceRoot = "riscv32-esp-elf";
             installPhase = ''
               mkdir -p "$out"
               cp -r ./* "$out/"
@@ -85,6 +107,7 @@
 
           toolchain_packages = pkgs.lib.optionals is_linux [
             xtensa_esp_elf
+            riscv32_esp_elf
             esp32ulp_elf
             esp_rom_elfs
           ];
@@ -114,7 +137,7 @@
 
             shellHook = ''
               export PATH="$ESP_IDF_PATH/tools:$PATH"
-              export IDF_TARGET="esp32"
+              export IDF_TARGET="''${XREADER_IDF_TARGET:-esp32}"
               export IDF_PYTHON_CHECK_CONSTRAINTS=0
               export IDF_PYTHON_ENV_PATH="''${XREADER_IDF_PYTHON_ENV_PATH:-$PWD/.nix/idf-python}"
 
@@ -135,6 +158,7 @@
               echo "ESP-IDF source: $ESP_IDF_PATH"
               echo "Target: $IDF_TARGET"
               echo "Xtensa toolchain: $(command -v xtensa-esp-elf-gcc || true)"
+              echo "RISC-V toolchain: $(command -v riscv32-esp-elf-gcc || true)"
             '';
           };
         });

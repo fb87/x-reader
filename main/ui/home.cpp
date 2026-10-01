@@ -70,7 +70,13 @@ static const char* subtitle_for(uint8_t index, const char* book_title)
 static void draw_home_row(gfx::framebuffer_t* framebuffer, layout::rect_t row, uint8_t index,
                           const char* subtitle, bool selected)
 {
-    const uint8_t background = selected ? 0x0d : 0x0f;
+    // Focus-move redraws use the panel's fast 1-bit-only refresh mode, which
+    // thresholds every pixel to pure black/white -- a subtle gray wash is
+    // invisible under it. Inverting to a solid black row with white content
+    // survives that threshold instead of relying on an intermediate gray.
+    const uint8_t background = selected ? 0x00 : 0x0f;
+    const uint8_t foreground = selected ? 0x0f : 0x00;
+    const uint8_t secondary = selected ? 0x0f : 0x06;
     gfx::fill_rect(framebuffer, row.x, row.y, row.width, row.height, background);
     if (!selected)
         gfx::fill_rect(framebuffer, row.x, static_cast<uint16_t>(row.y + row.height - 1U),
@@ -82,7 +88,7 @@ static void draw_home_row(gfx::framebuffer_t* framebuffer, layout::rect_t row, u
     const uint16_t glyph = gfx::icon_advance(1);
     const uint16_t icon_x = static_cast<uint16_t>(row.x + 10U);
     const uint16_t icon_y = static_cast<uint16_t>(row.y + (row.height - glyph) / 2U);
-    gfx::draw_icon(framebuffer, icon_x, icon_y, icons[index], 1, 0x00);
+    gfx::draw_icon(framebuffer, icon_x, icon_y, icons[index], 1, foreground);
 
     // Two stacked 1x lines (title + subtitle) need 5 (top margin) + 24 (title
     // glyph height) + 1 (gap) + 24 (subtitle glyph height) = 54 px; below that,
@@ -92,9 +98,10 @@ static void draw_home_row(gfx::framebuffer_t* framebuffer, layout::rect_t row, u
     const uint16_t text_x = static_cast<uint16_t>(icon_x + glyph + 12U);
     const uint16_t title_y = two_lines ? static_cast<uint16_t>(row.y + 5U)
                                        : static_cast<uint16_t>(row.y + (row.height - 24U) / 2U);
-    gfx::draw_text(framebuffer, text_x, title_y, menu_labels[index], 1, 0x00);
+    gfx::draw_text(framebuffer, text_x, title_y, menu_labels[index], 1, foreground);
     if (two_lines && subtitle != nullptr && subtitle[0] != '\0')
-        gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(row.y + 30U), subtitle, 1, 0x06);
+        gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(row.y + 30U), subtitle, 1,
+                       secondary);
 
     if (index != home_sleep)
     {
@@ -102,7 +109,7 @@ static void draw_home_row(gfx::framebuffer_t* framebuffer, layout::rect_t row, u
             row.width > glyph + 8U ? static_cast<uint16_t>(row.x + row.width - glyph - 8U) : row.x;
         gfx::draw_icon(framebuffer, arrow_x,
                        static_cast<uint16_t>(row.y + (row.height - glyph) / 2U),
-                       gfx::icon_chevron_right, 1, 0x06);
+                       gfx::icon_chevron_right, 1, secondary);
     }
 }
 } // namespace

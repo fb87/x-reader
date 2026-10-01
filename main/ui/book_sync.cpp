@@ -54,10 +54,14 @@ void draw_book_sync(gfx::framebuffer_t* framebuffer, book_sync_item_t focus, boo
             layout::row(area, index, book_sync_item_count,
                         static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap);
         const bool selected = index == static_cast<uint8_t>(focus);
+        // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
+        // which thresholds every pixel to pure black/white -- a subtle gray
+        // wash is invisible under it. Inverting to a solid black row with
+        // white content survives that threshold instead.
         gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height,
-                       selected ? 0x0d : 0x0f);
-        const uint8_t foreground = 0x00;
-        const uint8_t secondary = selected ? 0x04 : 0x06;
+                       selected ? 0x00 : 0x0f);
+        const uint8_t foreground = selected ? 0x0f : 0x00;
+        const uint8_t secondary = selected ? 0x0f : 0x06;
         gfx::draw_text(framebuffer, static_cast<uint16_t>(item.x + 14U),
                        static_cast<uint16_t>(item.y + (item.height - 24U) / 2U), labels[index], 1,
                        foreground);

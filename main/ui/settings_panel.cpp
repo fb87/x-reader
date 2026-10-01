@@ -14,7 +14,6 @@ static constexpr uint8_t paper = 0x0f;
 static constexpr uint8_t ink = 0x00;
 static constexpr uint8_t secondary = 0x06;
 static constexpr uint8_t rule = 0x0c;
-static constexpr uint8_t focus_wash = 0x0d;
 
 static layout::rect_t panel_area(layout::viewport_t vp)
 {
@@ -71,8 +70,13 @@ void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
         if (row.height == 0)
             continue;
         const bool selected = index == focus;
-        gfx::fill_rect(framebuffer, row.x, row.y, row.width, row.height,
-                       selected ? focus_wash : paper);
+        // Focus-move redraws use the panel's fast 1-bit-only refresh mode, which
+        // thresholds every pixel to pure black/white -- a subtle gray wash is
+        // invisible under it. Inverting to a solid black row with white content
+        // survives that threshold instead of relying on an intermediate gray.
+        const uint8_t row_ink = selected ? paper : ink;
+        const uint8_t row_secondary = selected ? paper : secondary;
+        gfx::fill_rect(framebuffer, row.x, row.y, row.width, row.height, selected ? ink : paper);
         gfx::fill_rect(framebuffer, row.x, static_cast<uint16_t>(row.y + row.height - 1U),
                        row.width, 1, rule);
 
@@ -81,11 +85,11 @@ void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
         {
             gfx::draw_icon(framebuffer, text_x,
                            static_cast<uint16_t>(row.y + (row.height - glyph) / 2U), spec.icon, 1,
-                           ink);
+                           row_ink);
             text_x = static_cast<uint16_t>(text_x + glyph + 10U);
         }
         gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(row.y + (row.height - 24U) / 2U),
-                       spec.label == nullptr ? "" : spec.label, 1, ink);
+                       spec.label == nullptr ? "" : spec.label, 1, row_ink);
 
         const layout::rect_t control = control_area(row);
         switch (spec.control)
@@ -111,11 +115,11 @@ void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
                 if (arrow_x > width + 8U)
                     gfx::draw_text(framebuffer, static_cast<uint16_t>(arrow_x - width - 8U),
                                    static_cast<uint16_t>(row.y + (row.height - 24U) / 2U),
-                                   spec.value, 1, secondary);
+                                   spec.value, 1, row_secondary);
             }
             gfx::draw_icon(framebuffer, arrow_x,
                            static_cast<uint16_t>(row.y + (row.height - glyph) / 2U),
-                           gfx::icon_chevron_right, 1, secondary);
+                           gfx::icon_chevron_right, 1, row_secondary);
             break;
         }
         case settings_control_value:
@@ -127,7 +131,7 @@ void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
                                    ? static_cast<uint16_t>(row.x + row.width - width - 12U)
                                    : row.x;
             gfx::draw_text(framebuffer, x, static_cast<uint16_t>(row.y + (row.height - 24U) / 2U),
-                           value, 1, secondary);
+                           value, 1, row_secondary);
             break;
         }
         }

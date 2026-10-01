@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "freertos/task.h"
 
+#include "xteink_board.hpp"
 #include "xteink_button_decode.hpp"
 #include "xteink_pins.hpp"
 
@@ -133,11 +134,25 @@ static void update_power(task_context_t* context)
 static void task(void* argument)
 {
     task_context_t* context = static_cast<task_context_t*>(argument);
+    uint32_t diagnostic_tick = 0;
     while (true)
     {
         update_navigation(context, read_navigation_key(context));
         update_repeat(context);
         update_power(context);
+        // TEMPORARY: raw ADC trace to diagnose real buttons producing no
+        // events after a soft reset. Remove once resolved.
+        if (++diagnostic_tick % 25U == 0U)
+        {
+            int ladder1 = 4095;
+            int ladder2 = 4095;
+            const esp_err_t error1 =
+                adc_oneshot_read(context->adc, button_ladder1_channel, &ladder1);
+            const esp_err_t error2 =
+                adc_oneshot_read(context->adc, button_ladder2_channel, &ladder2);
+            ESP_LOGI(tag, "adc ladder1=%d(%s) ladder2=%d(%s)", ladder1, esp_err_to_name(error1),
+                     ladder2, esp_err_to_name(error2));
+        }
         vTaskDelay(pdMS_TO_TICKS(context->config.poll_interval_ms));
     }
 }
@@ -162,11 +177,23 @@ esp_err_t start_buttons(QueueHandle_t events, const button_config_t* config)
     if (selected.poll_interval_ms == 0 || selected.stable_samples == 0)
         return ESP_ERR_INVALID_ARG;
 
-    const adc_oneshot_unit_init_cfg_t unit_config = {
-        .unit_id = button_adc_unit,
-        .ulp_mode = ADC_ULP_MODE_DISABLE,
-    };
-    esp_err_t error = adc_oneshot_new_unit(&unit_config, &task_context.adc);
+    // KNOWN HARDWARE LIMITATION, confirmed on real hardware: after a soft
+    // (EN-pin) reset -- which is how every `idf.py flash` and every
+    // esptool "hard-reset" ends -- these two ADC channels can read a flat
+    // max value regardless of button state, requiring a full power-off/on
+    // to recover. Reconfirmed with adc_oneshot_read() itself reporting
+    // ESP_OK throughout (not a software error being swallowed), and with an
+    // explicit gpio_reset_pin() on both channels' pins before ADC channel
+    // config (ruled out as a fix -- same symptom persisted). This points to
+    // ADC1's own analog bias/reference state surviving an EN-pin reset in a
+    // way a true power cycle clears, not anything this driver code controls.
+    // No software workaround found yet; if hit again, the user needs a full
+    // power cycle (unplug/replug USB), not just a reset.
+
+    // ESP32-C3 only has one ADC1 unit; board::xteink::battery_voltage_mv()
+    // needs it too, so both share the one lazily-created handle instead of
+    // each calling adc_oneshot_new_unit() (which fails the second time).
+    esp_err_t error = board::xteink::acquire_adc1(&task_context.adc);
     if (error != ESP_OK)
         return error;
 
@@ -180,7 +207,6 @@ esp_err_t start_buttons(QueueHandle_t events, const button_config_t* config)
             adc_oneshot_config_channel(task_context.adc, button_ladder2_channel, &channel_config);
     if (error != ESP_OK)
     {
-        adc_oneshot_del_unit(task_context.adc);
         task_context.adc = nullptr;
         return error;
     }
@@ -195,7 +221,6 @@ esp_err_t start_buttons(QueueHandle_t events, const button_config_t* config)
     error = gpio_config(&power_config);
     if (error != ESP_OK)
     {
-        adc_oneshot_del_unit(task_context.adc);
         task_context.adc = nullptr;
         return error;
     }
@@ -214,7 +239,9 @@ esp_err_t start_buttons(QueueHandle_t events, const button_config_t* config)
 
     if (xTaskCreate(task, "xteink_keys", 3072, &task_context, 5, nullptr) != pdPASS)
     {
-        adc_oneshot_del_unit(task_context.adc);
+        // Don't delete task_context.adc here -- it's the shared ADC1 handle
+        // (see acquire_adc1()), which board::xteink::battery_voltage_mv() may
+        // also be holding onto.
         task_context.adc = nullptr;
         return ESP_ERR_NO_MEM;
     }

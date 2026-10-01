@@ -46,6 +46,20 @@ static void append_bytes(uint8_t* data, size_t* size, const void* source, size_t
     *size += length;
 }
 
+// document_t only holds a path to its cached chapter text on disk now; tests
+// that need to inspect the decoded text read it back from there.
+static size_t read_document_text(const xreader::epub::document_t* document, char* buffer,
+                                 size_t capacity)
+{
+    FILE* file = fopen(document->cache_path, "rb");
+    assert(file != nullptr);
+    const size_t read = fread(buffer, 1, capacity - 1, file);
+    fclose(file);
+    assert(read == document->length);
+    buffer[read] = '\0';
+    return read;
+}
+
 static void write_stored_zip(const char* path, const zip_fixture_entry_t* entries, size_t count)
 {
     uint8_t data[8192] = {};
@@ -165,17 +179,47 @@ int main()
            xreader::gfx::measure_text("u\xcc\x9b\xcc\x81", 1)); // ứ
 
     // Pagination is built once and page starts are cached. Verify stable page count and
-    // rendering for a multi-page Vietnamese document.
-    xreader::epub::document_t paged_document = {};
+    // rendering for a multi-page Vietnamese document -- driven through the real
+    // load_document() cache-write/cache-read pipeline, not a hand-built document_t,
+    // since document_t is now just a handle to that cache file.
     const char* sample_line =
         "Tiếng Việt thử nghiệm: Trường, người, đường, những, nước và chương. ";
-    while (paged_document.length + strlen(sample_line) + 2 < sizeof(paged_document.text))
-    {
-        memcpy(paged_document.text + paged_document.length, sample_line, strlen(sample_line));
-        paged_document.length += strlen(sample_line);
-        paged_document.text[paged_document.length++] = '\n';
-    }
-    paged_document.text[paged_document.length] = '\0';
+    char pagination_chapter[4096] = {};
+    size_t pagination_chapter_length = 0;
+    pagination_chapter_length += static_cast<size_t>(
+        snprintf(pagination_chapter, sizeof(pagination_chapter), "%s", "<html><body>"));
+    for (int repeat = 0; repeat < 40; ++repeat)
+        pagination_chapter_length += static_cast<size_t>(
+            snprintf(pagination_chapter + pagination_chapter_length,
+                    sizeof(pagination_chapter) - pagination_chapter_length, "<p>%s</p>", sample_line));
+    snprintf(pagination_chapter + pagination_chapter_length,
+            sizeof(pagination_chapter) - pagination_chapter_length, "%s", "</body></html>");
+    const zip_fixture_entry_t pagination_entries[] = {
+        {"META-INF/container.xml", "<container><rootfiles><rootfile "
+                                   "full-path=\"OEBPS/content.opf\"/></rootfiles></container>"},
+        {"OEBPS/content.opf",
+         "<package><metadata><dc:title>Pagination</dc:title></metadata>"
+         "<manifest><item id=\"one\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/></manifest>"
+         "<spine><itemref idref=\"one\"/></spine></package>"},
+        {"OEBPS/ch1.xhtml", pagination_chapter},
+    };
+    const char* pagination_epub_path = "/tmp/xreader-test-pagination.epub";
+    write_stored_zip(pagination_epub_path, pagination_entries,
+                     sizeof(pagination_entries) / sizeof(pagination_entries[0]));
+    xreader::epub::book_t pagination_book = {};
+    assert(xreader::epub::load_metadata(pagination_epub_path, &pagination_book) == ESP_OK);
+    assert(pagination_book.spine_count == 1);
+    xreader::epub::document_t paged_document = {};
+    assert(xreader::epub::load_document(pagination_epub_path, &pagination_book, 0,
+                                        &paged_document) == ESP_OK);
+    assert(paged_document.length > 0);
+    // Re-loading the same chapter must hit the cache (same content, same result)
+    // instead of silently failing to find/parse it a second time.
+    xreader::epub::document_t paged_document_again = {};
+    assert(xreader::epub::load_document(pagination_epub_path, &pagination_book, 0,
+                                        &paged_document_again) == ESP_OK);
+    assert(paged_document_again.length == paged_document.length);
+
     xreader::ui::reader_settings_t reader_settings = {2, 0, 0, 1, 0, 0};
     const uint8_t cached_pages = xreader::ui::page_count(&paged_document, &reader_settings, 960, 540);
     assert(cached_pages > 1);
@@ -356,14 +400,17 @@ int main()
     assert(strcmp(book.spine[0].href, "ch1.xhtml") == 0);
     assert(strcmp(book.spine[1].href, "ch2.xhtml") == 0);
     assert(strcmp(book.cover_href, "OEBPS/images/cover.png") == 0);
+    char chapter_text[4096] = {};
     assert(xreader::epub::load_document(epub_path, &book, 0, &document) == ESP_OK);
-    assert(strstr(document.text, "Chapter one") != nullptr);
-    assert(strstr(document.text, "\xe1\xba\xaf") != nullptr); // NFC ắ
-    assert(strstr(document.text, "\xe1\xba\xb1") != nullptr); // numeric entity ằ
+    read_document_text(&document, chapter_text, sizeof(chapter_text));
+    assert(strstr(chapter_text, "Chapter one") != nullptr);
+    assert(strstr(chapter_text, "\xe1\xba\xaf") != nullptr); // NFC ắ
+    assert(strstr(chapter_text, "\xe1\xba\xb1") != nullptr); // numeric entity ằ
     assert(xreader::epub::load_document(epub_path, &book, 1, &document) == ESP_OK);
-    assert(strstr(document.text, "Chapter two") != nullptr);
-    assert(strstr(document.text, "SECRET") == nullptr);
-    assert(strstr(document.text, "A  B") != nullptr);
+    read_document_text(&document, chapter_text, sizeof(chapter_text));
+    assert(strstr(chapter_text, "Chapter two") != nullptr);
+    assert(strstr(chapter_text, "SECRET") == nullptr);
+    assert(strstr(chapter_text, "A  B") != nullptr);
 
     const xreader::input::action_event_t pointer_right = {xreader::input::action_pointer, 721, 0};
     const xreader::input::action_event_t pointer_left = {xreader::input::action_pointer, 240, 0};

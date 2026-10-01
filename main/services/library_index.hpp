@@ -12,7 +12,14 @@ namespace services
 namespace library_index
 {
 
+// XTeink X4 has no PSRAM, so its catalog_t (entries[max_books]) has to fit
+// inside the ~139KB internal RAM region alongside the display buffers and
+// WiFi stack; a full 32-entry catalog (~23KB) doesn't leave enough headroom.
+#if defined(XREADER_BOARD_XTEINK)
+static constexpr size_t max_books = 8;
+#else
 static constexpr size_t max_books = 32;
+#endif
 static constexpr size_t path_length = 256;
 static constexpr size_t title_length = 96;
 static constexpr size_t author_length = 80;

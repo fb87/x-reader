@@ -42,15 +42,19 @@ void draw_bookmarks(gfx::framebuffer_t* framebuffer, const bookmark_view_t* item
         {
             const auto row = layout::row(area, i, count, m.row_height, m.gap);
             const bool selected = i == focus;
+            // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
+            // which thresholds every pixel to pure black/white -- a subtle gray
+            // wash is invisible under it. Inverting to a solid black row with
+            // white content survives that threshold instead.
             gfx::fill_rect(framebuffer, row.x, row.y, row.width, row.height,
-                           selected ? 0x0d : 0x0f);
+                           selected ? 0x00 : 0x0f);
 
             char line[64] = {};
             snprintf(line, sizeof(line), "Chapter %u   Page %u",
                      static_cast<unsigned>(items[i].spine + 1U),
                      static_cast<unsigned>(items[i].page + 1U));
             gfx::draw_text(framebuffer, static_cast<uint16_t>(row.x + 12U),
-                           static_cast<uint16_t>(row.y + 12U), line, 1, 0x00);
+                           static_cast<uint16_t>(row.y + 12U), line, 1, selected ? 0x0f : 0x00);
         }
     }
 

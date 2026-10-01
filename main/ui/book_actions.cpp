@@ -38,9 +38,14 @@ void draw_book_actions(gfx::framebuffer_t* framebuffer, book_action_item_t focus
         const auto r = layout::row(area, i, book_action_item_count,
                                    static_cast<uint16_t>(m.row_height + 4U), m.gap);
         const bool selected = i == static_cast<uint8_t>(focus);
-        gfx::fill_rect(framebuffer, r.x, r.y, r.width, r.height, selected ? 0x0d : 0x0f);
+        // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
+        // which thresholds every pixel to pure black/white -- a subtle gray
+        // wash is invisible under it. Inverting to a solid black row with
+        // white content survives that threshold instead.
+        gfx::fill_rect(framebuffer, r.x, r.y, r.width, r.height, selected ? 0x00 : 0x0f);
         gfx::draw_text(framebuffer, static_cast<uint16_t>(r.x + 14U),
-                       static_cast<uint16_t>(r.y + (r.height - 24U) / 2U), labels[i], 1, 0x00);
+                       static_cast<uint16_t>(r.y + (r.height - 24U) / 2U), labels[i], 1,
+                       selected ? 0x0f : 0x00);
     }
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Select", gfx::icon_check},
                                 {"Back", gfx::icon_arrow_back});

@@ -47,8 +47,12 @@ void draw_wifi_networks(gfx::framebuffer_t* framebuffer, const wifi_network_view
         const layout::rect_t row = layout::row(
             area, index, total, static_cast<uint16_t>(metrics.row_height + 2U), metrics.gap);
         const bool selected = index == focus;
-        gfx::fill_rect(framebuffer, row.x, row.y, row.width, row.height, selected ? 0x0d : 0x0f);
-        const uint8_t foreground = 0x00;
+        // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
+        // which thresholds every pixel to pure black/white -- a subtle gray
+        // wash is invisible under it. Inverting to a solid black row with
+        // white content survives that threshold instead.
+        gfx::fill_rect(framebuffer, row.x, row.y, row.width, row.height, selected ? 0x00 : 0x0f);
+        const uint8_t foreground = selected ? 0x0f : 0x00;
         if (index < visible_networks)
         {
             const wifi_network_view_t& network = networks[index];
@@ -65,7 +69,7 @@ void draw_wifi_networks(gfx::framebuffer_t* framebuffer, const wifi_network_view
                     : row.x;
             gfx::draw_text(framebuffer, info_x,
                            static_cast<uint16_t>(row.y + (row.height - 24U) / 2U), info, 1,
-                           selected ? 0x04 : 0x06);
+                           selected ? 0x0f : 0x06);
         }
         else
         {

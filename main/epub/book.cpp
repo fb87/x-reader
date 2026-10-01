@@ -2,8 +2,11 @@
 
 #include <ctype.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "css.hpp"
 #include "esp_heap_caps.h"
@@ -57,14 +60,34 @@ static bool attribute(const xml::token_t* token, const char* key, char* output, 
     return false;
 }
 
+// PSRAM-less boards (e.g. XTeink/esp32c3) have zero MALLOC_CAP_SPIRAM-capable
+// regions, and heap_caps_malloc requires every requested capability bit to be
+// satisfiable -- a bare SPIRAM|8BIT request always returns null there. Prefer
+// SPIRAM when it exists, but fall back to plain internal RAM everywhere in
+// this file so EPUB parsing works on both boards.
+static void* alloc_prefer_spiram(size_t size)
+{
+    void* buffer = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (buffer == nullptr)
+        buffer = heap_caps_malloc(size, MALLOC_CAP_8BIT);
+    return buffer;
+}
+
+static void* calloc_prefer_spiram(size_t count, size_t size)
+{
+    void* buffer = heap_caps_calloc(count, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (buffer == nullptr)
+        buffer = heap_caps_calloc(count, size, MALLOC_CAP_8BIT);
+    return buffer;
+}
+
 static esp_err_t read_entry(zip::archive_t* archive, const char* name, char** data, size_t* size)
 {
     zip::entry_t entry = {};
     esp_err_t error = zip::find(archive, name, &entry);
     if (error != ESP_OK)
         return error;
-    char* buffer = static_cast<char*>(
-        heap_caps_malloc(entry.uncompressed_size + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    char* buffer = static_cast<char*>(alloc_prefer_spiram(entry.uncompressed_size + 1));
     if (buffer == nullptr)
         return ESP_ERR_NO_MEM;
     error = zip::read(archive, &entry, reinterpret_cast<uint8_t*>(buffer), entry.uncompressed_size,
@@ -221,34 +244,222 @@ static bool parse_entity(const char* source, size_t length, uint32_t* codepoint)
     return true;
 }
 
-static void append_codepoint(document_t* document, uint32_t codepoint, bool* last_space)
+// A chapter's cache directory sits beside the EPUB file itself (not under the
+// SD mount root, unlike the library catalog cache) so book.cpp never needs to
+// know the SD mount path -- callers keep passing just the book's own file
+// path, exactly as load_metadata()/load_document() always have.
+static constexpr uint32_t chapter_cache_magic = 0x50484358U; // "XCHP"
+static constexpr uint16_t chapter_cache_version = 1;
+
+struct chapter_cache_header_t
 {
-    if (document == nullptr || last_space == nullptr)
+    uint32_t magic;
+    uint16_t version;
+    uint16_t image_count;
+    uint32_t source_size;
+    int64_t source_mtime;
+    uint32_t text_length;
+    uint32_t checksum; // FNV-1a-32 over the cached text file's bytes
+    document_image_t images[document_image_count];
+};
+
+// Accumulates one chapter's decoded text into a small flush buffer, writing
+// it out to the (temp) cache file as it fills, instead of an unbounded
+// in-RAM buffer. document_image_t offsets are recorded against `length`,
+// which tracks the same cumulative logical position append_codepoint et al.
+// always have, just backed by a file instead of a fixed array now.
+struct chapter_builder_t
+{
+    FILE* file;
+    char flush_buffer[2048];
+    size_t flush_used;
+    size_t length;
+    uint32_t checksum;
+    uint8_t image_count;
+    document_image_t images[document_image_count];
+    char trailing[2]; // last two bytes written, for append_break()'s "already ends in \n" checks
+    bool error;
+};
+
+static uint32_t book_hash(const char* path)
+{
+    uint32_t hash = 2166136261U;
+    for (const char* cursor = path; *cursor != '\0'; ++cursor)
+        hash = (hash ^ static_cast<uint8_t>(*cursor)) * 16777619U;
+    return hash;
+}
+
+// Like directory_name(), but for real filesystem paths (up to book_path_length
+// in main/ui/library.hpp, i.e. 512 bytes) rather than in-archive entry names,
+// which directory_name()'s book_text_length (128) cap would silently truncate.
+static bool filesystem_directory_name(const char* path, char* output, size_t capacity)
+{
+    const char* slash = strrchr(path, '/');
+    const size_t length = slash == nullptr ? 0U : static_cast<size_t>(slash - path);
+    if (length + 1U > capacity)
+        return false;
+    memcpy(output, path, length);
+    output[length] = '\0';
+    return true;
+}
+
+static bool ensure_directory(const char* path)
+{
+    if (mkdir(path, 0755) == 0)
+        return true;
+    struct stat info = {};
+    return stat(path, &info) == 0 && S_ISDIR(info.st_mode);
+}
+
+// Creates <dirname(book_path)>/.xreader-chapters/<hash8>/ (mkdir is not
+// recursive, so both levels are created explicitly) and writes it to
+// `leaf_directory`.
+static bool ensure_chapter_cache_directory(const char* book_path, char* leaf_directory,
+                                           size_t capacity)
+{
+    char directory[document_cache_path_length] = {};
+    if (!filesystem_directory_name(book_path, directory, sizeof(directory)))
+        return false;
+    char chapters_directory[document_cache_path_length] = {};
+    const int chapters_written = snprintf(chapters_directory, sizeof(chapters_directory),
+                                          "%s/.xreader-chapters", directory);
+    if (chapters_written < 0 || static_cast<size_t>(chapters_written) >= sizeof(chapters_directory))
+        return false;
+    if (!ensure_directory(chapters_directory))
+        return false;
+    const int leaf_written = snprintf(leaf_directory, capacity, "%s/%08lx", chapters_directory,
+                                      static_cast<unsigned long>(book_hash(book_path)));
+    if (leaf_written < 0 || static_cast<size_t>(leaf_written) >= capacity)
+        return false;
+    return ensure_directory(leaf_directory);
+}
+
+static bool resolve_cache_paths(const char* book_path, uint8_t spine_index, char* text_path,
+                                char* header_path, size_t capacity)
+{
+    char directory[document_cache_path_length] = {};
+    if (!filesystem_directory_name(book_path, directory, sizeof(directory)))
+        return false;
+    const uint32_t hash = book_hash(book_path);
+    const int text_written =
+        snprintf(text_path, capacity, "%s/.xreader-chapters/%08lx/ch%03u.txt", directory,
+                static_cast<unsigned long>(hash), static_cast<unsigned>(spine_index));
+    if (text_written < 0 || static_cast<size_t>(text_written) >= capacity)
+        return false;
+    const int header_written =
+        snprintf(header_path, capacity, "%s/.xreader-chapters/%08lx/ch%03u.hdr", directory,
+                static_cast<unsigned long>(hash), static_cast<unsigned>(spine_index));
+    if (header_written < 0 || static_cast<size_t>(header_written) >= capacity)
+        return false;
+    return true;
+}
+
+static esp_err_t read_chapter_header(const char* header_path, chapter_cache_header_t* header)
+{
+    FILE* file = fopen(header_path, "rb");
+    if (file == nullptr)
+        return ESP_ERR_NOT_FOUND;
+    const size_t read = fread(header, 1, sizeof(*header), file);
+    fclose(file);
+    if (read != sizeof(*header) || header->magic != chapter_cache_magic ||
+        header->version != chapter_cache_version)
+        return ESP_FAIL;
+    return ESP_OK;
+}
+
+// Re-reads the cached text file sequentially to confirm it matches the
+// header's checksum/length -- a plain streamed read, far cheaper than the
+// XML parse it lets us skip, but still enough to catch a corrupt/truncated
+// cache (e.g. an interrupted write on a previous, differently-crashed run).
+static esp_err_t verify_chapter_text(const char* text_path, uint32_t expected_checksum,
+                                     uint32_t expected_length)
+{
+    FILE* file = fopen(text_path, "rb");
+    if (file == nullptr)
+        return ESP_ERR_NOT_FOUND;
+    uint32_t checksum = 2166136261U;
+    uint32_t total = 0U;
+    uint8_t buffer[512];
+    size_t read = 0;
+    while ((read = fread(buffer, 1, sizeof(buffer), file)) > 0U)
+    {
+        for (size_t index = 0; index < read; ++index)
+            checksum = (checksum ^ buffer[index]) * 16777619U;
+        total += static_cast<uint32_t>(read);
+    }
+    fclose(file);
+    if (total != expected_length || checksum != expected_checksum)
+        return ESP_FAIL;
+    return ESP_OK;
+}
+
+static void builder_flush(chapter_builder_t* builder)
+{
+    if (builder->error || builder->flush_used == 0U)
+        return;
+    if (fwrite(builder->flush_buffer, 1, builder->flush_used, builder->file) != builder->flush_used)
+        builder->error = true;
+    builder->flush_used = 0U;
+}
+
+static void builder_put_bytes(chapter_builder_t* builder, const char* data, size_t length)
+{
+    if (builder == nullptr || builder->error || length == 0U)
+        return;
+    if (length >= 2U)
+    {
+        builder->trailing[0] = data[length - 2U];
+        builder->trailing[1] = data[length - 1U];
+    }
+    else
+    {
+        builder->trailing[0] = builder->trailing[1];
+        builder->trailing[1] = data[0];
+    }
+    size_t offset = 0;
+    while (offset < length)
+    {
+        const size_t space = sizeof(builder->flush_buffer) - builder->flush_used;
+        const size_t chunk = (length - offset) < space ? (length - offset) : space;
+        memcpy(builder->flush_buffer + builder->flush_used, data + offset, chunk);
+        builder->flush_used += chunk;
+        offset += chunk;
+        if (builder->flush_used == sizeof(builder->flush_buffer))
+            builder_flush(builder);
+    }
+    for (size_t index = 0; index < length; ++index)
+        builder->checksum =
+            (builder->checksum ^ static_cast<uint8_t>(data[index])) * 16777619U;
+    builder->length += length;
+}
+
+static void append_codepoint(chapter_builder_t* builder, uint32_t codepoint, bool* last_space)
+{
+    if (builder == nullptr || last_space == nullptr)
         return;
     if (codepoint == 0x00a0U ||
         (codepoint <= 0x7fU && isspace(static_cast<unsigned char>(codepoint))))
     {
-        if (!*last_space && document->length + 1U < document_text_length)
-            document->text[document->length++] = ' ';
+        if (!*last_space && builder->length + 1U < chapter_text_length_limit)
+            builder_put_bytes(builder, " ", 1);
         *last_space = true;
         return;
     }
     char encoded[4] = {};
     const size_t bytes = encode_utf8(codepoint, encoded);
-    if (document->length + bytes >= document_text_length)
+    if (builder->length + bytes >= chapter_text_length_limit)
         return;
-    memcpy(document->text + document->length, encoded, bytes);
-    document->length += bytes;
+    builder_put_bytes(builder, encoded, bytes);
     *last_space = false;
 }
 
-static void append_text(document_t* document, const char* source, size_t length, bool* last_space,
-                        bool preserve_whitespace = false)
+static void append_text(chapter_builder_t* builder, const char* source, size_t length,
+                        bool* last_space, bool preserve_whitespace = false)
 {
-    if (document == nullptr || source == nullptr || last_space == nullptr)
+    if (builder == nullptr || source == nullptr || last_space == nullptr)
         return;
     size_t index = 0;
-    while (index < length && document->length + 1U < document_text_length)
+    while (index < length && builder->length + 1U < chapter_text_length_limit)
     {
         uint32_t first = 0;
         size_t first_bytes = 0;
@@ -312,7 +523,7 @@ static void append_text(document_t* document, const char* source, size_t length,
         if (second_bytes > 0U && gfx::compose_unicode(first, second, third_bytes > 0U ? third : 0U,
                                                       &composed, &consumed_codepoints))
         {
-            append_codepoint(document, composed, last_space);
+            append_codepoint(builder, composed, last_space);
             index += first_bytes + second_bytes;
             if (consumed_codepoints == 3U)
                 index += third_bytes;
@@ -323,30 +534,30 @@ static void append_text(document_t* document, const char* source, size_t length,
             (first == '\t' || first == '\r' || first == '\n' || first == ' '))
         {
             const char normalized = first == '\r' ? '\n' : static_cast<char>(first);
-            if (document->length + 1U < document_text_length)
+            if (builder->length + 1U < chapter_text_length_limit)
             {
-                document->text[document->length++] = normalized;
+                builder_put_bytes(builder, &normalized, 1);
                 *last_space = false;
             }
         }
         else
         {
-            append_codepoint(document, first, last_space);
+            append_codepoint(builder, first, last_space);
         }
         index += first_bytes;
     }
 }
 
-static void append_break(document_t* document, bool* last_space, bool force_double = false)
+static void append_break(chapter_builder_t* builder, bool* last_space, bool force_double = false)
 {
-    if (document == nullptr || last_space == nullptr)
+    if (builder == nullptr || last_space == nullptr)
         return;
-    if (document->length > 0U && document->text[document->length - 1U] != '\n' &&
-        document->length + 1U < document_text_length)
-        document->text[document->length++] = '\n';
-    if (force_double && document->length > 0U && document->length + 1U < document_text_length &&
-        (document->length < 2U || document->text[document->length - 2U] != '\n'))
-        document->text[document->length++] = '\n';
+    if (builder->length > 0U && builder->trailing[1] != '\n' &&
+        builder->length + 1U < chapter_text_length_limit)
+        builder_put_bytes(builder, "\n", 1);
+    if (force_double && builder->length > 0U && builder->length + 1U < chapter_text_length_limit &&
+        (builder->length < 2U || builder->trailing[0] != '\n'))
+        builder_put_bytes(builder, "\n", 1);
     *last_space = true;
 }
 
@@ -509,12 +720,9 @@ esp_err_t load_metadata(const char* path, book_t* book)
         return error;
     }
     xml::init(&reader, opf, opf_size);
-    char* spine_id = static_cast<char*>(
-        heap_caps_calloc(1, book_text_length, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    char* item_ids = static_cast<char*>(
-        heap_caps_calloc(book_spine_length, book_text_length, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    char* item_hrefs = static_cast<char*>(
-        heap_caps_calloc(book_spine_length, book_text_length, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    char* spine_id = static_cast<char*>(calloc_prefer_spiram(1, book_text_length));
+    char* item_ids = static_cast<char*>(calloc_prefer_spiram(book_spine_length, book_text_length));
+    char* item_hrefs = static_cast<char*>(calloc_prefer_spiram(book_spine_length, book_text_length));
     char toc_href[book_text_length] = {};
     char cover_id[book_text_length] = {};
     if (spine_id == nullptr || item_ids == nullptr || item_hrefs == nullptr)
@@ -733,6 +941,32 @@ esp_err_t load_document(const char* path, const book_t* book, uint8_t spine_inde
         spine_index >= book->spine_count)
         return ESP_ERR_INVALID_ARG;
     memset(document, 0, sizeof(*document));
+
+    struct stat source_info = {};
+    if (stat(path, &source_info) != 0)
+        return ESP_ERR_NOT_FOUND;
+
+    char text_path[document_cache_path_length] = {};
+    char header_path[document_cache_path_length] = {};
+    if (!resolve_cache_paths(path, spine_index, text_path, header_path, document_cache_path_length))
+        return ESP_ERR_INVALID_SIZE;
+    copy_field(document->cache_path, text_path, sizeof(document->cache_path));
+
+    chapter_cache_header_t header = {};
+    if (read_chapter_header(header_path, &header) == ESP_OK &&
+        header.source_size == static_cast<uint32_t>(source_info.st_size) &&
+        header.source_mtime == static_cast<int64_t>(source_info.st_mtime) &&
+        verify_chapter_text(text_path, header.checksum, header.text_length) == ESP_OK)
+    {
+        document->length = header.text_length;
+        document->image_count = static_cast<uint8_t>(header.image_count);
+        memcpy(document->images, header.images, sizeof(document->images));
+        return ESP_OK;
+    }
+
+    // Cache miss or stale (source EPUB changed, or no cache yet) -- parse the
+    // chapter now, same XML walk as before, just targeting a chapter_builder_t
+    // that streams to the (temp) cache file instead of an in-RAM buffer.
     char entry_name[book_text_length] = {};
     if (!join_path(book->opf_directory, book->spine[spine_index].href, entry_name))
         return ESP_ERR_INVALID_SIZE;
@@ -750,6 +984,32 @@ esp_err_t load_document(const char* path, const book_t* book, uint8_t spine_inde
     {
         zip::close(&archive);
         return error;
+    }
+
+    char cache_directory[document_cache_path_length] = {};
+    if (!ensure_chapter_cache_directory(path, cache_directory, sizeof(cache_directory)))
+    {
+        heap_caps_free(data);
+        zip::close(&archive);
+        return ESP_FAIL;
+    }
+    char temp_text_path[document_cache_path_length] = {};
+    if (static_cast<size_t>(snprintf(temp_text_path, sizeof(temp_text_path), "%s.tmp", text_path)) >=
+        sizeof(temp_text_path))
+    {
+        heap_caps_free(data);
+        zip::close(&archive);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    chapter_builder_t builder = {};
+    builder.checksum = 2166136261U;
+    builder.file = fopen(temp_text_path, "wb");
+    if (builder.file == nullptr)
+    {
+        heap_caps_free(data);
+        zip::close(&archive);
+        return ESP_FAIL;
     }
 
     xml::reader_t reader = {};
@@ -814,7 +1074,7 @@ esp_err_t load_document(const char* path, const book_t* book, uint8_t spine_inde
                 continue;
             }
             if (inline_style.page_break_before)
-                append_break(document, &last_space, true);
+                append_break(&builder, &last_space, true);
         }
 
         if (token.type == xml::token_start &&
@@ -833,18 +1093,17 @@ esp_err_t load_document(const char* path, const book_t* book, uint8_t spine_inde
              xml::name_is(&token, "h3") || xml::name_is(&token, "h4") ||
              xml::name_is(&token, "li") || xml::name_is(&token, "pre"));
         if (structural_block || inline_style.block)
-            append_break(document, &last_space,
+            append_break(&builder, &last_space,
                          xml::name_is(&token, "h1") || xml::name_is(&token, "h2"));
         if ((token.type == xml::token_start || token.type == xml::token_empty) &&
-            xml::name_is(&token, "li") && document->length + 2U < document_text_length)
+            xml::name_is(&token, "li") && builder.length + 2U < chapter_text_length_limit)
         {
-            document->text[document->length++] = '-';
-            document->text[document->length++] = ' ';
+            builder_put_bytes(&builder, "- ", 2);
             last_space = false;
         }
 
         if ((token.type == xml::token_start || token.type == xml::token_empty) &&
-            xml::name_is(&token, "img") && document->image_count < document_image_count)
+            xml::name_is(&token, "img") && builder.image_count < document_image_count)
         {
             char src[book_text_length] = {};
             char image_href[book_text_length] = {};
@@ -856,8 +1115,8 @@ esp_err_t load_document(const char* path, const book_t* book, uint8_t spine_inde
                     image_entry.uncompressed_size > 0U &&
                     image_entry.uncompressed_size <= 2U * 1024U * 1024U)
                 {
-                    uint8_t* image_data = static_cast<uint8_t*>(heap_caps_malloc(
-                        image_entry.uncompressed_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+                    uint8_t* image_data =
+                        static_cast<uint8_t*>(alloc_prefer_spiram(image_entry.uncompressed_size));
                     if (image_data != nullptr)
                     {
                         size_t image_size = 0;
@@ -866,20 +1125,17 @@ esp_err_t load_document(const char* path, const book_t* book, uint8_t spine_inde
                                       image_entry.uncompressed_size, &image_size) == ESP_OK &&
                             image::inspect(image_data, image_size, &info) == ESP_OK)
                         {
-                            append_break(document, &last_space);
-                            document_image_t& image_ref = document->images[document->image_count++];
-                            image_ref.text_offset = document->length;
+                            append_break(&builder, &last_space);
+                            document_image_t& image_ref = builder.images[builder.image_count++];
+                            image_ref.text_offset = builder.length;
                             copy_field(image_ref.href, image_href, sizeof(image_ref.href));
                             image_ref.width = info.width;
                             image_ref.height = info.height;
                             char marker[4] = {};
                             const size_t marker_bytes = encode_utf8(0xfffcU, marker);
-                            if (document->length + marker_bytes < document_text_length)
-                            {
-                                memcpy(document->text + document->length, marker, marker_bytes);
-                                document->length += marker_bytes;
-                            }
-                            append_break(document, &last_space);
+                            if (builder.length + marker_bytes < chapter_text_length_limit)
+                                builder_put_bytes(&builder, marker, marker_bytes);
+                            append_break(&builder, &last_space);
                         }
                         heap_caps_free(image_data);
                     }
@@ -888,7 +1144,7 @@ esp_err_t load_document(const char* path, const book_t* book, uint8_t spine_inde
         }
         else if (token.type == xml::token_text)
         {
-            append_text(document, token.value, token.value_length, &last_space, preformatted);
+            append_text(&builder, token.value, token.value_length, &last_space, preformatted);
         }
 
         if (token.type == xml::token_end)
@@ -902,9 +1158,61 @@ esp_err_t load_document(const char* path, const book_t* book, uint8_t spine_inde
                 --depth;
         }
     }
-    document->text[document->length] = '\0';
+    builder_flush(&builder);
+    const int close_result = fclose(builder.file);
+    builder.file = nullptr;
+    const bool write_ok = !builder.error && close_result == 0;
     heap_caps_free(data);
     zip::close(&archive);
+
+    if (!write_ok)
+    {
+        unlink(temp_text_path);
+        return ESP_FAIL;
+    }
+    unlink(text_path);
+    if (rename(temp_text_path, text_path) != 0)
+    {
+        unlink(temp_text_path);
+        return ESP_FAIL;
+    }
+
+    chapter_cache_header_t new_header = {};
+    new_header.magic = chapter_cache_magic;
+    new_header.version = chapter_cache_version;
+    new_header.image_count = builder.image_count;
+    new_header.source_size = static_cast<uint32_t>(source_info.st_size);
+    new_header.source_mtime = static_cast<int64_t>(source_info.st_mtime);
+    new_header.text_length = static_cast<uint32_t>(builder.length);
+    new_header.checksum = builder.checksum;
+    memcpy(new_header.images, builder.images, sizeof(new_header.images));
+    char temp_header_path[document_cache_path_length] = {};
+    if (static_cast<size_t>(snprintf(temp_header_path, sizeof(temp_header_path), "%s.tmp",
+                                     header_path)) < sizeof(temp_header_path))
+    {
+        FILE* header_file = fopen(temp_header_path, "wb");
+        if (header_file != nullptr)
+        {
+            const bool header_fwrite_ok =
+                fwrite(&new_header, 1, sizeof(new_header), header_file) == sizeof(new_header);
+            const bool header_write_ok = header_fwrite_ok && fclose(header_file) == 0;
+            if (header_write_ok)
+            {
+                unlink(header_path);
+                rename(temp_header_path, header_path);
+            }
+            else
+            {
+                unlink(temp_header_path);
+            }
+        }
+    }
+    // A failure writing the header is not fatal -- the next open just treats
+    // this chapter as an uncached miss and re-parses it.
+
+    document->length = builder.length;
+    document->image_count = builder.image_count;
+    memcpy(document->images, builder.images, sizeof(document->images));
     return ESP_OK;
 }
 

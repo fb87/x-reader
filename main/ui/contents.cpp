@@ -58,12 +58,16 @@ void draw_contents(gfx::framebuffer_t* framebuffer, const epub::book_t* book, ui
             const uint8_t idx = static_cast<uint8_t>(first + slot);
             auto r = layout::row(area, slot, max_visible, m.row_height, m.gap);
             const bool selected = idx == focus;
-            gfx::fill_rect(framebuffer, r.x, r.y, r.width, r.height, selected ? 0x0d : 0x0f);
-            const uint8_t fg = 0x00;
+            // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
+            // which thresholds every pixel to pure black/white -- a subtle gray
+            // wash is invisible under it. Inverting to a solid black row with
+            // white content survives that threshold instead.
+            gfx::fill_rect(framebuffer, r.x, r.y, r.width, r.height, selected ? 0x00 : 0x0f);
+            const uint8_t fg = selected ? 0x0f : 0x00;
             char n[12] = {};
             snprintf(n, sizeof(n), "%u", static_cast<unsigned>(idx + 1U));
             gfx::draw_text(framebuffer, static_cast<uint16_t>(r.x + 10U),
-                           static_cast<uint16_t>(r.y + 12U), n, 1, selected ? 0x04 : 0x07);
+                           static_cast<uint16_t>(r.y + 12U), n, 1, selected ? 0x0f : 0x07);
             gfx::draw_text(framebuffer, static_cast<uint16_t>(r.x + 42U),
                            static_cast<uint16_t>(r.y + 12U), item_title(book, idx), 1, fg);
             if (!selected)
