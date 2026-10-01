@@ -21,7 +21,8 @@ static layout::rect_t area_for(layout::viewport_t vp)
     return layout::inset(content, layout::metrics(vp).margin);
 }
 } // namespace
-void draw_book_actions(gfx::framebuffer_t* framebuffer, book_action_item_t focus, const char* title)
+void draw_book_actions(gfx::framebuffer_t* framebuffer, book_action_item_t focus, const char* title,
+                       int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -37,7 +38,7 @@ void draw_book_actions(gfx::framebuffer_t* framebuffer, book_action_item_t focus
     {
         const auto r = layout::row(area, i, book_action_item_count,
                                    static_cast<uint16_t>(m.row_height + 4U), m.gap);
-        const bool selected = i == static_cast<uint8_t>(focus);
+        const bool selected = footer_focus < 0 && i == static_cast<uint8_t>(focus);
         // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
         // which thresholds every pixel to pure black/white -- a subtle gray
         // wash is invisible under it. Inverting to a solid black row with
@@ -48,7 +49,7 @@ void draw_book_actions(gfx::framebuffer_t* framebuffer, book_action_item_t focus
                        selected ? 0x0f : 0x00);
     }
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Select", gfx::icon_check},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 }
 bool book_actions_touch_item(uint16_t width, uint16_t height, uint16_t x, uint16_t y,
                              book_action_item_t* item)

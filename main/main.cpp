@@ -200,7 +200,11 @@ static esp_err_t show(gfx::framebuffer_t* framebuffer, drivers::it8951e::device_
     [[maybe_unused]] const int64_t draw_start = XR_TIME_US();
     XR_LOGI("draw start page=%u/%u", static_cast<unsigned>(page + 1),
             static_cast<unsigned>(page_count));
-    ui::draw_reader(framebuffer, book_path, book, document, page, page_count, spine_index, settings);
+    // Reader never enters rotary footer-focus mode (see ui::dispatch()), so this
+    // is always -1; -1 is passed explicitly rather than threading screen_state_t
+    // through this narrow helper just for a value that can never change here.
+    ui::draw_reader(framebuffer, book_path, book, document, page, page_count, spine_index, settings,
+                    -1);
     XR_LOGI("draw done elapsed_us=%lld", static_cast<long long>(XR_TIME_US() - draw_start));
     const drivers::it8951e::refresh_mode_t refresh_mode =
         settings != nullptr && settings->refresh_mode != 0 ? drivers::it8951e::refresh_du
@@ -366,16 +370,18 @@ static void apply_reading_setting(storage::persistence::settings_t* settings,
     }
 }
 
-static void draw_connectivity_state(gfx::framebuffer_t* framebuffer, ui::connectivity_item_t focus)
+static void draw_connectivity_state(gfx::framebuffer_t* framebuffer, ui::connectivity_item_t focus,
+                                    int8_t footer_focus)
 {
     const services::connectivity::state_t network = services::connectivity::snapshot();
     const services::book_sync::state_t sync = services::book_sync::snapshot();
     ui::draw_connectivity(framebuffer, focus, network.enabled, network.connected, network.ssid,
                           network.ip, sync.server[0] != '\0',
-                          services::connectivity::status_text(network));
+                          services::connectivity::status_text(network), footer_focus);
 }
 
-static uint8_t draw_wifi_networks_state(gfx::framebuffer_t* framebuffer, uint8_t focus)
+static uint8_t draw_wifi_networks_state(gfx::framebuffer_t* framebuffer, uint8_t focus,
+                                        int8_t footer_focus)
 {
     services::connectivity::scan_result_t results[services::connectivity::max_scan_results] = {};
     const uint8_t count =
@@ -389,11 +395,12 @@ static uint8_t draw_wifi_networks_state(gfx::framebuffer_t* framebuffer, uint8_t
     }
     const services::connectivity::state_t network = services::connectivity::snapshot();
     ui::draw_wifi_networks(framebuffer, views, count, focus,
-                           services::connectivity::status_text(network));
+                           services::connectivity::status_text(network), footer_focus);
     return count;
 }
 
-static void draw_book_sync_state(gfx::framebuffer_t* framebuffer, ui::book_sync_item_t focus);
+static void draw_book_sync_state(gfx::framebuffer_t* framebuffer, ui::book_sync_item_t focus,
+                                 int8_t footer_focus);
 
 static bool handle_connectivity_ui_command(ui::screen_command_t command,
                                            ui::screen_state_t* screen_state,
@@ -412,7 +419,7 @@ static bool handle_connectivity_ui_command(ui::screen_command_t command,
                            sync.server, false, ui::keyboard_qwerty);
         screen_state->return_screen = ui::screen_book_sync;
         screen_state->screen = ui::screen_keyboard;
-        ui::draw_keyboard(framebuffer, &screen_state->keyboard);
+        ui::draw_keyboard(framebuffer, &screen_state->keyboard, ui::footer_highlight(screen_state));
         transfer_dirty(framebuffer, display, drivers::it8951e::refresh_du);
         return true;
     }
@@ -441,11 +448,11 @@ static bool handle_connectivity_ui_command(ui::screen_command_t command,
                                "SYNC SERVER", sync.server, false, ui::keyboard_qwerty);
             screen_state->return_screen = ui::screen_connectivity;
             screen_state->screen = ui::screen_keyboard;
-            ui::draw_keyboard(framebuffer, &screen_state->keyboard);
+            ui::draw_keyboard(framebuffer, &screen_state->keyboard, ui::footer_highlight(screen_state));
             transfer_dirty(framebuffer, display, drivers::it8951e::refresh_du);
             return true;
         }
-        draw_connectivity_state(framebuffer, screen_state->connectivity_focus);
+        draw_connectivity_state(framebuffer, screen_state->connectivity_focus, ui::footer_highlight(screen_state));
         transfer_dirty(framebuffer, display, drivers::it8951e::refresh_du);
         return true;
     }
@@ -454,7 +461,7 @@ static bool handle_connectivity_ui_command(ui::screen_command_t command,
         command == ui::screen_command_rescan_wifi)
     {
         services::connectivity::request_scan();
-        draw_wifi_networks_state(framebuffer, screen_state->wifi_network_focus);
+        draw_wifi_networks_state(framebuffer, screen_state->wifi_network_focus, ui::footer_highlight(screen_state));
         transfer_dirty(framebuffer, display, drivers::it8951e::refresh_du);
         return true;
     }
@@ -475,13 +482,13 @@ static bool handle_connectivity_ui_command(ui::screen_command_t command,
                 ui::keyboard_begin(&screen_state->keyboard, ui::keyboard_purpose_wifi_password,
                                    "WI-FI PASSWORD", "", true, ui::keyboard_qwerty);
                 screen_state->screen = ui::screen_keyboard;
-                ui::draw_keyboard(framebuffer, &screen_state->keyboard);
+                ui::draw_keyboard(framebuffer, &screen_state->keyboard, ui::footer_highlight(screen_state));
             }
             else
             {
                 services::connectivity::configure(screen_state->pending_wifi_ssid, "");
                 screen_state->screen = ui::screen_wifi_networks;
-                draw_wifi_networks_state(framebuffer, screen_state->wifi_network_focus);
+                draw_wifi_networks_state(framebuffer, screen_state->wifi_network_focus, ui::footer_highlight(screen_state));
             }
             transfer_dirty(framebuffer, display, drivers::it8951e::refresh_du);
         }
@@ -490,7 +497,7 @@ static bool handle_connectivity_ui_command(ui::screen_command_t command,
 
     if (command == ui::screen_command_show_keyboard)
     {
-        ui::draw_keyboard(framebuffer, &screen_state->keyboard);
+        ui::draw_keyboard(framebuffer, &screen_state->keyboard, ui::footer_highlight(screen_state));
         transfer_dirty(framebuffer, display, drivers::it8951e::refresh_du);
         return true;
     }
@@ -507,7 +514,7 @@ static bool handle_connectivity_ui_command(ui::screen_command_t command,
                 ui::keyboard_begin(&screen_state->keyboard, ui::keyboard_purpose_wifi_password,
                                    "WI-FI PASSWORD", "", true, ui::keyboard_qwerty);
                 screen_state->screen = ui::screen_keyboard;
-                ui::draw_keyboard(framebuffer, &screen_state->keyboard);
+                ui::draw_keyboard(framebuffer, &screen_state->keyboard, ui::footer_highlight(screen_state));
             }
         }
         else if (screen_state->keyboard.purpose == ui::keyboard_purpose_wifi_password)
@@ -515,7 +522,7 @@ static bool handle_connectivity_ui_command(ui::screen_command_t command,
             services::connectivity::configure(screen_state->pending_wifi_ssid,
                                               screen_state->keyboard.text);
             screen_state->screen = ui::screen_wifi_networks;
-            draw_wifi_networks_state(framebuffer, screen_state->wifi_network_focus);
+            draw_wifi_networks_state(framebuffer, screen_state->wifi_network_focus, ui::footer_highlight(screen_state));
         }
         else if (screen_state->keyboard.purpose == ui::keyboard_purpose_sync_server)
         {
@@ -523,12 +530,12 @@ static bool handle_connectivity_ui_command(ui::screen_command_t command,
             if (screen_state->return_screen == ui::screen_book_sync)
             {
                 screen_state->screen = ui::screen_book_sync;
-                draw_book_sync_state(framebuffer, screen_state->book_sync_focus);
+                draw_book_sync_state(framebuffer, screen_state->book_sync_focus, ui::footer_highlight(screen_state));
             }
             else
             {
                 screen_state->screen = ui::screen_connectivity;
-                draw_connectivity_state(framebuffer, screen_state->connectivity_focus);
+                draw_connectivity_state(framebuffer, screen_state->connectivity_focus, ui::footer_highlight(screen_state));
             }
         }
         else
@@ -546,18 +553,19 @@ static bool handle_connectivity_ui_command(ui::screen_command_t command,
             screen_state->keyboard.purpose != ui::keyboard_purpose_sync_server)
             return false;
         if (screen_state->screen == ui::screen_wifi_networks)
-            draw_wifi_networks_state(framebuffer, screen_state->wifi_network_focus);
+            draw_wifi_networks_state(framebuffer, screen_state->wifi_network_focus, ui::footer_highlight(screen_state));
         else if (screen_state->screen == ui::screen_book_sync)
-            draw_book_sync_state(framebuffer, screen_state->book_sync_focus);
+            draw_book_sync_state(framebuffer, screen_state->book_sync_focus, ui::footer_highlight(screen_state));
         else
-            draw_connectivity_state(framebuffer, screen_state->connectivity_focus);
+            draw_connectivity_state(framebuffer, screen_state->connectivity_focus, ui::footer_highlight(screen_state));
         transfer_dirty(framebuffer, display, drivers::it8951e::refresh_du);
         return true;
     }
     return false;
 }
 
-static void draw_ota_state(gfx::framebuffer_t* framebuffer, ui::ota_item_t focus)
+static void draw_ota_state(gfx::framebuffer_t* framebuffer, ui::ota_item_t focus,
+                           int8_t footer_focus)
 {
     const services::ota::state_t ota_state = services::ota::snapshot();
     const char* status = "UP TO DATE";
@@ -573,10 +581,11 @@ static void draw_ota_state(gfx::framebuffer_t* framebuffer, ui::ota_item_t focus
         status = "UPDATE ERROR";
     ui::draw_ota(framebuffer, focus, ota_state.current_version, ota_state.available_version, status,
                  ota_state.update_available, ota_state.release_notes, ota_state.progress_percent,
-                 ota_state.last_result, ota_state.rollback_pending);
+                 ota_state.last_result, ota_state.rollback_pending, footer_focus);
 }
 
-static void draw_book_sync_state(gfx::framebuffer_t* framebuffer, ui::book_sync_item_t focus)
+static void draw_book_sync_state(gfx::framebuffer_t* framebuffer, ui::book_sync_item_t focus,
+                                 int8_t footer_focus)
 {
     const services::connectivity::state_t network = services::connectivity::snapshot();
     const services::book_sync::state_t sync = services::book_sync::snapshot();
@@ -585,7 +594,7 @@ static void draw_book_sync_state(gfx::framebuffer_t* framebuffer, ui::book_sync_
                        sync.activity, sync.books_completed, sync.books_total, sync.pending_retry,
                        sync.retry_count, sync.last_result, sync.bytes_downloaded, sync.bytes_total,
                        sync.history_count > 1U ? sync.history[1] : nullptr,
-                       sync.history_count > 2U ? sync.history[2] : nullptr);
+                       sync.history_count > 2U ? sync.history[2] : nullptr, footer_focus);
 }
 
 static size_t refresh_library_catalog(const char* mount_path,
@@ -747,7 +756,7 @@ static void draw_book_manager_state(gfx::framebuffer_t* framebuffer,
     ui::draw_book_manager(framebuffer,
                           state == nullptr ? ui::book_manager_library : state->book_manager_focus,
                           static_cast<uint16_t>(book_count), mounted, duplicate_count,
-                          services::library_scan::busy());
+                          services::library_scan::busy(), ui::footer_highlight(state));
 }
 
 // Called from the polling loop while screen_book_manager is visible.  Copies a
@@ -780,12 +789,12 @@ static void draw_library_view(gfx::framebuffer_t* framebuffer, bool mounted,
         if (search_query != nullptr && search_query[0] != '\0')
             snprintf(heading, sizeof(heading), "Search: %.22s", search_query);
         ui::draw_library_catalog_view(framebuffer, mounted, catalog, search_indices, search_count,
-                                      state->library_focus, heading);
+                                      state->library_focus, heading, ui::footer_highlight(state));
         return;
     }
     ui::draw_library_catalog(framebuffer, mounted, catalog, book_count,
                              state == nullptr ? 0U : state->library_focus,
-                             recent_mode ? "Recent books" : "Library");
+                             recent_mode ? "Recent books" : "Library", ui::footer_highlight(state));
 }
 
 static bool handle_dialog_ui_command(ui::screen_command_t command, ui::screen_state_t* screen_state,
@@ -821,7 +830,7 @@ static bool handle_dialog_ui_command(ui::screen_command_t command, ui::screen_st
         {
             ui::dialog_begin(&screen_state->dialog, ui::dialog_info, "MESSAGE", "Nothing to do.");
         }
-        ui::draw_dialog(framebuffer, &screen_state->dialog);
+        ui::draw_dialog(framebuffer, &screen_state->dialog, ui::footer_highlight(screen_state));
         transfer_dirty(framebuffer, display, drivers::it8951e::refresh_du);
         return true;
     }
@@ -846,7 +855,7 @@ static bool handle_dialog_ui_command(ui::screen_command_t command, ui::screen_st
                 screen_state->dialog_action = ui::dialog_action_none;
                 ui::dialog_begin(&screen_state->dialog, ui::dialog_warning, "LOW BATTERY",
                                  "Charge above 10% before installing firmware.", "OK", "");
-                ui::draw_dialog(framebuffer, &screen_state->dialog);
+                ui::draw_dialog(framebuffer, &screen_state->dialog, ui::footer_highlight(screen_state));
                 transfer_dirty(framebuffer, display, drivers::it8951e::refresh_du);
                 return true;
             }
@@ -858,13 +867,15 @@ static bool handle_dialog_ui_command(ui::screen_command_t command, ui::screen_st
     screen_state->dialog_action = ui::dialog_action_none;
     screen_state->screen = target;
     if (target == ui::screen_connectivity)
-        draw_connectivity_state(framebuffer, screen_state->connectivity_focus);
+        draw_connectivity_state(framebuffer, screen_state->connectivity_focus, ui::footer_highlight(screen_state));
     else if (target == ui::screen_ota)
-        draw_ota_state(framebuffer, screen_state->ota_focus);
+        draw_ota_state(framebuffer, screen_state->ota_focus, ui::footer_highlight(screen_state));
     else if (target == ui::screen_book_manager)
-        ui::draw_book_manager(framebuffer, screen_state->book_manager_focus, 0U, true);
+        ui::draw_book_manager(framebuffer, screen_state->book_manager_focus, 0U, true, 0U, false,
+                              ui::footer_highlight(screen_state));
     else
-        ui::draw_settings(framebuffer, screen_state->settings_focus, nullptr);
+        ui::draw_settings(framebuffer, screen_state->settings_focus, nullptr,
+                          ui::footer_highlight(screen_state));
     transfer_dirty(framebuffer, display, drivers::it8951e::refresh_du);
     return true;
 }
@@ -941,7 +952,7 @@ static void simulate_navigation_task(void* argument)
 #endif
 
 static void draw_storage_state(gfx::framebuffer_t* framebuffer, const char* mount_path,
-                               bool mounted, uint16_t book_count)
+                               bool mounted, uint16_t book_count, int8_t footer_focus)
 {
     uint64_t total = 0;
     uint64_t free_bytes = 0;
@@ -949,10 +960,10 @@ static void draw_storage_state(gfx::framebuffer_t* framebuffer, const char* moun
     {
         (void)esp_vfs_fat_info(mount_path, &total, &free_bytes);
     }
-    ui::draw_storage(framebuffer, mounted, total, free_bytes, book_count, mount_path);
+    ui::draw_storage(framebuffer, mounted, total, free_bytes, book_count, mount_path, footer_focus);
 }
 
-static void draw_about_state(gfx::framebuffer_t* framebuffer)
+static void draw_about_state(gfx::framebuffer_t* framebuffer, int8_t footer_focus)
 {
     const esp_app_desc_t* description = esp_app_get_description();
     ui::draw_about(framebuffer, description == nullptr ? "UNKNOWN" : description->version,
@@ -961,7 +972,7 @@ static void draw_about_state(gfx::framebuffer_t* framebuffer)
 #else
                    "M5PAPER",
 #endif
-                   esp_get_idf_version(), __DATE__);
+                   esp_get_idf_version(), __DATE__, footer_focus);
 }
 
 static void run()
@@ -1235,7 +1246,7 @@ static void run()
         book_path[0] = '\0';
     }
     ui::draw_home(&framebuffer, sd_card.mounted, book_path[0] != '\0' ? book->title : nullptr,
-                  screen_state.home_focus);
+                  screen_state.home_focus, ui::footer_highlight(&screen_state));
     error = transfer_dirty(&framebuffer, &display);
     if (error != ESP_OK)
     {
@@ -1282,7 +1293,7 @@ static void run()
                 {
                     screen_state.pending_wifi_ssid[0] = '\0';
                     screen_state.screen = ui::screen_connectivity;
-                    draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
+                    draw_connectivity_state(&framebuffer, screen_state.connectivity_focus, ui::footer_highlight(&screen_state));
                     transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
                     continue;
                 }
@@ -1301,13 +1312,13 @@ static void run()
                     continue;
                 }
                 if (screen_state.screen == ui::screen_connectivity)
-                    draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
+                    draw_connectivity_state(&framebuffer, screen_state.connectivity_focus, ui::footer_highlight(&screen_state));
                 else if (screen_state.screen == ui::screen_wifi_networks)
-                    draw_wifi_networks_state(&framebuffer, screen_state.wifi_network_focus);
+                    draw_wifi_networks_state(&framebuffer, screen_state.wifi_network_focus, ui::footer_highlight(&screen_state));
                 else if (screen_state.screen == ui::screen_ota)
-                    draw_ota_state(&framebuffer, screen_state.ota_focus);
+                    draw_ota_state(&framebuffer, screen_state.ota_focus, ui::footer_highlight(&screen_state));
                 else if (screen_state.screen == ui::screen_book_sync)
-                    draw_book_sync_state(&framebuffer, screen_state.book_sync_focus);
+                    draw_book_sync_state(&framebuffer, screen_state.book_sync_focus, ui::footer_highlight(&screen_state));
                 transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
                 continue;
             }
@@ -1415,7 +1426,8 @@ static void run()
                 ui::draw_book_actions(&framebuffer, screen_state.book_action_focus,
                                       library_detail_index < library_catalog->count
                                           ? library_catalog->entries[library_detail_index].title
-                                          : "EPUB");
+                                          : "EPUB",
+                                          ui::footer_highlight(&screen_state));
             }
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
@@ -1427,7 +1439,7 @@ static void run()
             ui::keyboard_begin(&screen_state.keyboard, ui::keyboard_purpose_search, "SEARCH BOOKS",
                                library_search_query, false, ui::keyboard_qwerty);
             screen_state.screen = ui::screen_keyboard;
-            ui::draw_keyboard(&framebuffer, &screen_state.keyboard);
+            ui::draw_keyboard(&framebuffer, &screen_state.keyboard, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -1484,7 +1496,8 @@ static void run()
             ui::draw_library_details(&framebuffer,
                                      library_detail_index < library_catalog->count
                                          ? &library_catalog->entries[library_detail_index]
-                                         : nullptr);
+                                         : nullptr,
+                                         ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -1495,7 +1508,8 @@ static void run()
             ui::draw_book_actions(&framebuffer, screen_state.book_action_focus,
                                   library_detail_index < library_catalog->count
                                       ? library_catalog->entries[library_detail_index].title
-                                      : "EPUB");
+                                      : "EPUB",
+                                          ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -1533,7 +1547,8 @@ static void run()
             library_detail_index = selected;
             ui::draw_library_details(&framebuffer, selected < library_catalog->count
                                                        ? &library_catalog->entries[selected]
-                                                       : nullptr);
+                                                       : nullptr,
+                                         ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -1542,7 +1557,8 @@ static void run()
             ui::draw_book_actions(&framebuffer, screen_state.book_action_focus,
                                   library_detail_index < library_catalog->count
                                       ? library_catalog->entries[library_detail_index].title
-                                      : "EPUB");
+                                      : "EPUB",
+                                          ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -1556,7 +1572,7 @@ static void run()
             ui::keyboard_begin(&screen_state.keyboard, ui::keyboard_purpose_rename, "RENAME BOOK",
                                current_name, false, ui::keyboard_qwerty);
             screen_state.screen = ui::screen_keyboard;
-            ui::draw_keyboard(&framebuffer, &screen_state.keyboard);
+            ui::draw_keyboard(&framebuffer, &screen_state.keyboard, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -1630,29 +1646,30 @@ static void run()
             if (screen_state.screen == ui::screen_home)
                 ui::draw_home(&framebuffer, sd_card.mounted,
                               book_path[0] != '\0' ? book->title : nullptr,
-                              screen_state.home_focus);
+                              screen_state.home_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_library ||
                      screen_state.screen == ui::screen_library_search_results)
                 draw_library_view(&framebuffer, sd_card.mounted, library_catalog, &screen_state,
                                   book_count, library_search_indices, library_search_count,
                                   library_search_query, library_recent_mode);
             else if (screen_state.screen == ui::screen_settings)
-                ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
+                ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values,
+                          ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_storage)
                 draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted,
-                                   static_cast<uint16_t>(book_count));
+                                   static_cast<uint16_t>(book_count), ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_about)
-                draw_about_state(&framebuffer);
+                draw_about_state(&framebuffer, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_dialog)
-                ui::draw_dialog(&framebuffer, &screen_state.dialog);
+                ui::draw_dialog(&framebuffer, &screen_state.dialog, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_connectivity)
-                draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
+                draw_connectivity_state(&framebuffer, screen_state.connectivity_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_wifi_networks)
-                draw_wifi_networks_state(&framebuffer, screen_state.wifi_network_focus);
+                draw_wifi_networks_state(&framebuffer, screen_state.wifi_network_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_keyboard)
-                ui::draw_keyboard(&framebuffer, &screen_state.keyboard);
+                ui::draw_keyboard(&framebuffer, &screen_state.keyboard, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_ota)
-                draw_ota_state(&framebuffer, screen_state.ota_focus);
+                draw_ota_state(&framebuffer, screen_state.ota_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_manager)
             {
                 duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
@@ -1660,14 +1677,16 @@ static void run()
                                         duplicate_book_count);
             }
             else if (screen_state.screen == ui::screen_file_browser)
-                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
+                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus,
+                                    ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_actions)
                 ui::draw_book_actions(&framebuffer, screen_state.book_action_focus,
                                       library_detail_index < library_catalog->count
                                           ? library_catalog->entries[library_detail_index].title
-                                          : "EPUB");
+                                          : "EPUB",
+                                          ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_sync)
-                draw_book_sync_state(&framebuffer, screen_state.book_sync_focus);
+                draw_book_sync_state(&framebuffer, screen_state.book_sync_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
         }
         else if (command == ui::screen_command_show_library)
@@ -1680,28 +1699,29 @@ static void run()
         }
         else if (command == ui::screen_command_show_settings)
         {
-            ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
+            ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values,
+                          ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_show_storage)
         {
             draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted,
-                               static_cast<uint16_t>(book_count));
+                               static_cast<uint16_t>(book_count), ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_show_about)
         {
-            draw_about_state(&framebuffer);
+            draw_about_state(&framebuffer, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_show_connectivity)
         {
-            draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
+            draw_connectivity_state(&framebuffer, screen_state.connectivity_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_show_ota)
         {
-            draw_ota_state(&framebuffer, screen_state.ota_focus);
+            draw_ota_state(&framebuffer, screen_state.ota_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_show_book_manager)
@@ -1715,7 +1735,8 @@ static void run()
         {
             services::file_browser::open(sd_config.mount_path, sd_config.mount_path, &file_listing);
             screen_state.file_browser_focus = 0U;
-            ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
+            ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus,
+                                    ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_file_browser_back)
@@ -1730,7 +1751,8 @@ static void run()
             {
                 services::file_browser::parent(&file_listing);
                 screen_state.file_browser_focus = 0U;
-                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
+                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus,
+                                    ui::footer_highlight(&screen_state));
             }
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
         }
@@ -1744,7 +1766,8 @@ static void run()
                     services::file_browser::open(file_listing.root, selected.path, &file_listing);
                     screen_state.file_browser_focus = 0U;
                     ui::draw_file_browser(&framebuffer, &file_listing,
-                                          screen_state.file_browser_focus);
+                                          screen_state.file_browser_focus,
+                                          ui::footer_highlight(&screen_state));
                     transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
                 }
                 else if (selected.epub && load_book_file(selected.path, book, document))
@@ -1757,13 +1780,13 @@ static void run()
         }
         else if (command == ui::screen_command_show_book_sync)
         {
-            draw_book_sync_state(&framebuffer, screen_state.book_sync_focus);
+            draw_book_sync_state(&framebuffer, screen_state.book_sync_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_show_home)
         {
             ui::draw_home(&framebuffer, sd_card.mounted,
-                          book_path[0] != '\0' ? book->title : nullptr, screen_state.home_focus);
+                          book_path[0] != '\0' ? book->title : nullptr, screen_state.home_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_ota_action ||
@@ -1773,9 +1796,9 @@ static void run()
             perform_service_action(&screen_state, sd_config.mount_path, library_catalog, book_paths,
                                    &book_count, book_path, 0, 0);
             if (screen_state.screen == ui::screen_connectivity)
-                draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
+                draw_connectivity_state(&framebuffer, screen_state.connectivity_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_ota)
-                draw_ota_state(&framebuffer, screen_state.ota_focus);
+                draw_ota_state(&framebuffer, screen_state.ota_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_manager)
             {
                 duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
@@ -1784,24 +1807,28 @@ static void run()
                 library_scan_was_busy = services::library_scan::busy();
             }
             else if (screen_state.screen == ui::screen_file_browser)
-                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
+                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus,
+                                    ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_actions)
                 ui::draw_book_actions(&framebuffer, screen_state.book_action_focus,
                                       library_detail_index < library_catalog->count
                                           ? library_catalog->entries[library_detail_index].title
-                                          : "EPUB");
+                                          : "EPUB",
+                                          ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_sync)
-                draw_book_sync_state(&framebuffer, screen_state.book_sync_focus);
+                draw_book_sync_state(&framebuffer, screen_state.book_sync_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
         }
         else if (command == ui::screen_command_show_display_settings)
         {
-            ui::draw_display_settings(&framebuffer, screen_state.display_focus, &settings_values);
+            ui::draw_display_settings(&framebuffer, screen_state.display_focus, &settings_values,
+                                      ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_show_reading_settings)
         {
-            ui::draw_reading_settings(&framebuffer, screen_state.reading_focus, &settings_values);
+            ui::draw_reading_settings(&framebuffer, screen_state.reading_focus, &settings_values,
+                                      ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
         }
         else if (command == ui::screen_command_edit_display_setting ||
@@ -1843,10 +1870,10 @@ static void run()
             settings_values.sleep_timeout_minutes = settings.sleep_timeout_minutes;
             if (screen_state.screen == ui::screen_display_settings)
                 ui::draw_display_settings(&framebuffer, screen_state.display_focus,
-                                          &settings_values);
+                                          &settings_values, ui::footer_highlight(&screen_state));
             else
                 ui::draw_reading_settings(&framebuffer, screen_state.reading_focus,
-                                          &settings_values);
+                                          &settings_values, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
         }
     }
@@ -1935,7 +1962,7 @@ static void run()
                 {
                     screen_state.pending_wifi_ssid[0] = '\0';
                     screen_state.screen = ui::screen_connectivity;
-                    draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
+                    draw_connectivity_state(&framebuffer, screen_state.connectivity_focus, ui::footer_highlight(&screen_state));
                     transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
                     continue;
                 }
@@ -1954,13 +1981,13 @@ static void run()
                     continue;
                 }
                 if (screen_state.screen == ui::screen_connectivity)
-                    draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
+                    draw_connectivity_state(&framebuffer, screen_state.connectivity_focus, ui::footer_highlight(&screen_state));
                 else if (screen_state.screen == ui::screen_wifi_networks)
-                    draw_wifi_networks_state(&framebuffer, screen_state.wifi_network_focus);
+                    draw_wifi_networks_state(&framebuffer, screen_state.wifi_network_focus, ui::footer_highlight(&screen_state));
                 else if (screen_state.screen == ui::screen_ota)
-                    draw_ota_state(&framebuffer, screen_state.ota_focus);
+                    draw_ota_state(&framebuffer, screen_state.ota_focus, ui::footer_highlight(&screen_state));
                 else if (screen_state.screen == ui::screen_book_sync)
-                    draw_book_sync_state(&framebuffer, screen_state.book_sync_focus);
+                    draw_book_sync_state(&framebuffer, screen_state.book_sync_focus, ui::footer_highlight(&screen_state));
                 transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
                 continue;
             }
@@ -2052,7 +2079,8 @@ static void run()
                 ui::draw_book_actions(&framebuffer, screen_state.book_action_focus,
                                       library_detail_index < library_catalog->count
                                           ? library_catalog->entries[library_detail_index].title
-                                          : "EPUB");
+                                          : "EPUB",
+                                          ui::footer_highlight(&screen_state));
             }
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
@@ -2062,7 +2090,7 @@ static void run()
             ui::keyboard_begin(&screen_state.keyboard, ui::keyboard_purpose_reader_search,
                                "SEARCH IN BOOK", reader_search_query, false, ui::keyboard_qwerty);
             screen_state.screen = ui::screen_keyboard;
-            ui::draw_keyboard(&framebuffer, &screen_state.keyboard);
+            ui::draw_keyboard(&framebuffer, &screen_state.keyboard, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -2155,7 +2183,7 @@ static void run()
             ui::keyboard_begin(&screen_state.keyboard, ui::keyboard_purpose_search, "SEARCH BOOKS",
                                library_search_query, false, ui::keyboard_qwerty);
             screen_state.screen = ui::screen_keyboard;
-            ui::draw_keyboard(&framebuffer, &screen_state.keyboard);
+            ui::draw_keyboard(&framebuffer, &screen_state.keyboard, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -2212,7 +2240,8 @@ static void run()
             ui::draw_library_details(&framebuffer,
                                      library_detail_index < library_catalog->count
                                          ? &library_catalog->entries[library_detail_index]
-                                         : nullptr);
+                                         : nullptr,
+                                         ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -2223,7 +2252,8 @@ static void run()
             ui::draw_book_actions(&framebuffer, screen_state.book_action_focus,
                                   library_detail_index < library_catalog->count
                                       ? library_catalog->entries[library_detail_index].title
-                                      : "EPUB");
+                                      : "EPUB",
+                                          ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -2261,7 +2291,8 @@ static void run()
             library_detail_index = selected;
             ui::draw_library_details(&framebuffer, selected < library_catalog->count
                                                        ? &library_catalog->entries[selected]
-                                                       : nullptr);
+                                                       : nullptr,
+                                         ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -2270,7 +2301,8 @@ static void run()
             ui::draw_book_actions(&framebuffer, screen_state.book_action_focus,
                                   library_detail_index < library_catalog->count
                                       ? library_catalog->entries[library_detail_index].title
-                                      : "EPUB");
+                                      : "EPUB",
+                                          ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -2284,7 +2316,7 @@ static void run()
             ui::keyboard_begin(&screen_state.keyboard, ui::keyboard_purpose_rename, "RENAME BOOK",
                                current_name, false, ui::keyboard_qwerty);
             screen_state.screen = ui::screen_keyboard;
-            ui::draw_keyboard(&framebuffer, &screen_state.keyboard);
+            ui::draw_keyboard(&framebuffer, &screen_state.keyboard, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -2312,7 +2344,7 @@ static void run()
         if (command == ui::screen_command_show_home)
         {
             ui::draw_home(&framebuffer, sd_card.mounted,
-                          book_path[0] != '\0' ? book->title : nullptr, screen_state.home_focus);
+                          book_path[0] != '\0' ? book->title : nullptr, screen_state.home_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             continue;
         }
@@ -2327,32 +2359,33 @@ static void run()
         }
         if (command == ui::screen_command_show_settings)
         {
-            ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
+            ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values,
+                          ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             continue;
         }
         if (command == ui::screen_command_show_storage)
         {
             draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted,
-                               static_cast<uint16_t>(book_count));
+                               static_cast<uint16_t>(book_count), ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             continue;
         }
         if (command == ui::screen_command_show_about)
         {
-            draw_about_state(&framebuffer);
+            draw_about_state(&framebuffer, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             continue;
         }
         if (command == ui::screen_command_show_connectivity)
         {
-            draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
+            draw_connectivity_state(&framebuffer, screen_state.connectivity_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             continue;
         }
         if (command == ui::screen_command_show_ota)
         {
-            draw_ota_state(&framebuffer, screen_state.ota_focus);
+            draw_ota_state(&framebuffer, screen_state.ota_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             continue;
         }
@@ -2368,7 +2401,8 @@ static void run()
         {
             services::file_browser::open(sd_config.mount_path, sd_config.mount_path, &file_listing);
             screen_state.file_browser_focus = 0U;
-            ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
+            ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus,
+                                    ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             continue;
         }
@@ -2384,7 +2418,8 @@ static void run()
             {
                 services::file_browser::parent(&file_listing);
                 screen_state.file_browser_focus = 0U;
-                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
+                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus,
+                                    ui::footer_highlight(&screen_state));
             }
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
@@ -2399,7 +2434,8 @@ static void run()
                     services::file_browser::open(file_listing.root, selected.path, &file_listing);
                     screen_state.file_browser_focus = 0U;
                     ui::draw_file_browser(&framebuffer, &file_listing,
-                                          screen_state.file_browser_focus);
+                                          screen_state.file_browser_focus,
+                                          ui::footer_highlight(&screen_state));
                     transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
                 }
                 else if (selected.epub)
@@ -2432,7 +2468,7 @@ static void run()
         }
         if (command == ui::screen_command_show_book_sync)
         {
-            draw_book_sync_state(&framebuffer, screen_state.book_sync_focus);
+            draw_book_sync_state(&framebuffer, screen_state.book_sync_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             continue;
         }
@@ -2443,9 +2479,9 @@ static void run()
             perform_service_action(&screen_state, sd_config.mount_path, library_catalog, book_paths,
                                    &book_count, book_path, spine_index, page);
             if (screen_state.screen == ui::screen_connectivity)
-                draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
+                draw_connectivity_state(&framebuffer, screen_state.connectivity_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_ota)
-                draw_ota_state(&framebuffer, screen_state.ota_focus);
+                draw_ota_state(&framebuffer, screen_state.ota_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_manager)
             {
                 duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
@@ -2454,14 +2490,16 @@ static void run()
                 library_scan_was_busy = services::library_scan::busy();
             }
             else if (screen_state.screen == ui::screen_file_browser)
-                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
+                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus,
+                                    ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_actions)
                 ui::draw_book_actions(&framebuffer, screen_state.book_action_focus,
                                       library_detail_index < library_catalog->count
                                           ? library_catalog->entries[library_detail_index].title
-                                          : "EPUB");
+                                          : "EPUB",
+                                          ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_sync)
-                draw_book_sync_state(&framebuffer, screen_state.book_sync_focus);
+                draw_book_sync_state(&framebuffer, screen_state.book_sync_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -2534,29 +2572,30 @@ static void run()
             if (screen_state.screen == ui::screen_home)
                 ui::draw_home(&framebuffer, sd_card.mounted,
                               book_path[0] != '\0' ? book->title : nullptr,
-                              screen_state.home_focus);
+                              screen_state.home_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_library ||
                      screen_state.screen == ui::screen_library_search_results)
                 draw_library_view(&framebuffer, sd_card.mounted, library_catalog, &screen_state,
                                   book_count, library_search_indices, library_search_count,
                                   library_search_query, library_recent_mode);
             else if (screen_state.screen == ui::screen_settings)
-                ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values);
+                ui::draw_settings(&framebuffer, screen_state.settings_focus, &settings_values,
+                          ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_storage)
                 draw_storage_state(&framebuffer, sd_config.mount_path, sd_card.mounted,
-                                   static_cast<uint16_t>(book_count));
+                                   static_cast<uint16_t>(book_count), ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_about)
-                draw_about_state(&framebuffer);
+                draw_about_state(&framebuffer, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_dialog)
-                ui::draw_dialog(&framebuffer, &screen_state.dialog);
+                ui::draw_dialog(&framebuffer, &screen_state.dialog, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_connectivity)
-                draw_connectivity_state(&framebuffer, screen_state.connectivity_focus);
+                draw_connectivity_state(&framebuffer, screen_state.connectivity_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_wifi_networks)
-                draw_wifi_networks_state(&framebuffer, screen_state.wifi_network_focus);
+                draw_wifi_networks_state(&framebuffer, screen_state.wifi_network_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_keyboard)
-                ui::draw_keyboard(&framebuffer, &screen_state.keyboard);
+                ui::draw_keyboard(&framebuffer, &screen_state.keyboard, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_ota)
-                draw_ota_state(&framebuffer, screen_state.ota_focus);
+                draw_ota_state(&framebuffer, screen_state.ota_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_manager)
             {
                 duplicate_book_count = services::book_manager::duplicate_count(library_catalog);
@@ -2564,26 +2603,30 @@ static void run()
                                         duplicate_book_count);
             }
             else if (screen_state.screen == ui::screen_file_browser)
-                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus);
+                ui::draw_file_browser(&framebuffer, &file_listing, screen_state.file_browser_focus,
+                                    ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_actions)
                 ui::draw_book_actions(&framebuffer, screen_state.book_action_focus,
                                       library_detail_index < library_catalog->count
                                           ? library_catalog->entries[library_detail_index].title
-                                          : "EPUB");
+                                          : "EPUB",
+                                          ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_sync)
-                draw_book_sync_state(&framebuffer, screen_state.book_sync_focus);
+                draw_book_sync_state(&framebuffer, screen_state.book_sync_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_quick_settings)
-                ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values);
+                ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values,
+                                  ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_contents)
-                ui::draw_contents(&framebuffer, book, screen_state.contents_focus);
+                ui::draw_contents(&framebuffer, book, screen_state.contents_focus,
+                              ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_bookmarks)
                 ui::draw_bookmarks(&framebuffer, bookmarks, bookmark_count,
-                                   screen_state.bookmarks_focus);
+                                   screen_state.bookmarks_focus, ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_book_info)
             {
                 const cover_bitmap_t cover = load_book_cover(library_catalog, book_path);
                 ui::draw_book_info(&framebuffer, book, spine_index, book->spine_count, cover.pixels,
-                                   cover.width, cover.height);
+                                   cover.width, cover.height, ui::footer_highlight(&screen_state));
                 heap_caps_free(cover.pixels);
             }
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
@@ -2591,14 +2634,15 @@ static void run()
         }
         if (command == ui::screen_command_show_contents)
         {
-            ui::draw_contents(&framebuffer, book, screen_state.contents_focus);
+            ui::draw_contents(&framebuffer, book, screen_state.contents_focus,
+                              ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             continue;
         }
         if (command == ui::screen_command_show_bookmarks)
         {
             ui::draw_bookmarks(&framebuffer, bookmarks, bookmark_count,
-                               screen_state.bookmarks_focus);
+                               screen_state.bookmarks_focus, ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             continue;
         }
@@ -2606,7 +2650,7 @@ static void run()
         {
             const cover_bitmap_t cover = load_book_cover(library_catalog, book_path);
             ui::draw_book_info(&framebuffer, book, spine_index, book->spine_count, cover.pixels,
-                               cover.width, cover.height);
+                               cover.width, cover.height, ui::footer_highlight(&screen_state));
             heap_caps_free(cover.pixels);
             transfer_dirty(&framebuffer, &display);
             continue;
@@ -2630,7 +2674,8 @@ static void run()
                 storage::persistence::save_bookmarks_for_book(book_path, persistent,
                                                               bookmark_count);
             }
-            ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values);
+            ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values,
+                                  ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display, drivers::it8951e::refresh_du);
             continue;
         }
@@ -2671,7 +2716,8 @@ static void run()
         }
         if (command == ui::screen_command_open_quick_settings)
         {
-            ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values);
+            ui::draw_quick_settings(&framebuffer, screen_state.quick_focus, &quick_values,
+                                  ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             input::flush(events);
             continue;
@@ -2684,14 +2730,16 @@ static void run()
         }
         if (command == ui::screen_command_show_display_settings)
         {
-            ui::draw_display_settings(&framebuffer, screen_state.display_focus, &quick_values);
+            ui::draw_display_settings(&framebuffer, screen_state.display_focus, &quick_values,
+                                      ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             input::flush(events);
             continue;
         }
         if (command == ui::screen_command_show_reading_settings)
         {
-            ui::draw_reading_settings(&framebuffer, screen_state.reading_focus, &quick_values);
+            ui::draw_reading_settings(&framebuffer, screen_state.reading_focus, &quick_values,
+                                      ui::footer_highlight(&screen_state));
             transfer_dirty(&framebuffer, &display);
             input::flush(events);
             continue;
@@ -2744,9 +2792,11 @@ static void run()
             if (page >= total_pages)
                 page = static_cast<uint8_t>(total_pages - 1);
             if (screen_state.screen == ui::screen_display_settings)
-                ui::draw_display_settings(&framebuffer, screen_state.display_focus, &quick_values);
+                ui::draw_display_settings(&framebuffer, screen_state.display_focus, &quick_values,
+                                      ui::footer_highlight(&screen_state));
             else if (screen_state.screen == ui::screen_reading_settings)
-                ui::draw_reading_settings(&framebuffer, screen_state.reading_focus, &quick_values);
+                ui::draw_reading_settings(&framebuffer, screen_state.reading_focus, &quick_values,
+                                      ui::footer_highlight(&screen_state));
             else
                 show(&framebuffer, &display, book, document, page, total_pages, spine_index, &reader_settings);
             transfer_dirty(&framebuffer, &display);

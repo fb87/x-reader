@@ -87,13 +87,13 @@ static void build_rows(settings_row_t* rows)
 } // namespace
 
 void draw_quick_settings(gfx::framebuffer_t* framebuffer, quick_setting_t focus,
-                         const quick_settings_values_t* values)
+                         const quick_settings_values_t* values, int8_t footer_focus)
 {
     (void)values;
     settings_row_t rows[quick_setting_count] = {};
     build_rows(rows);
     draw_settings_panel(framebuffer, "Reader Menu", rows, quick_setting_count,
-                        static_cast<uint8_t>(focus));
+                        static_cast<uint8_t>(focus), footer_focus);
 }
 
 bool quick_settings_touch(uint16_t display_width, uint16_t display_height, quick_setting_t focus,

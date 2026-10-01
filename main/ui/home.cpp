@@ -115,7 +115,7 @@ static void draw_home_row(gfx::framebuffer_t* framebuffer, layout::rect_t row, u
 } // namespace
 
 void draw_home(gfx::framebuffer_t* framebuffer, bool storage_mounted, const char* book_title,
-               home_action_t focus)
+               home_action_t focus, int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -123,12 +123,14 @@ void draw_home(gfx::framebuffer_t* framebuffer, bool storage_mounted, const char
     gfx::clear(framebuffer, 0x0f);
     chrome::draw_status_bar(framebuffer, storage_mounted ? "X-Reader" : "X-Reader (No SD)");
 
+    // Only one thing is ever highlighted at a time: while focus is in the
+    // footer (footer_focus >= 0), the row list shows no selection at all.
     for (uint8_t index = 0; index < home_action_count; ++index)
         draw_home_row(framebuffer, home_row(vp, index), index, subtitle_for(index, book_title),
-                      index == static_cast<uint8_t>(focus));
+                      footer_focus < 0 && index == static_cast<uint8_t>(focus));
 
     chrome::draw_indication_bar(framebuffer, {"Library", gfx::icon_list}, {"Open", gfx::icon_book},
-                                {"Settings", gfx::icon_settings});
+                                {"Settings", gfx::icon_settings}, footer_focus);
 }
 
 bool home_touch_action(uint16_t display_width, uint16_t display_height, uint16_t x, uint16_t y,

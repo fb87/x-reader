@@ -71,13 +71,13 @@ static void build_rows(settings_row_t* rows)
 } // namespace
 
 void draw_settings(gfx::framebuffer_t* framebuffer, settings_item_t focus,
-                   const quick_settings_values_t* values)
+                   const quick_settings_values_t* values, int8_t footer_focus)
 {
     (void)values;
     settings_row_t rows[settings_item_count] = {};
     build_rows(rows);
     draw_settings_panel(framebuffer, "Settings", rows, settings_item_count,
-                        static_cast<uint8_t>(focus));
+                        static_cast<uint8_t>(focus), footer_focus);
 }
 
 bool settings_touch_item(uint16_t display_width, uint16_t display_height, settings_item_t focus,

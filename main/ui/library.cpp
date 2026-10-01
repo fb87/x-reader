@@ -295,7 +295,7 @@ static layout::rect_t library_area(layout::viewport_t vp)
 }
 
 static void draw_library_rows(gfx::framebuffer_t* framebuffer, const char* const* titles,
-                              uint8_t count, uint8_t focus_index)
+                              uint8_t count, uint8_t focus_index, int8_t footer_focus)
 {
     const layout::viewport_t vp = {framebuffer->width, framebuffer->height};
     const layout::metrics_t m = layout::metrics(vp);
@@ -305,7 +305,7 @@ static void draw_library_rows(gfx::framebuffer_t* framebuffer, const char* const
     {
         const layout::rect_t item =
             layout::row(area, index, visible, static_cast<uint16_t>(m.row_height + 8U), m.gap);
-        const bool selected = index == static_cast<uint8_t>(focus_index % count);
+        const bool selected = footer_focus < 0 && index == static_cast<uint8_t>(focus_index % count);
         // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
         // which thresholds every pixel to pure black/white -- a subtle gray
         // wash is invisible under it. Inverting to a solid black row with
@@ -333,7 +333,7 @@ static void draw_library_rows(gfx::framebuffer_t* framebuffer, const char* const
 } // namespace
 
 void draw_library(gfx::framebuffer_t* framebuffer, bool storage_mounted, const char* mount_path,
-                  uint8_t focus_index)
+                  uint8_t focus_index, int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -343,7 +343,7 @@ void draw_library(gfx::framebuffer_t* framebuffer, bool storage_mounted, const c
     gfx::clear(framebuffer, 0x0f);
     chrome::draw_status_bar(framebuffer, "Library");
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Open", gfx::icon_book},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 
     if (!storage_mounted)
     {
@@ -371,11 +371,12 @@ void draw_library(gfx::framebuffer_t* framebuffer, bool storage_mounted, const c
     const char* titles[max_books] = {};
     for (uint8_t index = 0; index < books.count; ++index)
         titles[index] = books.titles[index];
-    draw_library_rows(framebuffer, titles, books.count, focus_index);
+    draw_library_rows(framebuffer, titles, books.count, focus_index, footer_focus);
 }
 
 void draw_library_list(gfx::framebuffer_t* framebuffer, bool storage_mounted,
-                       const char paths[][book_path_length], size_t count, uint8_t focus_index)
+                       const char paths[][book_path_length], size_t count, uint8_t focus_index,
+                       int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -384,7 +385,7 @@ void draw_library_list(gfx::framebuffer_t* framebuffer, bool storage_mounted,
     gfx::clear(framebuffer, 0x0f);
     chrome::draw_status_bar(framebuffer, "Library");
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Open", gfx::icon_book},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
     if (!storage_mounted)
     {
         gfx::draw_text(framebuffer, m.margin, static_cast<uint16_t>(m.status_height + m.margin),
@@ -401,13 +402,13 @@ void draw_library_list(gfx::framebuffer_t* framebuffer, bool storage_mounted,
     const char* titles[max_books] = {};
     for (uint8_t index = 0; index < visible_count; ++index)
         titles[index] = basename_from_path(paths[index]);
-    draw_library_rows(framebuffer, titles, visible_count, focus_index);
+    draw_library_rows(framebuffer, titles, visible_count, focus_index, footer_focus);
 }
 
 void draw_library_catalog_view(gfx::framebuffer_t* framebuffer, bool storage_mounted,
                                const services::library_index::catalog_t* catalog,
                                const uint16_t* indices, size_t count, uint8_t focus_index,
-                               const char* title)
+                               const char* title, int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -431,7 +432,7 @@ void draw_library_catalog_view(gfx::framebuffer_t* framebuffer, bool storage_mou
     chrome::draw_status_bar(framebuffer, nullptr);
     chrome::draw_title_bar(framebuffer, heading, trailing);
     chrome::draw_indication_bar(framebuffer, {"Search", gfx::icon_search}, {"Open", gfx::icon_book},
-                                {"Details", gfx::icon_info});
+                                {"Details", gfx::icon_info}, footer_focus);
     if (!storage_mounted)
     {
         gfx::draw_text(framebuffer, m.margin, static_cast<uint16_t>(m.status_height + m.margin),
@@ -459,7 +460,7 @@ void draw_library_catalog_view(gfx::framebuffer_t* framebuffer, bool storage_mou
         const layout::rect_t item = catalog_row(vp, row_index, visible);
         if (item.height == 0U)
             break;
-        const bool selected = view_index == selected_index;
+        const bool selected = footer_focus < 0 && view_index == selected_index;
         // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
         // which thresholds every pixel to pure black/white -- a subtle gray
         // wash is invisible under it. Inverting to a solid black row with
@@ -499,12 +500,12 @@ void draw_library_catalog_view(gfx::framebuffer_t* framebuffer, bool storage_mou
 
 void draw_library_catalog(gfx::framebuffer_t* framebuffer, bool storage_mounted,
                           const services::library_index::catalog_t* catalog, size_t count,
-                          uint8_t focus_index, const char* title)
+                          uint8_t focus_index, const char* title, int8_t footer_focus)
 {
     if (catalog != nullptr && count > catalog->count)
         count = catalog->count;
     draw_library_catalog_view(framebuffer, storage_mounted, catalog, nullptr, count, focus_index,
-                              title);
+                              title, footer_focus);
 }
 
 bool library_touch_index(uint16_t display_width, uint16_t display_height, uint16_t x, uint16_t y,

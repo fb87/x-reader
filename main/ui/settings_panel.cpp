@@ -54,7 +54,8 @@ static layout::rect_t control_area(layout::rect_t row)
 } // namespace
 
 void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
-                         const settings_row_t* rows, uint8_t count, uint8_t focus)
+                         const settings_row_t* rows, uint8_t count, uint8_t focus,
+                         int8_t footer_focus)
 {
     if (framebuffer == nullptr || rows == nullptr)
         return;
@@ -69,7 +70,7 @@ void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
         const layout::rect_t row = panel_row(vp, index, count);
         if (row.height == 0)
             continue;
-        const bool selected = index == focus;
+        const bool selected = footer_focus < 0 && index == focus;
         // Focus-move redraws use the panel's fast 1-bit-only refresh mode, which
         // thresholds every pixel to pure black/white -- a subtle gray wash is
         // invisible under it. Inverting to a solid black row with white content
@@ -138,7 +139,8 @@ void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
     }
 
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list},
-                                {"Change", gfx::icon_swap_horiz}, {"Back", gfx::icon_arrow_back});
+                                {"Change", gfx::icon_swap_horiz}, {"Back", gfx::icon_arrow_back},
+                                footer_focus);
 }
 
 bool settings_panel_hit(layout::viewport_t viewport, const settings_row_t* rows, uint8_t count,

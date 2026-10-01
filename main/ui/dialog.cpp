@@ -48,7 +48,7 @@ void dialog_begin(dialog_state_t* state, dialog_kind_t kind, const char* title, 
              cancel_label == nullptr ? "CANCEL" : cancel_label);
 }
 
-void draw_dialog(gfx::framebuffer_t* framebuffer, const dialog_state_t* state)
+void draw_dialog(gfx::framebuffer_t* framebuffer, const dialog_state_t* state, int8_t footer_focus)
 {
     if (framebuffer == nullptr || state == nullptr)
         return;
@@ -63,23 +63,28 @@ void draw_dialog(gfx::framebuffer_t* framebuffer, const dialog_state_t* state)
     const auto accept = button_rect(viewport, true);
     const auto cancel = button_rect(viewport, false);
     const bool show_cancel = state->kind == dialog_confirm;
+    // Only one thing is ever highlighted at a time: while focus is in the
+    // footer, neither button shows a selection.
+    const bool accept_focused = footer_focus < 0 && state->focus_accept;
+    const bool cancel_focused = footer_focus < 0 && !state->focus_accept;
     gfx::fill_rect(framebuffer, accept.x, accept.y, accept.width, accept.height,
-                   state->focus_accept ? 0x00 : 0x0f);
+                   accept_focused ? 0x00 : 0x0f);
     gfx::draw_rect(framebuffer, accept.x, accept.y, accept.width, accept.height, 0x00);
     gfx::draw_text(framebuffer, static_cast<uint16_t>(accept.x + 10U),
                    static_cast<uint16_t>(accept.y + 13U), state->accept_label, 1,
-                   state->focus_accept ? 0x0f : 0x00);
+                   accept_focused ? 0x0f : 0x00);
     if (show_cancel)
     {
         gfx::fill_rect(framebuffer, cancel.x, cancel.y, cancel.width, cancel.height,
-                       state->focus_accept ? 0x0f : 0x00);
+                       cancel_focused ? 0x00 : 0x0f);
         gfx::draw_rect(framebuffer, cancel.x, cancel.y, cancel.width, cancel.height, 0x00);
         gfx::draw_text(framebuffer, static_cast<uint16_t>(cancel.x + 10U),
                        static_cast<uint16_t>(cancel.y + 13U), state->cancel_label, 1,
-                       state->focus_accept ? 0x00 : 0x0f);
+                       cancel_focused ? 0x0f : 0x00);
     }
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_swap_horiz},
-                                {"Select", gfx::icon_check}, {"Back", gfx::icon_arrow_back});
+                                {"Select", gfx::icon_check}, {"Back", gfx::icon_arrow_back},
+                                footer_focus);
 }
 
 dialog_result_t dialog_handle(dialog_state_t* state, const input::action_event_t* event,

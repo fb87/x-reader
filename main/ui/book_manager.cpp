@@ -21,7 +21,7 @@ static layout::rect_t items_area(layout::viewport_t viewport)
 
 void draw_book_manager(gfx::framebuffer_t* framebuffer, book_manager_item_t focus,
                        uint16_t book_count, bool storage_mounted, uint16_t duplicate_count,
-                       bool scanning)
+                       bool scanning, int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -55,7 +55,7 @@ void draw_book_manager(gfx::framebuffer_t* framebuffer, book_manager_item_t focu
     {
         const layout::rect_t item =
             layout::row(area, index, book_manager_item_count, row_height, metrics.gap);
-        const bool selected = index == static_cast<uint8_t>(focus);
+        const bool selected = footer_focus < 0 && index == static_cast<uint8_t>(focus);
         // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
         // which thresholds every pixel to pure black/white -- a subtle gray
         // wash is invisible under it. Inverting to a solid black row with
@@ -77,7 +77,7 @@ void draw_book_manager(gfx::framebuffer_t* framebuffer, book_manager_item_t focu
                        secondary);
     }
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Open", gfx::icon_check},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 }
 
 bool book_manager_touch_item(uint16_t display_width, uint16_t display_height, uint16_t x,

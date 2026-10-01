@@ -25,7 +25,7 @@ void draw_book_sync(gfx::framebuffer_t* framebuffer, book_sync_item_t focus, boo
                     const char* last_sync, const char* activity, uint16_t completed, uint16_t total,
                     bool pending_retry, uint8_t retry_count, const char* last_result,
                     uint32_t bytes_downloaded, uint32_t bytes_total, const char* history1,
-                    const char* history2)
+                    const char* history2, int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -53,7 +53,7 @@ void draw_book_sync(gfx::framebuffer_t* framebuffer, book_sync_item_t focus, boo
         const layout::rect_t item =
             layout::row(area, index, book_sync_item_count,
                         static_cast<uint16_t>(metrics.row_height + 4U), metrics.gap);
-        const bool selected = index == static_cast<uint8_t>(focus);
+        const bool selected = footer_focus < 0 && index == static_cast<uint8_t>(focus);
         // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
         // which thresholds every pixel to pure black/white -- a subtle gray
         // wash is invisible under it. Inverting to a solid black row with
@@ -112,7 +112,7 @@ void draw_book_sync(gfx::framebuffer_t* framebuffer, book_sync_item_t focus, boo
         gfx::draw_text(framebuffer, metrics.margin, y, detail, 1, 0x06);
     }
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Select", gfx::icon_check},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 }
 
 bool book_sync_touch_item(uint16_t display_width, uint16_t display_height, uint16_t x, uint16_t y,

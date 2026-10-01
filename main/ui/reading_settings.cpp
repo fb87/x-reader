@@ -88,12 +88,12 @@ static const quick_settings_values_t fallback = {2, 0, 1, 0, 0, 0, 0, 1, 0, 1, 6
 } // namespace
 
 void draw_reading_settings(gfx::framebuffer_t* framebuffer, reading_setting_t focus,
-                           const quick_settings_values_t* values)
+                           const quick_settings_values_t* values, int8_t footer_focus)
 {
     settings_row_t rows[reading_setting_count] = {};
     build_rows(values == nullptr ? &fallback : values, rows);
     draw_settings_panel(framebuffer, "Reading Settings", rows, reading_setting_count,
-                        static_cast<uint8_t>(focus));
+                        static_cast<uint8_t>(focus), footer_focus);
 }
 
 bool reading_settings_hit(layout::viewport_t viewport, uint16_t x, uint16_t y, settings_hit_t* hit)

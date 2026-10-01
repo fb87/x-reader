@@ -13,7 +13,7 @@ namespace xreader::ui
 
 void draw_book_info(gfx::framebuffer_t* framebuffer, const epub::book_t* book, uint8_t spine_index,
                     uint8_t spine_count, const uint8_t* cover_pixels, uint16_t cover_pixel_width,
-                    uint16_t cover_pixel_height)
+                    uint16_t cover_pixel_height, int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -91,7 +91,7 @@ void draw_book_info(gfx::framebuffer_t* framebuffer, const epub::book_t* book, u
     widgets::draw_button(framebuffer, open_button, "Open Book", gfx::icon_book, true);
 
     chrome::draw_indication_bar(framebuffer, {nullptr, gfx::icon_none}, {"Open", gfx::icon_book},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 }
 
 layout::rect_t book_info_open_bounds(layout::viewport_t vp)

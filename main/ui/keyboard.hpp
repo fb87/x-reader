@@ -50,7 +50,8 @@ struct keyboard_state_t
 };
 void keyboard_begin(keyboard_state_t* state, keyboard_purpose_t purpose, const char* title,
                     const char* initial, bool masked, keyboard_mode_t mode = keyboard_qwerty);
-void draw_keyboard(gfx::framebuffer_t* framebuffer, const keyboard_state_t* state);
+void draw_keyboard(gfx::framebuffer_t* framebuffer, const keyboard_state_t* state,
+                   int8_t footer_focus);
 keyboard_result_t keyboard_handle(keyboard_state_t* state, const input::action_event_t* event,
                                   layout::viewport_t viewport);
 } // namespace ui

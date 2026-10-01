@@ -77,6 +77,86 @@ static screen_command_t activate_quick_setting(screen_state_t* state)
         return screen_command_edit_setting;
     }
 }
+
+// What a tap/select on this zone currently means, for every screen except
+// screen_home (which activate_footer_zone() below handles directly via
+// activate_home(), since its footer cells are fixed shortcuts rather than a
+// synthesized action_event_t). action_none means the cell is blank/dead for
+// this screen's current state (e.g. About/Storage's empty left+center cells).
+static input::action_t resolve_footer_action(const screen_state_t* state,
+                                             layout::footer_zone_t zone)
+{
+    if (state->screen == screen_reader)
+        return zone == layout::footer_left     ? input::action_page_prev
+              : zone == layout::footer_center ? input::action_menu
+                                               : input::action_page_next;
+    if (state->screen == screen_library || state->screen == screen_library_search_results)
+        return zone == layout::footer_left     ? input::action_left
+              : zone == layout::footer_center ? input::action_select
+                                               : input::action_right;
+    if (state->screen == screen_library_details)
+        return zone == layout::footer_left     ? input::action_menu
+              : zone == layout::footer_center ? input::action_select
+                                               : input::action_back;
+    if (state->screen == screen_book_info || state->screen == screen_storage ||
+        state->screen == screen_about)
+        return zone == layout::footer_right ? input::action_back : input::action_none;
+    if (zone == layout::footer_center)
+        return input::action_select;
+    if (zone == layout::footer_right)
+        return input::action_back;
+    return input::action_none;
+}
+
+static bool footer_zone_alive(const screen_state_t* state, layout::footer_zone_t zone)
+{
+    if (state->screen == screen_home)
+        return true;
+    return resolve_footer_action(state, zone) != input::action_none;
+}
+
+static layout::footer_zone_t zone_for_index(uint8_t index)
+{
+    if (index == 0)
+        return layout::footer_left;
+    if (index == 1)
+        return layout::footer_center;
+    return layout::footer_right;
+}
+
+// Searches up to 3 steps from `start` (always advancing at least once) for a
+// cell that isn't dead. Every screen has at least one live cell (Back, if
+// nothing else), so this always terminates; if it somehow doesn't find one it
+// returns `start` unchanged rather than looping forever.
+static uint8_t next_alive_footer_index(const screen_state_t* state, uint8_t start, bool forward)
+{
+    uint8_t index = start;
+    for (uint8_t attempt = 0; attempt < 3; ++attempt)
+    {
+        index = forward ? focus::next(index, 3) : focus::previous(index, 3);
+        if (footer_zone_alive(state, zone_for_index(index)))
+            return index;
+    }
+    return start;
+}
+
+static screen_command_t activate_footer_zone(screen_state_t* state, layout::footer_zone_t zone,
+                                             const screen_context_t* context)
+{
+    if (state->screen == screen_home)
+    {
+        if (zone == layout::footer_left)
+            return activate_home(state, home_library);
+        if (zone == layout::footer_right)
+            return activate_home(state, home_settings);
+        return activate_home(state, state->home_focus);
+    }
+    const input::action_t resolved = resolve_footer_action(state, zone);
+    if (resolved == input::action_none)
+        return screen_command_none;
+    input::action_event_t footer_event{resolved, 0, 0};
+    return dispatch(state, &footer_event, context);
+}
 } // namespace
 
 void initialize(screen_state_t* state)
@@ -104,7 +184,15 @@ void initialize(screen_state_t* state)
     state->reading_focus = reading_setting_font_size;
     state->has_pending_value = false;
     state->pending_value = 0;
+    state->footer_active = false;
+    state->footer_focus = 1;
     keyboard_begin(&state->keyboard, keyboard_purpose_none, "INPUT", "", false);
+}
+
+int8_t footer_highlight(const screen_state_t* state)
+{
+    return state != nullptr && state->footer_active ? static_cast<int8_t>(state->footer_focus)
+                                                     : static_cast<int8_t>(-1);
 }
 
 screen_command_t dispatch(screen_state_t* state, const input::action_event_t* event,
@@ -126,59 +214,61 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
     // screen controller so visual chrome and interaction cannot drift apart.
     if (event->action == input::action_pointer)
     {
+        // Touch and rotary-driven footer-focus are mutually exclusive modalities;
+        // any touch -- footer or not -- cancels footer-focus mode rather than
+        // leaving it stuck active while a per-screen touch handler below silently
+        // moves that screen's own list focus underneath it.
+        state->footer_active = false;
         const layout::footer_zone_t zone =
             layout::footer_hit(context->viewport, event->x, event->y);
         if (zone != layout::footer_none)
-        {
-            if (state->screen == screen_home)
-            {
-                if (zone == layout::footer_left)
-                    return activate_home(state, home_library);
-                if (zone == layout::footer_right)
-                    return activate_home(state, home_settings);
-                if (zone == layout::footer_center)
-                    return activate_home(state, state->home_focus);
-            }
-
-            input::action_event_t footer_event = *event;
-            footer_event.x = 0;
-            footer_event.y = 0;
-            footer_event.action = input::action_none;
-
-            if (state->screen == screen_reader)
-                footer_event.action = zone == layout::footer_left     ? input::action_page_prev
-                                      : zone == layout::footer_center ? input::action_menu
-                                                                      : input::action_page_next;
-            else if (state->screen == screen_library ||
-                     state->screen == screen_library_search_results)
-                footer_event.action = zone == layout::footer_left     ? input::action_left
-                                      : zone == layout::footer_center ? input::action_select
-                                                                      : input::action_right;
-            else if (state->screen == screen_library_details)
-                footer_event.action = zone == layout::footer_left     ? input::action_menu
-                                      : zone == layout::footer_center ? input::action_select
-                                                                      : input::action_back;
-            else if (state->screen == screen_book_info || state->screen == screen_storage ||
-                     state->screen == screen_about)
-                footer_event.action =
-                    zone == layout::footer_right ? input::action_back : input::action_none;
-            else if (zone == layout::footer_center)
-                footer_event.action = input::action_select;
-            else if (zone == layout::footer_right)
-                footer_event.action = input::action_back;
-
-            if (footer_event.action != input::action_none)
-                return dispatch(state, &footer_event, context);
-            return screen_command_none;
-        }
+            return activate_footer_zone(state, zone, context);
     }
 
     if (event->action == input::action_power)
         return screen_command_sleep;
     if (event->action == input::action_home && state->screen != screen_home)
     {
+        state->footer_active = false;
         state->screen = screen_home;
         return screen_command_show_home;
+    }
+
+    if (state->footer_active)
+    {
+        if (event->action == input::action_footer_exit)
+        {
+            state->footer_active = false;
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_down)
+        {
+            state->footer_focus = next_alive_footer_index(state, state->footer_focus, true);
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_up)
+        {
+            state->footer_focus = next_alive_footer_index(state, state->footer_focus, false);
+            return screen_command_redraw;
+        }
+        if (event->action == input::action_select)
+        {
+            const screen_t before = state->screen;
+            const screen_command_t command =
+                activate_footer_zone(state, zone_for_index(state->footer_focus), context);
+            if (state->screen != before)
+                state->footer_active = false;
+            return command;
+        }
+    }
+    else if (event->action == input::action_footer_enter && state->screen != screen_reader &&
+             state->screen != screen_keyboard)
+    {
+        state->footer_active = true;
+        state->footer_focus = footer_zone_alive(state, layout::footer_center)
+                                  ? 1
+                                  : next_alive_footer_index(state, 1, true);
+        return screen_command_redraw;
     }
 
     if (state->screen == screen_home)

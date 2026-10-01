@@ -31,7 +31,7 @@ struct dialog_state_t
 };
 void dialog_begin(dialog_state_t* state, dialog_kind_t kind, const char* title, const char* message,
                   const char* accept_label = "OK", const char* cancel_label = "CANCEL");
-void draw_dialog(gfx::framebuffer_t* framebuffer, const dialog_state_t* state);
+void draw_dialog(gfx::framebuffer_t* framebuffer, const dialog_state_t* state, int8_t footer_focus);
 dialog_result_t dialog_handle(dialog_state_t* state, const input::action_event_t* event,
                               layout::viewport_t viewport);
 } // namespace ui

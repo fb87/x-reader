@@ -25,7 +25,7 @@ enum reading_setting_t : uint8_t
 };
 
 void draw_reading_settings(gfx::framebuffer_t* framebuffer, reading_setting_t focus,
-                           const quick_settings_values_t* values);
+                           const quick_settings_values_t* values, int8_t footer_focus);
 bool reading_settings_hit(layout::viewport_t viewport, uint16_t x, uint16_t y, settings_hit_t* hit);
 
 } // namespace ui

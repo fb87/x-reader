@@ -14,8 +14,8 @@ enum ota_item_t : uint8_t
 };
 void draw_ota(gfx::framebuffer_t* framebuffer, ota_item_t focus, const char* current_version,
               const char* available_version, const char* status, bool update_available,
-              const char* release_notes = nullptr, uint8_t progress_percent = 0,
-              const char* last_result = nullptr, bool rollback_pending = false);
+              const char* release_notes, uint8_t progress_percent, const char* last_result,
+              bool rollback_pending, int8_t footer_focus);
 bool ota_touch_item(uint16_t width, uint16_t height, uint16_t x, uint16_t y, ota_item_t* item);
 } // namespace ui
 } // namespace xreader

@@ -17,11 +17,10 @@ enum book_sync_item_t : uint8_t
 };
 void draw_book_sync(gfx::framebuffer_t* framebuffer, book_sync_item_t focus, bool connected,
                     bool sync_books, bool sync_progress, bool server_configured,
-                    const char* last_sync, const char* activity = nullptr, uint16_t completed = 0,
-                    uint16_t total = 0, bool pending_retry = false, uint8_t retry_count = 0,
-                    const char* last_result = nullptr, uint32_t bytes_downloaded = 0,
-                    uint32_t bytes_total = 0, const char* history1 = nullptr,
-                    const char* history2 = nullptr);
+                    const char* last_sync, const char* activity, uint16_t completed,
+                    uint16_t total, bool pending_retry, uint8_t retry_count,
+                    const char* last_result, uint32_t bytes_downloaded, uint32_t bytes_total,
+                    const char* history1, const char* history2, int8_t footer_focus);
 bool book_sync_touch_item(uint16_t width, uint16_t height, uint16_t x, uint16_t y,
                           book_sync_item_t* item);
 } // namespace ui

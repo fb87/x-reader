@@ -29,7 +29,7 @@ static layout::rect_t list_area(layout::viewport_t viewport)
 } // namespace
 
 void draw_wifi_networks(gfx::framebuffer_t* framebuffer, const wifi_network_view_t* networks,
-                        uint8_t count, uint8_t focus, const char* status)
+                        uint8_t count, uint8_t focus, const char* status, int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -46,7 +46,7 @@ void draw_wifi_networks(gfx::framebuffer_t* framebuffer, const wifi_network_view
     {
         const layout::rect_t row = layout::row(
             area, index, total, static_cast<uint16_t>(metrics.row_height + 2U), metrics.gap);
-        const bool selected = index == focus;
+        const bool selected = footer_focus < 0 && index == focus;
         // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
         // which thresholds every pixel to pure black/white -- a subtle gray
         // wash is invisible under it. Inverting to a solid black row with
@@ -80,7 +80,7 @@ void draw_wifi_networks(gfx::framebuffer_t* framebuffer, const wifi_network_view
         }
     }
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Select", gfx::icon_check},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 }
 
 bool wifi_networks_touch_item(uint16_t width, uint16_t height, uint16_t x, uint16_t y,

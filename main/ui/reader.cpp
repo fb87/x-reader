@@ -484,7 +484,7 @@ bool find_page(const epub::document_t* document, const char* query,
 
 void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const epub::book_t* book,
                  const epub::document_t* document, uint8_t page, uint8_t page_count,
-                 uint8_t spine_index, const reader_settings_t* settings)
+                 uint8_t spine_index, const reader_settings_t* settings, int8_t footer_focus)
 {
     if (framebuffer == nullptr || book == nullptr || document == nullptr)
         return;
@@ -585,7 +585,7 @@ void draw_reader(gfx::framebuffer_t* framebuffer, const char* book_path, const e
                           static_cast<uint16_t>(spine_index) + 1U < book->spine_count;
     chrome::draw_indication_bar(framebuffer, {"Prev", gfx::icon_arrow_back, !can_prev},
                                 {"Menu", gfx::icon_menu},
-                                {"Next", gfx::icon_chevron_right, !can_next});
+                                {"Next", gfx::icon_chevron_right, !can_next}, footer_focus);
 
     // Mockup 5 shows a progress bar with "3 / 256" on the left and the book's
     // title and author on the right, just above the action bar.

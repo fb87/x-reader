@@ -42,7 +42,7 @@ enum quick_setting_t : uint8_t
 };
 
 void draw_quick_settings(gfx::framebuffer_t* framebuffer, quick_setting_t focus,
-                         const quick_settings_values_t* values);
+                         const quick_settings_values_t* values, int8_t footer_focus);
 bool quick_settings_touch(uint16_t display_width, uint16_t display_height, quick_setting_t focus,
                           uint16_t x, uint16_t y, quick_setting_t* item);
 bool quick_settings_contains(uint16_t display_width, uint16_t display_height, uint16_t x,

@@ -37,8 +37,10 @@ void draw_status_bar(gfx::framebuffer_t* framebuffer, const char* title);
 void draw_title_bar(gfx::framebuffer_t* framebuffer, const char* title, const char* trailing);
 uint16_t title_height(layout::viewport_t viewport);
 
+// focused_cell is -1 for no rotary focus, or 0/1/2 (left/center/right) to render
+// that cell inverted (solid black/white) -- see ui::footer_highlight().
 void draw_indication_bar(gfx::framebuffer_t* framebuffer, footer_cell_t left, footer_cell_t center,
-                         footer_cell_t right);
+                         footer_cell_t right, int8_t focused_cell);
 
 } // namespace chrome
 } // namespace ui

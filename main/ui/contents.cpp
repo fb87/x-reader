@@ -31,7 +31,8 @@ const char* item_title(const epub::book_t* book, uint8_t i)
 }
 } // namespace
 
-void draw_contents(gfx::framebuffer_t* framebuffer, const epub::book_t* book, uint8_t focus)
+void draw_contents(gfx::framebuffer_t* framebuffer, const epub::book_t* book, uint8_t focus,
+                   int8_t footer_focus)
 {
     if (!framebuffer)
         return;
@@ -57,7 +58,7 @@ void draw_contents(gfx::framebuffer_t* framebuffer, const epub::book_t* book, ui
         {
             const uint8_t idx = static_cast<uint8_t>(first + slot);
             auto r = layout::row(area, slot, max_visible, m.row_height, m.gap);
-            const bool selected = idx == focus;
+            const bool selected = footer_focus < 0 && idx == focus;
             // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
             // which thresholds every pixel to pure black/white -- a subtle gray
             // wash is invisible under it. Inverting to a solid black row with
@@ -76,7 +77,7 @@ void draw_contents(gfx::framebuffer_t* framebuffer, const epub::book_t* book, ui
         }
     }
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Open", gfx::icon_book},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 }
 
 bool contents_touch_index(uint16_t width, uint16_t height, uint16_t x, uint16_t y, uint8_t count,

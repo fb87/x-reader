@@ -56,6 +56,12 @@ bool map_event(const event_t* event, action_event_t* action)
     case event_rotary_counterclockwise:
         action->action = action_up;
         break;
+    case event_rotary_double_clockwise:
+        action->action = action_footer_enter;
+        break;
+    case event_rotary_double_counterclockwise:
+        action->action = action_footer_exit;
+        break;
     case event_button_up:
         action->action = action_select;
         break;

@@ -22,6 +22,10 @@ enum action_t : uint8_t
     action_page_prev,
     action_home,
     action_power,
+    // Jump rotary focus into/out of the bottom action bar -- see
+    // event_rotary_double_clockwise/_counterclockwise.
+    action_footer_enter,
+    action_footer_exit,
 };
 
 struct action_event_t

@@ -164,7 +164,7 @@ void draw_title_bar(gfx::framebuffer_t* framebuffer, const char* title, const ch
 }
 
 void draw_indication_bar(gfx::framebuffer_t* framebuffer, footer_cell_t left, footer_cell_t center,
-                         footer_cell_t right)
+                         footer_cell_t right, int8_t focused_cell)
 {
     if (framebuffer == nullptr)
         return;
@@ -185,6 +185,26 @@ void draw_indication_bar(gfx::framebuffer_t* framebuffer, footer_cell_t left, fo
     const uint16_t block_top = m.footer_height > block_height
                                   ? static_cast<uint16_t>(top + (m.footer_height - block_height) / 2U)
                                   : top;
+
+    // Pass 1: cell backgrounds. A rotary-focused cell renders solid black with
+    // white content -- the same inversion used for row highlights elsewhere,
+    // since this panel's fast refresh mode is a confirmed 1-bit-only threshold
+    // that would otherwise crush any subtler highlight color to invisible.
+    for (uint8_t index = 0; index < 3; ++index)
+    {
+        const uint16_t x = static_cast<uint16_t>(index * third);
+        const uint16_t width = index == 2 ? static_cast<uint16_t>(framebuffer->width - x) : third;
+        if (index == focused_cell)
+            gfx::fill_rect(framebuffer, x, top, width, m.footer_height, ink);
+    }
+
+    // Pass 2: separators, then icon/label -- drawn after the backgrounds so a
+    // focused cell's black fill can never clobber the divider next to it.
+    for (uint8_t index = 1; index < 3; ++index)
+        gfx::fill_rect(framebuffer, static_cast<uint16_t>(index * third),
+                       static_cast<uint16_t>(top + 8U), 1,
+                       static_cast<uint16_t>(m.footer_height - 16U), rule);
+
     for (uint8_t index = 0; index < 3; ++index)
     {
         const footer_cell_t cell = cells[index];
@@ -193,7 +213,8 @@ void draw_indication_bar(gfx::framebuffer_t* framebuffer, footer_cell_t left, fo
         if (cell.label == nullptr && cell.icon == gfx::icon_none)
             continue;
 
-        const uint8_t foreground = cell.disabled ? mid : ink;
+        const bool focused = index == focused_cell;
+        const uint8_t foreground = focused ? paper : (cell.disabled ? mid : ink);
         const bool has_label = cell.label != nullptr && cell.label[0] != '\0';
         const uint16_t label_width = has_label ? gfx::measure_text(cell.label, 1) : 0;
         if (cell.icon != gfx::icon_none)
@@ -212,9 +233,6 @@ void draw_indication_bar(gfx::framebuffer_t* framebuffer, footer_cell_t left, fo
                     : static_cast<uint16_t>(block_top + glyph + label_gap);
             gfx::draw_text(framebuffer, label_x, label_y, cell.label, 1, foreground);
         }
-        if (index != 0)
-            gfx::fill_rect(framebuffer, x, static_cast<uint16_t>(top + 8U), 1,
-                           static_cast<uint16_t>(m.footer_height - 16U), rule);
     }
 }
 

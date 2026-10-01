@@ -40,7 +40,8 @@ struct settings_row_t
 };
 
 void draw_settings_panel(gfx::framebuffer_t* framebuffer, const char* title,
-                         const settings_row_t* rows, uint8_t count, uint8_t focus);
+                         const settings_row_t* rows, uint8_t count, uint8_t focus,
+                         int8_t footer_focus);
 
 // Resolves a touch to a row.  For sliders and segmented controls it also reports
 // the value the touch selected, so the caller can set rather than cycle.

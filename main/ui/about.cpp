@@ -9,7 +9,7 @@ namespace xreader
 namespace ui
 {
 void draw_about(gfx::framebuffer_t* framebuffer, const char* version, const char* board,
-                const char* idf_version, const char* build_date)
+                const char* idf_version, const char* build_date, int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -34,7 +34,7 @@ void draw_about(gfx::framebuffer_t* framebuffer, const char* version, const char
                        static_cast<uint16_t>(row.y + 12U), values[index], 1, 0x05);
     }
     chrome::draw_indication_bar(framebuffer, {nullptr, gfx::icon_none}, {nullptr, gfx::icon_none},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 }
 } // namespace ui
 } // namespace xreader

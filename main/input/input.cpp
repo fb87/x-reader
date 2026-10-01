@@ -28,6 +28,10 @@ static const char* event_name(event_type_t type)
         return "rotary_clockwise";
     case event_rotary_counterclockwise:
         return "rotary_counterclockwise";
+    case event_rotary_double_clockwise:
+        return "rotary_double_clockwise";
+    case event_rotary_double_counterclockwise:
+        return "rotary_double_counterclockwise";
     case event_button_down:
         return "button_down";
     case event_button_up:
@@ -74,6 +78,8 @@ struct task_context_t
     bool press_long_fired;
     button_debounce_t right_button;
     button_debounce_t left_button;
+    TickType_t last_clockwise_tick;
+    TickType_t last_counterclockwise_tick;
     bool touch_active;
     uint16_t touch_x;
     uint16_t touch_y;
@@ -118,15 +124,35 @@ static bool debounce_click(button_debounce_t* button, bool pressed)
 // plain button press does not reliably produce one, which is why "rotating"
 // appeared to do nothing).  Each fires its rotary event on release, matching
 // how the centre button already fires event_button_up on release below.
+// Two clicks of the same direction within this window are a distinct "double"
+// gesture (jump focus into/out of the bottom action bar). The double event is
+// layered on top of the normal click rather than replacing it, so a plain
+// single click never waits around to see if a second one is coming.
+static constexpr uint32_t double_press_ms = 400;
+
 static void poll_rotary(task_context_t* context)
 {
     const bool right_pressed = gpio_get_level(context->config.rotary_right_pin) == 0;
     if (debounce_click(&context->right_button, right_pressed))
+    {
+        const TickType_t now = xTaskGetTickCount();
         send(context, {event_rotary_clockwise, 0, 0});
+        if (static_cast<uint32_t>(now - context->last_clockwise_tick) <=
+            pdMS_TO_TICKS(double_press_ms))
+            send(context, {event_rotary_double_clockwise, 0, 0});
+        context->last_clockwise_tick = now;
+    }
 
     const bool left_pressed = gpio_get_level(context->config.rotary_left_pin) == 0;
     if (debounce_click(&context->left_button, left_pressed))
+    {
+        const TickType_t now = xTaskGetTickCount();
         send(context, {event_rotary_counterclockwise, 0, 0});
+        if (static_cast<uint32_t>(now - context->last_counterclockwise_tick) <=
+            pdMS_TO_TICKS(double_press_ms))
+            send(context, {event_rotary_double_counterclockwise, 0, 0});
+        context->last_counterclockwise_tick = now;
+    }
 }
 
 static constexpr uint32_t long_press_ms = 700;
@@ -249,6 +275,8 @@ esp_err_t start(const config_t* config, QueueHandle_t events)
     task_context.left_button.state = gpio_get_level(config->rotary_left_pin) == 0;
     task_context.left_button.candidate = task_context.left_button.state;
     task_context.left_button.stable_samples = debounce_samples;
+    task_context.last_clockwise_tick = xTaskGetTickCount();
+    task_context.last_counterclockwise_tick = task_context.last_clockwise_tick;
     task_context.touch_active = false;
     task_context.touch_x = 0;
     task_context.touch_y = 0;
@@ -294,6 +322,8 @@ void flush(QueueHandle_t events)
     task_context.left_button.candidate = gpio_get_level(task_context.config.rotary_left_pin) == 0;
     task_context.left_button.state = task_context.left_button.candidate;
     task_context.left_button.stable_samples = debounce_samples;
+    task_context.last_clockwise_tick = xTaskGetTickCount();
+    task_context.last_counterclockwise_tick = task_context.last_clockwise_tick;
 }
 
 } // namespace input

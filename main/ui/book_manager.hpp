@@ -16,8 +16,8 @@ enum book_manager_item_t : uint8_t
     book_manager_item_count
 };
 void draw_book_manager(gfx::framebuffer_t* framebuffer, book_manager_item_t focus,
-                       uint16_t book_count, bool storage_mounted, uint16_t duplicate_count = 0U,
-                       bool scanning = false);
+                       uint16_t book_count, bool storage_mounted, uint16_t duplicate_count,
+                       bool scanning, int8_t footer_focus);
 bool book_manager_touch_item(uint16_t width, uint16_t height, uint16_t x, uint16_t y,
                              book_manager_item_t* item);
 } // namespace ui

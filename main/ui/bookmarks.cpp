@@ -19,7 +19,7 @@ layout::rect_t bookmarks_area(layout::viewport_t vp)
 } // namespace
 
 void draw_bookmarks(gfx::framebuffer_t* framebuffer, const bookmark_view_t* items, uint8_t count,
-                    uint8_t focus)
+                    uint8_t focus, int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -41,7 +41,7 @@ void draw_bookmarks(gfx::framebuffer_t* framebuffer, const bookmark_view_t* item
         for (uint8_t i = 0; i < count; ++i)
         {
             const auto row = layout::row(area, i, count, m.row_height, m.gap);
-            const bool selected = i == focus;
+            const bool selected = footer_focus < 0 && i == focus;
             // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
             // which thresholds every pixel to pure black/white -- a subtle gray
             // wash is invisible under it. Inverting to a solid black row with
@@ -59,7 +59,7 @@ void draw_bookmarks(gfx::framebuffer_t* framebuffer, const bookmark_view_t* item
     }
 
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Open", gfx::icon_book},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 }
 
 bool bookmarks_touch_index(uint16_t width, uint16_t height, uint16_t x, uint16_t y, uint8_t count,

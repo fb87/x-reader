@@ -74,13 +74,13 @@ static const quick_settings_values_t fallback = {2, 0, 1, 0, 0, 0, 0, 1, 0, 1, 6
 } // namespace
 
 void draw_display_settings(gfx::framebuffer_t* framebuffer, display_setting_t focus,
-                           const quick_settings_values_t* values)
+                           const quick_settings_values_t* values, int8_t footer_focus)
 {
     settings_row_t rows[display_setting_count] = {};
     char sleep_text[24] = {};
     build_rows(values == nullptr ? &fallback : values, rows, sleep_text, sizeof(sleep_text));
     draw_settings_panel(framebuffer, "Display Settings", rows, display_setting_count,
-                        static_cast<uint8_t>(focus));
+                        static_cast<uint8_t>(focus), footer_focus);
 }
 
 bool display_settings_hit(layout::viewport_t viewport, uint16_t x, uint16_t y, settings_hit_t* hit)

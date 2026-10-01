@@ -22,7 +22,7 @@ enum home_action_t : uint8_t
 };
 
 void draw_home(gfx::framebuffer_t* framebuffer, bool storage_mounted, const char* book_title,
-               home_action_t focus);
+               home_action_t focus, int8_t footer_focus);
 bool home_touch_action(uint16_t display_width, uint16_t display_height, uint16_t x, uint16_t y,
                        home_action_t* action);
 

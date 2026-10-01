@@ -87,7 +87,17 @@ struct screen_state_t
     // application can set it directly instead of cycling to the next option.
     bool has_pending_value;
     uint8_t pending_value;
+    // Rotary-only access to the bottom action bar: double-down (action_footer_enter)
+    // moves focus here, double-up (action_footer_exit) or a screen change moves it
+    // back. footer_focus is 0=left, 1=center, 2=right, meaningful only while active.
+    bool footer_active;
+    uint8_t footer_focus;
 };
+
+// -1 when the footer isn't rotary-focused, else 0/1/2 (left/center/right) -- what
+// screens should pass to chrome::draw_indication_bar (via their own draw_*()
+// footer_focus parameter) to render the focused cell.
+int8_t footer_highlight(const screen_state_t* state);
 
 struct screen_context_t
 {

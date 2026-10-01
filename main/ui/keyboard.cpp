@@ -413,7 +413,7 @@ void keyboard_begin(keyboard_state_t* s, keyboard_purpose_t p, const char* t, co
     snprintf(s->text, sizeof(s->text), "%s", i ? i : "");
     s->cursor = static_cast<uint8_t>(strlen(s->text));
 }
-void draw_keyboard(gfx::framebuffer_t* fb, const keyboard_state_t* s)
+void draw_keyboard(gfx::framebuffer_t* fb, const keyboard_state_t* s, int8_t footer_focus)
 {
     if (!fb || !s)
         return;
@@ -437,7 +437,7 @@ void draw_keyboard(gfx::framebuffer_t* fb, const keyboard_state_t* s)
         for (uint8_t c = 0; c < cols(s, r); ++c)
         {
             const auto k = key_rect(vp, s, r, c);
-            const bool sel = r == s->focus_row && c == s->focus_col;
+            const bool sel = footer_focus < 0 && r == s->focus_row && c == s->focus_col;
             gfx::fill_rect(fb, k.x, k.y, k.width, k.height, sel ? 0x00 : 0x0f);
             gfx::draw_rect(fb, k.x, k.y, k.width, k.height, sel ? 0x00 : 0x08);
             char sc[4] = {};
@@ -451,7 +451,7 @@ void draw_keyboard(gfx::framebuffer_t* fb, const keyboard_state_t* s)
                 sel ? 0x0f : 0x00);
         }
     chrome::draw_indication_bar(fb, {"Move", gfx::icon_list}, {"Type", gfx::icon_check},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 }
 keyboard_result_t keyboard_handle(keyboard_state_t* s, const input::action_event_t* e,
                                   layout::viewport_t vp)

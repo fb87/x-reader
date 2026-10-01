@@ -106,7 +106,7 @@ static bool draw_cover(gfx::framebuffer_t* framebuffer,
 } // namespace
 
 void draw_library_details(gfx::framebuffer_t* framebuffer,
-                          const services::library_index::entry_t* entry)
+                          const services::library_index::entry_t* entry, int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -120,7 +120,8 @@ void draw_library_details(gfx::framebuffer_t* framebuffer,
     {
         gfx::draw_text(framebuffer, body.x, body.y, "BOOK NOT AVAILABLE", 2, 0x00);
         chrome::draw_indication_bar(framebuffer, {nullptr, gfx::icon_none},
-                                    {nullptr, gfx::icon_none}, {"Back", gfx::icon_arrow_back});
+                                    {nullptr, gfx::icon_none}, {"Back", gfx::icon_arrow_back},
+                                    footer_focus);
         return;
     }
 
@@ -166,7 +167,7 @@ void draw_library_details(gfx::framebuffer_t* framebuffer,
         gfx::fill_rect(framebuffer, text_x, static_cast<uint16_t>(y + 25U), text_width, 1, 0x0d);
     }
     chrome::draw_indication_bar(framebuffer, {"Manage", gfx::icon_edit}, {"Open", gfx::icon_book},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 }
 
 } // namespace xreader::ui

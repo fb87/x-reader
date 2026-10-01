@@ -37,7 +37,8 @@ static uint8_t first_visible(uint8_t count, uint8_t focus, uint8_t visible)
 } // namespace
 
 void draw_file_browser(gfx::framebuffer_t* framebuffer,
-                       const services::file_browser::listing_t* listing, uint8_t focus)
+                       const services::file_browser::listing_t* listing, uint8_t focus,
+                       int8_t footer_focus)
 {
     if (framebuffer == nullptr)
         return;
@@ -95,7 +96,8 @@ void draw_file_browser(gfx::framebuffer_t* framebuffer,
     {
         gfx::draw_text(framebuffer, area.x, area.y, "EMPTY FOLDER", 2, 0x00);
         chrome::draw_indication_bar(framebuffer, {nullptr, gfx::icon_none},
-                                    {nullptr, gfx::icon_none}, {"Back", gfx::icon_arrow_back});
+                                    {nullptr, gfx::icon_none}, {"Back", gfx::icon_arrow_back},
+                                    footer_focus);
         return;
     }
 
@@ -108,7 +110,7 @@ void draw_file_browser(gfx::framebuffer_t* framebuffer,
         const uint8_t index = static_cast<uint8_t>(first + row);
         const auto& entry = listing->entries[index];
         const layout::rect_t item = layout::row(area, row, shown, metrics.row_height, metrics.gap);
-        const bool selected = index == focus;
+        const bool selected = footer_focus < 0 && index == focus;
         // Focus-move redraws use the panel's fast 1-bit-only refresh mode,
         // which thresholds every pixel to pure black/white -- a subtle gray
         // wash is invisible under it. Inverting to a solid black row with
@@ -143,7 +145,7 @@ void draw_file_browser(gfx::framebuffer_t* framebuffer,
         }
     }
     chrome::draw_indication_bar(framebuffer, {"Move", gfx::icon_list}, {"Open", gfx::icon_folder},
-                                {"Back", gfx::icon_arrow_back});
+                                {"Back", gfx::icon_arrow_back}, footer_focus);
 }
 
 bool file_browser_touch_index(uint16_t width, uint16_t height, uint16_t x, uint16_t y,
