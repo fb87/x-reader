@@ -69,7 +69,7 @@ void draw_wifi_networks(gfx::framebuffer_t* framebuffer, const wifi_network_view
                     : row.x;
             gfx::draw_text(framebuffer, info_x,
                            static_cast<uint16_t>(row.y + (row.height - 24U) / 2U), info, 1,
-                           selected ? 0x0f : 0x06);
+                           selected ? 0x0f : 0x00);
         }
         else
         {

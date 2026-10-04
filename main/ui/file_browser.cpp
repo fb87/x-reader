@@ -118,7 +118,7 @@ void draw_file_browser(gfx::framebuffer_t* framebuffer,
         gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height,
                        selected ? 0x00 : 0x0f);
         const uint8_t fg = selected ? 0x0f : 0x00;
-        const uint8_t secondary = selected ? 0x0f : 0x06;
+        const uint8_t secondary = selected ? 0x0f : 0x00;
         const uint16_t glyph = gfx::icon_advance(1);
         gfx::draw_icon(framebuffer, static_cast<uint16_t>(item.x + 8U),
                        static_cast<uint16_t>(item.y + (item.height - glyph) / 2U),

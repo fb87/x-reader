@@ -68,7 +68,7 @@ void draw_contents(gfx::framebuffer_t* framebuffer, const epub::book_t* book, ui
             char n[12] = {};
             snprintf(n, sizeof(n), "%u", static_cast<unsigned>(idx + 1U));
             gfx::draw_text(framebuffer, static_cast<uint16_t>(r.x + 10U),
-                           static_cast<uint16_t>(r.y + 12U), n, 1, selected ? 0x0f : 0x07);
+                           static_cast<uint16_t>(r.y + 12U), n, 1, selected ? 0x0f : 0x00);
             gfx::draw_text(framebuffer, static_cast<uint16_t>(r.x + 42U),
                            static_cast<uint16_t>(r.y + 12U), item_title(book, idx), 1, fg);
             if (!selected)

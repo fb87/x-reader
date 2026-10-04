@@ -1156,7 +1156,20 @@ static void run()
             .poll_interval_ms = 10,
             .touch_width = board::m5paper::display_height,
             .touch_height = board::m5paper::display_width,
-            .touch_rotation = 1,
+            // The GT911 touch digitizer reports coordinates already aligned with
+            // the portrait logical frame, unlike the EPD panel which is natively
+            // landscape and needs the display driver's own separate rotation.
+            // Confirmed via raw/logical diagnostic logging on real hardware: a
+            // tap's raw (x,y) landed within a few px of the expected logical
+            // point for that tap's screen position, in every corner tested.
+            // There used to be a second, redundant portrait-touch transpose
+            // applied in main.cpp's input loop on top of this one; stacking the
+            // two together produced a left/right-mirrored x for exactly the one
+            // place on screen that depends on x being correct in both
+            // directions -- the bottom action bar's left/center/right split
+            // (list rows only ever cared about y, so nothing else surfaced it).
+            // That second transform has been removed; this is the only one now.
+            .touch_rotation = 0,
         };
         input::start(&input_config, events);
 #endif
@@ -1332,22 +1345,6 @@ static void run()
         input::action_event_t action_event = {};
         if (!input::map_event(&event, &action_event))
             continue;
-        if (action_event.action == input::action_pointer && settings.orientation != 0)
-        {
-            const uint16_t physical_x = action_event.x;
-            const uint16_t physical_y = action_event.y;
-            // Measured on hardware: a real touch at raw (physical_x, physical_y)
-            // lands on the logical portrait point (physical_y, physical_x) -- a
-            // plain transpose, the same relationship the IT8951 portrait refresh
-            // transform uses (see it8951e.cpp).  The previous formula mirrored y
-            // (display_config.width - 1 - physical_x), which produced coordinates
-            // that never landed on a real widget: 0 of 13 real touches captured
-            // during a live session hit any Home row or the footer, versus 11 of
-            // 13 with this transform (the other two landed a few pixels short of
-            // a row boundary, consistent with normal finger imprecision).
-            action_event.x = physical_y;
-            action_event.y = physical_x;
-        }
         if (screen_state.screen == ui::screen_reader && settings.reverse_page_turn != 0U)
         {
             if (action_event.action == input::action_left)
@@ -2001,22 +1998,6 @@ static void run()
         input::action_event_t action_event = {};
         if (!input::map_event(&event, &action_event))
             continue;
-        if (action_event.action == input::action_pointer && settings.orientation != 0)
-        {
-            const uint16_t physical_x = action_event.x;
-            const uint16_t physical_y = action_event.y;
-            // Measured on hardware: a real touch at raw (physical_x, physical_y)
-            // lands on the logical portrait point (physical_y, physical_x) -- a
-            // plain transpose, the same relationship the IT8951 portrait refresh
-            // transform uses (see it8951e.cpp).  The previous formula mirrored y
-            // (display_config.width - 1 - physical_x), which produced coordinates
-            // that never landed on a real widget: 0 of 13 real touches captured
-            // during a live session hit any Home row or the footer, versus 11 of
-            // 13 with this transform (the other two landed a few pixels short of
-            // a row boundary, consistent with normal finger imprecision).
-            action_event.x = physical_y;
-            action_event.y = physical_x;
-        }
         const ui::screen_context_t context = {
             .viewport = {framebuffer.width, framebuffer.height},
             .library_count = static_cast<uint8_t>(

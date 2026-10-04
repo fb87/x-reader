@@ -327,7 +327,7 @@ static void draw_library_rows(gfx::framebuffer_t* framebuffer, const char* const
                        selected ? 0x0f : 0x00);
         if (item.height >= 60)
             gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 35U), "EPUB", 1,
-                           selected ? 0x0f : 0x07);
+                           selected ? 0x0f : 0x00);
     }
 }
 } // namespace
@@ -487,13 +487,13 @@ void draw_library_catalog_view(gfx::framebuffer_t* framebuffer, bool storage_mou
                        selected ? 0x0f : 0x00);
         if (item.height >= 56U)
             gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 32U), entry.author,
-                           1, selected ? 0x0f : 0x06);
+                           1, selected ? 0x0f : 0x00);
         if (item.height >= 75U)
         {
             char size_text[32] = {};
             format_size(entry.file_size, size_text, sizeof(size_text));
             gfx::draw_text(framebuffer, text_x, static_cast<uint16_t>(item.y + 58U), size_text, 1,
-                           selected ? 0x0f : 0x07);
+                           selected ? 0x0f : 0x00);
         }
     }
 }

@@ -236,7 +236,7 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
 
     if (state->footer_active)
     {
-        if (event->action == input::action_footer_exit)
+        if (event->action == input::action_footer_toggle)
         {
             state->footer_active = false;
             return screen_command_redraw;
@@ -261,7 +261,7 @@ screen_command_t dispatch(screen_state_t* state, const input::action_event_t* ev
             return command;
         }
     }
-    else if (event->action == input::action_footer_enter && state->screen != screen_reader &&
+    else if (event->action == input::action_footer_toggle && state->screen != screen_reader &&
              state->screen != screen_keyboard)
     {
         state->footer_active = true;

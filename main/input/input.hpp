@@ -35,13 +35,10 @@ enum event_type_t : uint8_t
     event_touch_up,
     event_rotary_clockwise,
     event_rotary_counterclockwise,
-    // Fires in addition to the plain rotary event above when two clicks of the
-    // same direction land within double_press_ms of each other -- a distinct
-    // gesture (jump focus into/out of the bottom action bar), layered on top
-    // rather than replacing the single click so ordinary navigation never
-    // gains latency waiting to see if a second click is coming.
-    event_rotary_double_clockwise,
-    event_rotary_double_counterclockwise,
+    // Fires once when either rotary side has been held past long_press_ms, and
+    // suppresses the matching click event on release -- a distinct gesture
+    // (toggle focus into/out of the bottom action bar), not a delayed click.
+    event_rotary_long_press,
     event_button_down,
     event_button_up,
     // Fires once when the centre/power button has been held past long_press_ms,

@@ -64,7 +64,7 @@ void draw_ota(gfx::framebuffer_t* framebuffer, ota_item_t focus, const char* cur
         gfx::fill_rect(framebuffer, item.x, item.y, item.width, item.height,
                        selected ? 0x00 : 0x0f);
         const uint8_t foreground = selected ? 0x0f : 0x00;
-        const uint8_t secondary = selected ? 0x0f : 0x06;
+        const uint8_t secondary = selected ? 0x0f : 0x00;
         gfx::draw_text(framebuffer, static_cast<uint16_t>(item.x + 14U),
                        static_cast<uint16_t>(item.y + (item.height - 24U) / 2U), labels[index], 1,
                        foreground);

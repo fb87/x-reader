@@ -12,7 +12,10 @@ namespace
 {
 static constexpr uint8_t paper = 0x0f;
 static constexpr uint8_t ink = 0x00;
-static constexpr uint8_t secondary = 0x06;
+// Focus-move redraws use the panel's fast 1-bit-only refresh mode, which
+// thresholds every pixel to pure black/white -- a mid-gray secondary color
+// becomes unreadable once a row loses focus and redraws under that mode.
+static constexpr uint8_t secondary = 0x00;
 static constexpr uint8_t rule = 0x0c;
 
 static layout::rect_t panel_area(layout::viewport_t vp)

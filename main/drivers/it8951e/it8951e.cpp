@@ -358,12 +358,17 @@ esp_err_t refresh(device_t* device, uint16_t x, uint16_t y, uint16_t width, uint
         // display_buffer_area takes native panel coordinates, unlike the image-load
         // command which accepts a rotation flag and lets the controller place the
         // pixels.  Measured on hardware: with rotation=1 the controller maps logical
-        // y directly onto native x, so the area is a plain transpose.  Mirroring it
-        // (native_x = width - y - height) refreshes a band at the opposite end of
-        // the panel, which leaves partial updates showing stale rows while a
-        // full-screen refresh still looks correct because it covers everything.
+        // y directly onto native x, so that axis is a plain transpose (mirroring it,
+        // native_x = width - y - height, refreshes a band at the opposite end of the
+        // panel, which leaves partial updates showing stale rows).  A true 90-degree
+        // rotation mirrors exactly one of the two axes, not neither -- so the other
+        // axis (logical x onto native y) needs the mirror the first one doesn't:
+        // leaving it a plain transpose left a narrow horizontal dirty rect (e.g. one
+        // cell of the bottom action bar) refreshing the wrong physical side of the
+        // panel, invisible until something besides a near-full-width redraw existed
+        // to notice it on.
         target_x = y;
-        target_y = x;
+        target_y = static_cast<uint16_t>(device->height - x - width);
         target_width = height;
         target_height = width;
     }

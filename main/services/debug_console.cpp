@@ -284,24 +284,14 @@ static void handle_command(char* line)
             reply("rot ERR args");
             return;
         }
-        // dcw/dccw inject the already-resolved "double click" gesture directly
-        // (same precedent as btnlong below), since real double-click detection
-        // lives in poll_rotary()'s timing state, which console-injected events
-        // bypass entirely -- two separate "rot cw" commands would never trigger it.
-        input::event_type_t type;
-        if (strcmp(direction, "cw") == 0)
-            type = input::event_rotary_clockwise;
-        else if (strcmp(direction, "ccw") == 0)
-            type = input::event_rotary_counterclockwise;
-        else if (strcmp(direction, "dcw") == 0)
-            type = input::event_rotary_double_clockwise;
-        else if (strcmp(direction, "dccw") == 0)
-            type = input::event_rotary_double_counterclockwise;
-        else
+        const bool clockwise = strcmp(direction, "cw") == 0;
+        if (!clockwise && strcmp(direction, "ccw") != 0)
         {
             reply("rot ERR args");
             return;
         }
+        const input::event_type_t type =
+            clockwise ? input::event_rotary_clockwise : input::event_rotary_counterclockwise;
         reply("rot %s %s", direction, send_event({type, 0, 0, input::key_none}) ? "OK" : "ERR");
         return;
     }
@@ -314,6 +304,12 @@ static void handle_command(char* line)
     {
         reply("btnlong %s",
               send_event({input::event_button_long_press, 0, 0, input::key_none}) ? "OK" : "ERR");
+        return;
+    }
+    if (strcmp(verb, "rotlong") == 0)
+    {
+        reply("rotlong %s",
+              send_event({input::event_rotary_long_press, 0, 0, input::key_none}) ? "OK" : "ERR");
         return;
     }
     if (strcmp(verb, "ls") == 0)

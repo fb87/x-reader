@@ -76,7 +76,7 @@ static void draw_home_row(gfx::framebuffer_t* framebuffer, layout::rect_t row, u
     // survives that threshold instead of relying on an intermediate gray.
     const uint8_t background = selected ? 0x00 : 0x0f;
     const uint8_t foreground = selected ? 0x0f : 0x00;
-    const uint8_t secondary = selected ? 0x0f : 0x06;
+    const uint8_t secondary = selected ? 0x0f : 0x00;
     gfx::fill_rect(framebuffer, row.x, row.y, row.width, row.height, background);
     if (!selected)
         gfx::fill_rect(framebuffer, row.x, static_cast<uint16_t>(row.y + row.height - 1U),
