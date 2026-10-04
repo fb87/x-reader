@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "app.h"
+#include "app_internal.h"
 #include "sim_port.h"
 #include "sim_fatfs.h"
 
@@ -65,6 +66,19 @@ static bool epub_open(sim_epub_file_t *epub, const char *path)
     if (f_open(&epub->file, path, FA_READ) != FR_OK) return false;
     epub->storage = (xr_storage_t) { &epub->file, f_size(&epub->file), epub_read, epub_inflate };
     return true;
+}
+
+static void scan_library(const char *root)
+{
+    FDIR dir; FILINFO info;
+    sim_fatfs_mount(root);
+    if (f_opendir(&dir, root) != FR_OK) return;
+    app_library_clear();
+    while (f_readdir(&dir, &info) == FR_OK && info.fname[0]) {
+        size_t n = strlen(info.fname);
+        if (n > 5 && strcmp(info.fname + n - 5, ".epub") == 0) app_library_add(info.fname);
+    }
+    f_closedir(&dir);
 }
 
 static const char *epub_display_name(const char *path)
@@ -180,6 +194,12 @@ int main(int argc, char **argv)
     sim_platform_init(&app.platform);
     xr_shell_init(&app.shell, &app.display.display, &app.platform.platform, app_theme());
     app_start(&app.shell);
+    char library_root[512] = ".";
+    if (argc > 1) {
+        const char *slash = strrchr(argv[1], '/');
+        if (slash) { size_t n = (size_t)(slash - argv[1]); if (n >= sizeof library_root) n = sizeof library_root - 1; memcpy(library_root, argv[1], n); library_root[n] = '\0'; }
+    }
+    scan_library(library_root);
     sim_epub_file_t epub;
     bool has_epub = argc > 1 && epub_open(&epub, argv[1]);
     if (has_epub && !app_load_epub(&epub.storage, epub_display_name(argv[1]))) has_epub = false;

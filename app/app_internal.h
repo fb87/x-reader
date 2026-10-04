@@ -19,6 +19,7 @@ typedef struct app_book {
 typedef struct app {
     xr_shell_t *shell;
     app_book_t books[APP_MAX_BOOKS];
+    char book_titles[APP_MAX_BOOKS][128];
     int book_count;
     int current; /* book on the Home card, -1 = none */
     /* settings */
@@ -30,6 +31,9 @@ typedef struct app {
     bool epub_open;
     uint16_t epub_spine;
 } app_t;
+
+void app_library_clear(void);
+bool app_library_add(const char *title);
 
 extern app_t g_app;
 extern const xr_font_t *const app_body_fonts[3];

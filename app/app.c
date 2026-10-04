@@ -1,5 +1,6 @@
 #include "app_internal.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #define APP_EPUB_MANIFEST_MAX 640
@@ -33,29 +34,11 @@ static const xr_theme_t k_theme = {
 
 const xr_theme_t *app_theme(void) { return &k_theme; }
 
-/* Demo catalogue (public-domain titles). A real build scans the SD card. */
-static const app_book_t k_books[] = {
-    { "Pride and Prejudice", "Jane Austen", "EPUB", 432, 37, 712, false, false },
-    { "Moby-Dick; or, The Whale", "Herman Melville", "EPUB", 720, 5, 1290, false, false },
-    { "The Adventures of Sherlock Holmes", "Arthur Conan Doyle", "EPUB", 307, 0, 540, false, false },
-    { "Frankenstein", "Mary Shelley", "EPUB", 280, 100, 460, false, false },
-    { "Alice's Adventures in Wonderland", "Lewis Carroll", "EPUB", 120, 64, 210, false, false },
-    { "Dracula", "Bram Stoker", "EPUB", 488, 12, 880, false, false },
-    { "The Time Machine", "H. G. Wells", "TXT", 104, 0, 180, false, false },
-    { "Little Women", "Louisa May Alcott", "EPUB", 560, 0, 950, false, false },
-    { "War and Peace", "Leo Tolstoy", "EPUB", 1392, 2, 3410, false, false },
-    { "The Odyssey", "Homer", "PDF", 416, 0, 2200, false, false },
-    { "Walden", "Henry David Thoreau", "EPUB", 352, 48, 600, false, false },
-    { "Jane Eyre", "Charlotte Bronte", "EPUB", 532, 0, 890, false, false },
-};
-
 void app_start(xr_shell_t *shell)
 {
     memset(&g_app, 0, sizeof g_app);
     g_app.shell = shell;
-    g_app.book_count = (int)XR_ARRAY_LEN(k_books);
-    memcpy(g_app.books, k_books, sizeof k_books);
-    g_app.current = 0;
+    g_app.current = -1;
     g_app.font_idx = 1;
     g_app.full_refresh_every = 6;
     g_app.show_progress = true;
@@ -63,6 +46,18 @@ void app_start(xr_shell_t *shell)
     g_app.bluetooth_connected = false;
     xr_shell_set_full_refresh_every(shell, (uint16_t)g_app.full_refresh_every);
     xr_shell_push(shell, app_page_splash());
+}
+
+void app_library_clear(void) { g_app.book_count = 0; g_app.current = -1; }
+
+bool app_library_add(const char *title)
+{
+    if (!title || g_app.book_count >= APP_MAX_BOOKS) return false;
+    int index = g_app.book_count++;
+    snprintf(g_app.book_titles[index], sizeof g_app.book_titles[index], "%s", title);
+    g_app.books[index] = (app_book_t) { g_app.book_titles[index], "FatFS EPUB", "EPUB", 0, 0, 0, false, true };
+    if (g_app.current < 0) g_app.current = 0;
+    return true;
 }
 
 void app_open_book(int index)
@@ -84,7 +79,11 @@ bool app_load_epub(const xr_storage_t *storage, const char *title)
         return false;
     s_epub_cover_placeholder = !s_epub_text[0];
     if (s_epub_cover_placeholder) strcpy(s_epub_text, "Cover");
-    app_book_t *book = &g_app.books[g_app.book_count++];
+    int existing = -1;
+    for (int i = 0; i < g_app.book_count; ++i)
+        if (strcmp(g_app.books[i].title, title) == 0) { existing = i; break; }
+    int index = existing >= 0 ? existing : g_app.book_count++;
+    app_book_t *book = &g_app.books[index];
     *book = (app_book_t) { s_epub.title[0] ? s_epub.title : title, "Imported EPUB", "EPUB", 0, 0, 0, false, true };
     g_app.current = g_app.book_count - 1;
     g_app.epub_open = true;
