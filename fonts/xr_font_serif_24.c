@@ -1097,5 +1097,5 @@ static const xr_glyph_t k_glyphs[95] = {
 };
 
 const xr_font_t xr_font_serif_24 = {
-    "DejaVuSerif 24", 32, 126, 23, 6, 39, k_glyphs, k_bitmap
+    "DejaVuSerif 24", 32, 126, 23, 6, 39, k_glyphs, k_bitmap, NULL, 0
 };

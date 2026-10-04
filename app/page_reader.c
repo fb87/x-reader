@@ -29,6 +29,9 @@ typedef struct reader_page {
     uint32_t page_start[READER_MAX_PAGES];
     int page_count, page;
     int lines_per_page;
+    bool cover_placeholder;
+    const char *chapter_title;
+    int total_pages;
     xr_rect_t text_rect, footer_rect;
 } reader_page_t;
 
@@ -68,12 +71,16 @@ static void reader_layout(xr_page_t *p)
     rp->text_rect = xr_rect(a.x + MARGIN, a.y + MARGIN, a.w - 2 * MARGIN, a.h - MARGIN - footer_h - 8);
     rp->footer_rect = xr_rect(a.x + MARGIN, a.y + a.h - footer_h - 4, a.w - 2 * MARGIN, footer_h);
     paginate(rp);
+    rp->total_pages = rp->page_count;
+    app_set_reading_progress(rp->page, rp->total_pages);
 }
 
 static void reader_create(xr_page_t *p)
 {
     reader_page_t *rp = XR_CONTAINER_OF(p, reader_page_t, base);
-    rp->text = app_sample_text();
+    rp->text = app_current_text();
+    rp->cover_placeholder = app_current_is_cover_placeholder();
+    rp->chapter_title = app_current_chapter_title();
     rp->page_count = 0;
     rp->page = 0;
     p->title = g_app.books[g_app.current].title;
@@ -85,6 +92,21 @@ static void reader_render(xr_page_t *p, xr_canvas_t *c)
     reader_page_t *rp = XR_CONTAINER_OF(p, reader_page_t, base);
     const xr_theme_t *t = p->shell->theme;
     const xr_font_t *f = body_font();
+
+    if (rp->cover_placeholder) {
+        xr_rect_t cover = xr_rect(p->area.x + p->area.w / 2 - 125, p->area.y + 80, 250, 360);
+        xr_canvas_fill_rect(c, cover, XR_LIGHT);
+        xr_canvas_draw_rect(c, cover, 4, XR_BLACK);
+        xr_canvas_fill_rect(c, xr_rect(cover.x + 18, cover.y + 22, cover.w - 36, 38), XR_BLACK);
+        xr_canvas_draw_text_in(c, t->font_small, xr_rect(cover.x + 12, cover.y + 25, cover.w - 24, 32),
+                               "X-READER", XR_ALIGN_CENTER, XR_WHITE);
+        xr_canvas_draw_text_wrapped(c, t->font_title,
+                                    xr_rect(cover.x + 24, cover.y + 100, cover.w - 48, 100),
+                                    p->title, XR_ALIGN_CENTER, XR_BLACK);
+        xr_canvas_hline(c, cover.x + 42, cover.y + 250, cover.w - 84, XR_DARK);
+        xr_canvas_hline(c, cover.x + 62, cover.y + 270, cover.w - 124, XR_DARK);
+        return;
+    }
 
     size_t off = rp->page_start[rp->page], next;
     int y = rp->text_rect.y;
@@ -101,7 +123,7 @@ static void reader_render(xr_page_t *p, xr_canvas_t *c)
     snprintf(pages, sizeof pages, "%d / %d", rp->page + 1, rp->page_count);
     int pw = xr_text_width(t->font_small, pages, -1);
     xr_canvas_draw_text_in(c, t->font_small, xr_rect(fr.x, fr.y, fr.w - pw - t->pad, fr.h),
-                           p->title, XR_ALIGN_LEFT, XR_DARK);
+                           rp->chapter_title, XR_ALIGN_LEFT, XR_DARK);
     xr_canvas_draw_text_in(c, t->font_small, fr, pages, XR_ALIGN_RIGHT, XR_DARK);
     if (g_app.show_progress) {
         int done = fr.w * (rp->page + 1) / rp->page_count;
@@ -113,8 +135,20 @@ static void reader_render(xr_page_t *p, xr_canvas_t *c)
 static void turn(reader_page_t *rp, int delta)
 {
     int np = rp->page + delta;
-    if (np < 0 || np >= rp->page_count) return;
+    if (np < 0 || np >= rp->page_count) {
+        if (!app_turn_epub_chapter(delta)) return;
+        rp->text = app_current_text();
+        rp->cover_placeholder = app_current_is_cover_placeholder();
+        rp->chapter_title = app_current_chapter_title();
+        rp->page_count = 0;
+        paginate(rp);
+        rp->page = delta > 0 ? 0 : rp->page_count - 1;
+        app_set_reading_progress(rp->page, rp->total_pages);
+        xr_page_invalidate(&rp->base, XR_REFRESH_QUALITY);
+        return;
+    }
     rp->page = np;
+    app_set_reading_progress(rp->page, rp->total_pages);
     /* QUALITY: counts toward the "full refresh every N pages" budget. */
     xr_page_invalidate(&rp->base, XR_REFRESH_QUALITY);
 }
@@ -171,7 +205,9 @@ static void set_font(reader_page_t *rp, int idx)
 {
     if (idx < 0 || idx > 2 || idx == g_app.font_idx) return;
     g_app.font_idx = idx;
-    paginate(rp);
+    /* Font changes alter every chapter's page count, so rebuild the whole-book
+     * page map before updating the progress bar. */
+    reader_layout(&rp->base);
     xr_page_invalidate(&rp->base, XR_REFRESH_QUALITY);
 }
 

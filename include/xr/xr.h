@@ -3,6 +3,8 @@
 #define XR_H
 
 #include "xr_types.h"
+#include "xr_storage.h"
+#include "xr_epub.h"
 #include "xr_canvas.h"
 #include "xr_text.h"
 #include "xr_hal.h"

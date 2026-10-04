@@ -13,6 +13,7 @@ typedef struct app_book {
     uint8_t progress; /* percent */
     uint16_t size_kb;
     bool favorite;
+    bool epub_source;
 } app_book_t;
 
 typedef struct app {
@@ -26,6 +27,8 @@ typedef struct app {
     bool show_progress;
     bool wifi_connected;
     bool bluetooth_connected;
+    bool epub_open;
+    uint16_t epub_spine;
 } app_t;
 
 extern app_t g_app;
@@ -41,6 +44,14 @@ xr_page_t *app_page_settings(void);
 
 void app_show_book_info(int index);
 void app_open_book(int index);
+const char *app_current_text(void);
+const char *app_current_chapter_title(void);
+void app_set_reading_progress(int page, int total_pages);
+bool app_load_epub_chapter(uint16_t chapter);
+uint16_t app_epub_chapter_index(void);
+uint16_t app_epub_chapter_count(void);
+bool app_current_is_cover_placeholder(void);
+bool app_turn_epub_chapter(int direction);
 void app_delete_book(int index);
 void app_confirm(const char *title, const char *message, const char *yes, xr_button_icon_fn icon,
                  xr_dialog_result_fn cb, void *user);

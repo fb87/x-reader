@@ -2,7 +2,19 @@
 
 #include <string.h>
 
+#define APP_EPUB_MANIFEST_MAX 640
+#define APP_EPUB_SPINE_MAX 640
+#define APP_EPUB_SCRATCH_SIZE (80 * 1024)
+#define APP_EPUB_TEXT_SIZE (64 * 1024)
+
 app_t g_app;
+static xr_epub_t s_epub;
+static xr_epub_manifest_item_t s_epub_manifest[APP_EPUB_MANIFEST_MAX];
+static xr_epub_spine_item_t s_epub_spine[APP_EPUB_SPINE_MAX];
+static uint8_t s_epub_scratch[APP_EPUB_SCRATCH_SIZE];
+static char s_epub_text[APP_EPUB_TEXT_SIZE];
+static bool s_epub_cover_placeholder;
+static char s_chapter_title[96];
 
 const xr_font_t *const app_body_fonts[3] = { &xr_font_alegreya_17, &xr_font_alegreya_20, &xr_font_alegreya_24 };
 const char *const app_font_names[3] = { "Small", "Medium", "Large" };
@@ -23,18 +35,18 @@ const xr_theme_t *app_theme(void) { return &k_theme; }
 
 /* Demo catalogue (public-domain titles). A real build scans the SD card. */
 static const app_book_t k_books[] = {
-    { "Pride and Prejudice", "Jane Austen", "EPUB", 432, 37, 712, false },
-    { "Moby-Dick; or, The Whale", "Herman Melville", "EPUB", 720, 5, 1290, false },
-    { "The Adventures of Sherlock Holmes", "Arthur Conan Doyle", "EPUB", 307, 0, 540, false },
-    { "Frankenstein", "Mary Shelley", "EPUB", 280, 100, 460, false },
-    { "Alice's Adventures in Wonderland", "Lewis Carroll", "EPUB", 120, 64, 210, false },
-    { "Dracula", "Bram Stoker", "EPUB", 488, 12, 880, false },
-    { "The Time Machine", "H. G. Wells", "TXT", 104, 0, 180, false },
-    { "Little Women", "Louisa May Alcott", "EPUB", 560, 0, 950, false },
-    { "War and Peace", "Leo Tolstoy", "EPUB", 1392, 2, 3410, false },
-    { "The Odyssey", "Homer", "PDF", 416, 0, 2200, false },
-    { "Walden", "Henry David Thoreau", "EPUB", 352, 48, 600, false },
-    { "Jane Eyre", "Charlotte Bronte", "EPUB", 532, 0, 890, false },
+    { "Pride and Prejudice", "Jane Austen", "EPUB", 432, 37, 712, false, false },
+    { "Moby-Dick; or, The Whale", "Herman Melville", "EPUB", 720, 5, 1290, false, false },
+    { "The Adventures of Sherlock Holmes", "Arthur Conan Doyle", "EPUB", 307, 0, 540, false, false },
+    { "Frankenstein", "Mary Shelley", "EPUB", 280, 100, 460, false, false },
+    { "Alice's Adventures in Wonderland", "Lewis Carroll", "EPUB", 120, 64, 210, false, false },
+    { "Dracula", "Bram Stoker", "EPUB", 488, 12, 880, false, false },
+    { "The Time Machine", "H. G. Wells", "TXT", 104, 0, 180, false, false },
+    { "Little Women", "Louisa May Alcott", "EPUB", 560, 0, 950, false, false },
+    { "War and Peace", "Leo Tolstoy", "EPUB", 1392, 2, 3410, false, false },
+    { "The Odyssey", "Homer", "PDF", 416, 0, 2200, false, false },
+    { "Walden", "Henry David Thoreau", "EPUB", 352, 48, 600, false, false },
+    { "Jane Eyre", "Charlotte Bronte", "EPUB", 532, 0, 890, false, false },
 };
 
 void app_start(xr_shell_t *shell)
@@ -59,6 +71,80 @@ void app_open_book(int index)
     g_app.current = index;
     xr_shell_push(g_app.shell, app_page_reader());
 }
+
+bool app_load_epub(const xr_storage_t *storage, const char *title)
+{
+    if (!storage || !title || g_app.book_count >= APP_MAX_BOOKS) return false;
+    if (xr_epub_open(&s_epub, storage, s_epub_scratch, sizeof(s_epub_scratch),
+                     s_epub_manifest, XR_ARRAY_LEN(s_epub_manifest),
+                     s_epub_spine, XR_ARRAY_LEN(s_epub_spine)) != XR_EPUB_OK)
+        return false;
+    if (xr_epub_spine_text(&s_epub, 0, s_epub_scratch, sizeof(s_epub_scratch),
+                           s_epub_text, sizeof(s_epub_text), NULL) != XR_EPUB_OK)
+        return false;
+    s_epub_cover_placeholder = !s_epub_text[0];
+    if (s_epub_cover_placeholder) strcpy(s_epub_text, "Cover");
+    app_book_t *book = &g_app.books[g_app.book_count++];
+    *book = (app_book_t) { s_epub.title[0] ? s_epub.title : title, "Imported EPUB", "EPUB", 0, 0, 0, false, true };
+    g_app.current = g_app.book_count - 1;
+    g_app.epub_open = true;
+    g_app.epub_spine = 0;
+    return true;
+}
+
+const char *app_current_text(void)
+{
+    return g_app.epub_open && g_app.current >= 0 && g_app.books[g_app.current].epub_source
+        ? s_epub_text : app_sample_text();
+}
+
+bool app_current_is_cover_placeholder(void)
+{
+    return g_app.epub_open && s_epub_cover_placeholder;
+}
+
+const char *app_current_chapter_title(void)
+{
+    const char *text = app_current_text();
+    size_t n = 0;
+    while (text[n] && text[n] != '\n' && n + 1 < sizeof(s_chapter_title)) ++n;
+    memcpy(s_chapter_title, text, n);
+    s_chapter_title[n] = '\0';
+    return s_chapter_title[0] ? s_chapter_title : "Cover";
+}
+
+void app_set_reading_progress(int page, int total_pages)
+{
+    if (!g_app.epub_open || g_app.current < 0 || !g_app.books[g_app.current].epub_source || total_pages <= 0)
+        return;
+    uint32_t chapters = app_epub_chapter_count();
+    uint32_t chapter_progress = (uint32_t)(page + 1) * 100u / (uint32_t)total_pages;
+    uint32_t progress = ((uint32_t)g_app.epub_spine * 100u + chapter_progress) / chapters;
+    if (progress == 0 && (page > 0 || g_app.epub_spine > 0)) progress = 1;
+    g_app.books[g_app.current].progress = (uint8_t)XR_MIN(progress, 100u);
+}
+
+bool app_turn_epub_chapter(int direction)
+{
+    if (!g_app.epub_open || g_app.current < 0 || !g_app.books[g_app.current].epub_source) return false;
+    int next = (int)g_app.epub_spine + direction;
+    if (next < 0 || next >= s_epub.spine_count) return false;
+    return app_load_epub_chapter((uint16_t)next);
+}
+
+bool app_load_epub_chapter(uint16_t chapter)
+{
+    if (!g_app.epub_open || chapter >= s_epub.spine_count) return false;
+    if (xr_epub_spine_text(&s_epub, chapter, s_epub_scratch, sizeof(s_epub_scratch),
+                           s_epub_text, sizeof(s_epub_text), NULL) != XR_EPUB_OK) return false;
+    s_epub_cover_placeholder = !s_epub_text[0];
+    if (s_epub_cover_placeholder) strcpy(s_epub_text, "Cover");
+    g_app.epub_spine = chapter;
+    return true;
+}
+
+uint16_t app_epub_chapter_index(void) { return g_app.epub_spine; }
+uint16_t app_epub_chapter_count(void) { return g_app.epub_open ? s_epub.spine_count : 0; }
 
 void app_delete_book(int index)
 {

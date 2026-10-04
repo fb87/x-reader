@@ -2,17 +2,49 @@
 
 #include <string.h>
 
-static const xr_glyph_t *glyph_of(const xr_font_t *f, unsigned char ch)
+static const xr_glyph_t *glyph_of(const xr_font_t *f, uint32_t codepoint)
 {
-    if (ch < f->first || ch > f->last) ch = '?';
-    return &f->glyphs[ch - f->first];
+    if (f->codepoints && f->glyph_count) {
+        int lo = 0, hi = f->glyph_count - 1;
+        while (lo <= hi) {
+            int mid = lo + (hi - lo) / 2;
+            if (f->codepoints[mid] == codepoint) return &f->glyphs[mid];
+            if (f->codepoints[mid] < codepoint) lo = mid + 1; else hi = mid - 1;
+        }
+        codepoint = '?';
+    }
+    if (codepoint < f->first || codepoint > f->last) codepoint = '?';
+    return &f->glyphs[codepoint - f->first];
+}
+
+static size_t utf8_next(const char *s, size_t len, uint32_t *codepoint)
+{
+    unsigned char c = (unsigned char)s[0];
+    if (c < 0x80) { *codepoint = c; return 1; }
+    if (c >= 0xc2 && c <= 0xdf && len >= 2 && ((unsigned char)s[1] & 0xc0) == 0x80) {
+        *codepoint = ((uint32_t)(c & 0x1f) << 6) | ((unsigned char)s[1] & 0x3f); return 2;
+    }
+    if (c >= 0xe0 && c <= 0xef && len >= 3 && ((unsigned char)s[1] & 0xc0) == 0x80 &&
+        ((unsigned char)s[2] & 0xc0) == 0x80) {
+        *codepoint = ((uint32_t)(c & 0x0f) << 12) | (((unsigned char)s[1] & 0x3f) << 6) |
+                     ((unsigned char)s[2] & 0x3f); return 3;
+    }
+    if (c >= 0xf0 && c <= 0xf4 && len >= 4 && ((unsigned char)s[1] & 0xc0) == 0x80 &&
+        ((unsigned char)s[2] & 0xc0) == 0x80 && ((unsigned char)s[3] & 0xc0) == 0x80) {
+        *codepoint = ((uint32_t)(c & 7) << 18) | (((unsigned char)s[1] & 0x3f) << 12) |
+                     (((unsigned char)s[2] & 0x3f) << 6) | ((unsigned char)s[3] & 0x3f); return 4;
+    }
+    *codepoint = '?'; return 1;
 }
 
 int xr_text_width(const xr_font_t *f, const char *s, int len)
 {
     if (len < 0) len = (int)strlen(s);
     int w = 0;
-    for (int i = 0; i < len; i++) w += glyph_of(f, (unsigned char)s[i])->advance;
+    for (size_t i = 0; i < (size_t)len;) {
+        uint32_t cp; size_t n = utf8_next(s + i, (size_t)len - i, &cp);
+        w += glyph_of(f, cp)->advance; i += n;
+    }
     return w;
 }
 
@@ -23,18 +55,19 @@ size_t xr_text_wrap(const xr_font_t *f, const char *s, int max_w, size_t *next)
     int w = 0;
 
     while (s[i] && s[i] != '\n') {
-        int a = glyph_of(f, (unsigned char)s[i])->advance;
+        uint32_t cp; size_t n = utf8_next(s + i, strlen(s + i), &cp);
+        int a = glyph_of(f, cp)->advance;
         if (w + a > max_w && i > 0) {
             size_t end = have_space ? last_space : i;
-            size_t n = end;
-            while (s[n] == ' ') n++;
-            *next = n;
+            size_t consumed = end;
+            while (s[consumed] == ' ') consumed++;
+            *next = consumed;
             while (end > 0 && s[end - 1] == ' ') end--;
             return end;
         }
         if (s[i] == ' ') { last_space = i; have_space = true; }
         w += a;
-        i++;
+        i += n;
     }
     *next = (s[i] == '\n') ? i + 1 : i;
     return i;
@@ -58,11 +91,12 @@ int xr_canvas_draw_text(xr_canvas_t *c, const xr_font_t *f, int x, int y,
     if (len < 0) len = (int)strlen(s);
     int baseline = y + f->ascent;
     for (int i = 0; i < len; i++) {
-        const xr_glyph_t *g = glyph_of(f, (unsigned char)s[i]);
+        uint32_t cp; size_t n = utf8_next(s + i, (size_t)len - i, &cp);
+        const xr_glyph_t *g = glyph_of(f, cp);
         if (g->w && g->h)
             xr_canvas_draw_mask(c, x + g->x_off, baseline + g->y_off, g->w, g->h,
                                 f->bitmap + g->offset, g->w, gray);
-        x += g->advance;
+        x += g->advance; i += (int)n - 1;
     }
     return x;
 }

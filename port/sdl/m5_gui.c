@@ -1,11 +1,13 @@
 /* Interactive SDL2 host port for the M5Paper-style 540x960 GRAY4 panel. */
 #include <SDL.h>
+#include <zlib.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "app.h"
 #include "sim_port.h"
+#include "sim_fatfs.h"
 
 #define ROTARY_HOLD_MS 500
 
@@ -21,6 +23,55 @@ typedef struct gui_app {
     gui_display_t display;
     sim_platform_t platform;
 } gui_app_t;
+
+typedef struct sim_epub_file { FIL file; xr_storage_t storage; } sim_epub_file_t;
+
+static bool epub_read(void *context, uint32_t offset, void *destination, uint32_t size)
+{
+    FIL *file = context; UINT read;
+    return f_lseek(file, offset) == FR_OK && f_read(file, destination, size, &read) == FR_OK && read == size;
+}
+
+static bool epub_inflate(void *context, const xr_storage_t *storage, uint32_t offset,
+                          uint32_t source_size, void *destination, uint32_t destination_size)
+{
+    uint8_t input[512]; z_stream stream; uint32_t remaining = source_size; UINT read;
+    (void)storage; memset(&stream, 0, sizeof stream);
+    if (f_lseek(context, offset) != FR_OK || inflateInit2(&stream, -MAX_WBITS) != Z_OK) return false;
+    stream.next_out = destination; stream.avail_out = destination_size;
+    for (;;) {
+        int result;
+        if (!stream.avail_in && remaining) {
+            UINT chunk = remaining > sizeof input ? sizeof input : remaining;
+            if (f_read(context, input, chunk, &read) != FR_OK || read != chunk) break;
+            remaining -= chunk;
+            stream.next_in = input;
+            stream.avail_in = chunk;
+        }
+        result = inflate(&stream, Z_NO_FLUSH);
+        if (result == Z_STREAM_END) {
+            bool complete = stream.total_out == destination_size && !remaining && !stream.avail_in;
+            inflateEnd(&stream);
+            return complete;
+        }
+        if (result != Z_OK || !stream.avail_out || (!remaining && !stream.avail_in)) break;
+    }
+    inflateEnd(&stream); return false;
+}
+
+static bool epub_open(sim_epub_file_t *epub, const char *path)
+{
+    sim_fatfs_mount(".");
+    if (f_open(&epub->file, path, FA_READ) != FR_OK) return false;
+    epub->storage = (xr_storage_t) { &epub->file, f_size(&epub->file), epub_read, epub_inflate };
+    return true;
+}
+
+static const char *epub_display_name(const char *path)
+{
+    const char *slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
+}
 
 static void gui_present(gui_display_t *gui)
 {
@@ -105,7 +156,7 @@ static void dispatch_key(gui_app_t *app, SDL_Keycode key, bool long_press)
     xr_shell_flush(&app->shell);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0) return 1;
     SDL_Window *window = SDL_CreateWindow("X-Reader M5Paper Simulator",
@@ -129,6 +180,9 @@ int main(void)
     sim_platform_init(&app.platform);
     xr_shell_init(&app.shell, &app.display.display, &app.platform.platform, app_theme());
     app_start(&app.shell);
+    sim_epub_file_t epub;
+    bool has_epub = argc > 1 && epub_open(&epub, argv[1]);
+    if (has_epub && !app_load_epub(&epub.storage, epub_display_name(argv[1]))) has_epub = false;
     xr_shell_tick(&app.shell);
     xr_shell_flush(&app.shell);
 
@@ -173,5 +227,6 @@ int main(void)
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
+    if (has_epub) f_close(&epub.file);
     return 0;
 }

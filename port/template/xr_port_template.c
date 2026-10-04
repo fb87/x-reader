@@ -6,6 +6,10 @@
  * Framebuffer sizing (static, no malloc):
  *   M5Paper   540x960 @ 4bpp = 259,200 B  -> put it in PSRAM
  *   Xteink    480x800 @ 1bpp =  48,000 B  -> fits in internal SRAM
+ *
+ * EPUB storage: bind xr_storage_t to FatFS FIL with f_lseek() + f_read().
+ * The EPUB core has no allocator; provide a fixed extraction buffer and an
+ * inflate_raw callback backed by IDF's miniz/zlib-compatible inflater.
  */
 #include "app.h"
 #include "xr/xr.h"
@@ -58,6 +62,8 @@ void board_main(void)
 {
     xr_shell_init(&s_shell, &s_display, &s_platform, app_theme());
     app_start(&s_shell);
+    /* TODO: open an SD-card FIL, wrap it in xr_storage_t, then call
+     * app_load_epub(&storage, "Book title") after mounting FatFS. */
     for (;;) {
         xr_event_t ev;
         while (board_poll_input(&ev)) xr_shell_dispatch(&s_shell, &ev);

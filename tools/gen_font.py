@@ -31,12 +31,16 @@ FONTS = [
     ("alegreya_24", os.path.join(ALEGREYA_DIR, "Alegreya-Regular.ttf"), 24, 10),
 ]
 
+UNICODE_RANGES = ((0x0020, 0x007E), (0x00A0, 0x00FF), (0x0100, 0x024F),
+                  (0x0300, 0x036F), (0x1E00, 0x1EFF))
+
 
 def gen(name, file, size, leading):
     font = ImageFont.truetype(file, size)
     ascent, descent = font.getmetrics()
     glyphs, bitmap = [], bytearray()
-    for code in range(32, 127):
+    codepoints = [code for first, last in UNICODE_RANGES for code in range(first, last + 1)]
+    for code in codepoints:
         ch = chr(code)
         l, t, r, b = font.getbbox(ch, anchor="ls")
         w, h = max(0, r - l), max(0, b - t)
@@ -54,13 +58,17 @@ def gen(name, file, size, leading):
     for i in range(0, len(data), 24):
         out.append("    " + ",".join(str(v) for v in data[i:i + 24]) + ",")
     out.append("};\n")
-    out.append("static const xr_glyph_t k_glyphs[95] = {")
-    for code, g in zip(range(32, 127), glyphs):
+    out.append(f"static const xr_glyph_t k_glyphs[{len(codepoints)}] = {{")
+    for code, g in zip(codepoints, glyphs):
         out.append("    {%d, %d, %d, %d, %d, %d}, /* %r */" % (g + (chr(code),)))
+    out.append("};\n")
+    out.append(f"static const uint32_t k_codepoints[{len(codepoints)}] = {{")
+    for code in codepoints:
+        out.append(f"    0x{code:04x},")
     out.append("};\n")
     out.append(f"const xr_font_t xr_font_{name} = {{")
     out.append(f'    "{os.path.splitext(os.path.basename(file))[0]} {size}", 32, 126, {ascent}, {descent}, '
-               f"{ascent + descent + leading}, k_glyphs, k_bitmap")
+               f"{ascent + descent + leading}, k_glyphs, k_bitmap, k_codepoints, {len(codepoints)}")
     out.append("};")
     return "\n".join(out) + "\n", len(bitmap)
 

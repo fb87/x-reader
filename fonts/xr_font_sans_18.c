@@ -638,5 +638,5 @@ static const xr_glyph_t k_glyphs[95] = {
 };
 
 const xr_font_t xr_font_sans_18 = {
-    "DejaVuSans 18", 32, 126, 17, 5, 26, k_glyphs, k_bitmap
+    "DejaVuSans 18", 32, 126, 17, 5, 26, k_glyphs, k_bitmap, NULL, 0
 };

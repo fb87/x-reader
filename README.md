@@ -109,7 +109,7 @@ Copy `port/template/xr_port_template.c` and provide:
 
 ## Next steps
 
-- **UTF-8 and Vietnamese**: fonts only cover ASCII 32–126 today. Next comes UTF-8 decoding in `xr_text`, a sparse codepoint→glyph table, and covering Latin Extended plus the combining marks (or precomposed Vietnamese letters, U+1EA0–U+1EF9).
+- **UTF-8 and Vietnamese**: Alegreya bitmap fonts cover Latin Extended, combining marks, and Vietnamese precomposed letters (U+1EA0–U+1EF9).
 - 4 bpp glyph bitmaps, to halve font size in flash.
 - Spatial focus navigation (up/down/left/right by geometry) for grid layouts.
 - Rotation in the display port.

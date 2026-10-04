@@ -54,9 +54,9 @@ static void card_render(xr_widget_t *w, xr_canvas_t *c)
     xr_rect_t cover = xr_rect(in.x, y + t->font_small->line_height + 6, 82, 112);
     xr_rect_t details = xr_rect(cover.x + cover.w + 14, cover.y, in.x + in.w - (cover.x + cover.w + 14), cover.h);
     card_cover(c, cover, b);
-    xr_canvas_draw_text_wrapped(c, t->font_title, xr_rect(details.x, details.y, details.w, 58),
-                                b->title, XR_ALIGN_LEFT, XR_BLACK);
-    xr_canvas_draw_text_in(c, t->font_normal, xr_rect(details.x, details.y + 62, details.w, t->font_normal->line_height),
+    xr_canvas_draw_text_in(c, t->font_title, xr_rect(details.x, details.y, details.w, 42),
+                           b->title, XR_ALIGN_LEFT, XR_BLACK);
+    xr_canvas_draw_text_in(c, t->font_normal, xr_rect(details.x, details.y + 46, details.w, t->font_normal->line_height),
                             b->author, XR_ALIGN_LEFT, XR_DARK);
 
     char pct[8];
@@ -167,8 +167,11 @@ static void home_create(xr_page_t *p)
 
 static void home_enter(xr_page_t *p)
 {
-    /* Library may have changed while we were covered. */
-    update_stats(XR_CONTAINER_OF(p, home_page_t, base));
+    home_page_t *hp = XR_CONTAINER_OF(p, home_page_t, base);
+    /* Library or Reader may have changed while Home was covered. */
+    update_stats(hp);
+    xr_widget_invalidate(&hp->card.base);
+    xr_widget_invalidate(&hp->stats.base);
 }
 
 static void sleep_result(xr_dialog_t *d, int result, void *user)
