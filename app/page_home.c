@@ -3,19 +3,10 @@
 
 #include <stdio.h>
 
-enum { ACT_LIBRARY = 1, ACT_FAVORITES, ACT_SETTINGS, ACT_SLEEP };
-
 static void library_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray);
 static void favorite_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray);
+static void file_manager_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray);
 static void settings_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray);
-static void sleep_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray);
-
-static const xr_action_t k_home_actions[] = {
-    { ACT_LIBRARY, "Library", XR_KEY_NONE, library_icon },
-    { ACT_FAVORITES, "Favorites", XR_KEY_NONE, favorite_icon },
-    { ACT_SETTINGS, "Settings", XR_KEY_NONE, settings_icon },
-    { ACT_SLEEP, "Sleep", XR_KEY_POWER, sleep_icon },
-};
 
 /* ---- custom widget: the current-book card --------------------------- */
 
@@ -85,7 +76,8 @@ static const xr_widget_vtbl_t k_card_vtbl = { "book_card", card_render, card_eve
 typedef struct home_page {
     xr_page_t base;
     book_card_t card;
-    xr_button_t library, favorites, settings;
+    xr_button_t library, favorites, file_manager, settings;
+    xr_button_t sleep;
     xr_label_t stats;
     char stats_buf[48];
 } home_page_t;
@@ -94,35 +86,33 @@ static home_page_t s_home;
 
 static void go_library(xr_widget_t *w, void *u) { (void)w; (void)u; xr_shell_push(g_app.shell, app_page_library()); }
 static void go_favorites(xr_widget_t *w, void *u) { (void)w; (void)u; xr_shell_push(g_app.shell, app_page_favorites()); }
+static void go_file_manager(xr_widget_t *w, void *u) { (void)w; (void)u; xr_shell_push(g_app.shell, app_page_file_manager()); }
 static void go_settings(xr_widget_t *w, void *u) { (void)w; (void)u; xr_shell_push(g_app.shell, app_page_settings()); }
+static void go_sleep(xr_widget_t *w, void *u) { (void)w; (void)u; xr_shell_replace(g_app.shell, app_page_sleep()); }
 
 static void library_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 {
-    xr_canvas_draw_rect(c, xr_rect(r.x + 2, r.y + 3, 6, r.h - 6), 2, gray);
-    xr_canvas_draw_rect(c, xr_rect(r.x + 9, r.y + 1, 6, r.h - 4), 2, gray);
-    xr_canvas_draw_rect(c, xr_rect(r.x + 16, r.y + 4, 6, r.h - 7), 2, gray);
+    app_draw_icon(c, r, XR_ICON_BOOK, gray);
 }
 
 static void favorite_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 {
-    xr_canvas_draw_rect(c, xr_rect(r.x + 6, r.y + 2, r.w - 12, r.h - 4), 2, gray);
-    xr_canvas_vline(c, r.x + r.w / 2, r.y + 2, r.h - 4, gray);
+    app_draw_icon(c, r, XR_ICON_BOOK, gray);
 }
 
 static void settings_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 {
-    xr_canvas_hline(c, r.x + 2, r.y + 5, r.w - 4, gray);
-    xr_canvas_hline(c, r.x + 2, r.y + 12, r.w - 4, gray);
-    xr_canvas_hline(c, r.x + 2, r.y + 19, r.w - 4, gray);
-    xr_canvas_fill_rect(c, xr_rect(r.x + 6, r.y + 2, 5, 7), gray);
-    xr_canvas_fill_rect(c, xr_rect(r.x + 14, r.y + 9, 5, 7), gray);
-    xr_canvas_fill_rect(c, xr_rect(r.x + 9, r.y + 16, 5, 7), gray);
+    app_draw_icon(c, r, XR_ICON_SETTINGS, gray);
+}
+
+static void file_manager_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
+{
+    app_draw_icon(c, r, XR_ICON_FOLDER, gray);
 }
 
 static void sleep_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 {
-    xr_canvas_draw_rect(c, xr_rect(r.x + 3, r.y + 4, r.w - 6, r.h - 4), 2, gray);
-    xr_canvas_vline(c, r.x + r.w / 2, r.y, 8, gray);
+    app_draw_icon(c, r, XR_ICON_CLOSE, gray);
 }
 
 static void update_stats(home_page_t *hp)
@@ -151,8 +141,15 @@ static void home_create(xr_page_t *p)
                    go_favorites, NULL);
     xr_button_set_icon(&hp->favorites, favorite_icon);
     y += t->row_h;
+    xr_button_init(&hp->file_manager, xr_rect(a.x, y, a.w, t->row_h - 8), "File Manager",
+                   t->font_bold, go_file_manager, NULL);
+    xr_button_set_icon(&hp->file_manager, file_manager_icon);
+    y += t->row_h;
     xr_button_init(&hp->settings, xr_rect(a.x, y, a.w, t->row_h - 8), "Settings", t->font_bold, go_settings, NULL);
     xr_button_set_icon(&hp->settings, settings_icon);
+    xr_button_init(&hp->sleep, xr_rect(a.x + a.w - 112, a.y + a.h - 42, 112, 34),
+                   "Sleep", t->font_small, go_sleep, NULL);
+    xr_button_set_icon(&hp->sleep, sleep_icon);
 
     update_stats(hp);
     xr_label_init(&hp->stats, xr_rect(a.x, a.y + a.h - 30, a.w, 30), hp->stats_buf, t->font_small, XR_ALIGN_CENTER);
@@ -161,7 +158,9 @@ static void home_create(xr_page_t *p)
     xr_page_add(p, &hp->card.base);
     xr_page_add(p, &hp->library.base);
     xr_page_add(p, &hp->favorites.base);
+    xr_page_add(p, &hp->file_manager.base);
     xr_page_add(p, &hp->settings.base);
+    xr_page_add(p, &hp->sleep.base);
     xr_page_add(p, &hp->stats.base);
 }
 
@@ -174,34 +173,21 @@ static void home_enter(xr_page_t *p)
     xr_widget_invalidate(&hp->stats.base);
 }
 
-static void sleep_result(xr_dialog_t *d, int result, void *user)
+static void home_tick(xr_page_t *p, uint32_t now)
 {
-    (void)d; (void)user;
-    if (result == XR_RESULT_YES) { /* port hook: show sleep image, deep sleep */ }
-}
-
-static void home_action(xr_page_t *p, uint16_t id)
-{
-    (void)p;
-    switch (id) {
-    case ACT_LIBRARY: go_library(NULL, NULL); break;
-    case ACT_FAVORITES: go_favorites(NULL, NULL); break;
-    case ACT_SETTINGS: go_settings(NULL, NULL); break;
-    case ACT_SLEEP:
-        app_confirm("Sleep", "Put the device to sleep now?", "Sleep", sleep_icon, sleep_result, NULL);
-        break;
-    }
+    if (g_app.sleep_timeout_minutes > 0 &&
+        now - p->shell->last_input_ms >= (uint32_t)g_app.sleep_timeout_minutes * 60000u)
+        xr_shell_replace(p->shell, app_page_sleep());
 }
 
 static const xr_page_vtbl_t k_home_vtbl = {
     .on_create = home_create,
     .on_enter = home_enter,
-    .on_action = home_action,
+    .on_tick = home_tick,
 };
 
 xr_page_t *app_page_home(void)
 {
-    xr_page_init(&s_home.base, &k_home_vtbl, "Home", XR_CHROME_ALL);
-    xr_page_set_actions(&s_home.base, k_home_actions, XR_ARRAY_LEN(k_home_actions));
+    xr_page_init(&s_home.base, &k_home_vtbl, "Home", XR_CHROME_STATUS);
     return &s_home.base;
 }

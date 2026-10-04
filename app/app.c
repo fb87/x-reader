@@ -1,4 +1,5 @@
 #include "app_internal.h"
+#include "xr_icons.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -9,6 +10,16 @@
 #define APP_EPUB_TEXT_SIZE (64 * 1024)
 
 app_t g_app;
+
+void app_draw_icon(xr_canvas_t *c, xr_rect_t r, int icon, uint8_t gray)
+{
+    if (icon < 0 || icon >= XR_ICON_COUNT) return;
+    const xr_icon_glyph_t *g = &xr_icons[icon];
+    for (int y = 0; y < 24; ++y)
+        for (int x = 0; x < 24; ++x)
+            if (g->bitmap[y * 3 + x / 8] & (uint8_t)(0x80u >> (x % 8)))
+                xr_canvas_fill_rect(c, xr_rect(r.x + x, r.y + y, 1, 1), gray);
+}
 static xr_epub_t s_epub;
 static xr_epub_manifest_item_t s_epub_manifest[APP_EPUB_MANIFEST_MAX];
 static xr_epub_spine_item_t s_epub_spine[APP_EPUB_SPINE_MAX];
@@ -44,6 +55,7 @@ void app_start(xr_shell_t *shell)
     g_app.show_progress = true;
     g_app.wifi_connected = false;
     g_app.bluetooth_connected = false;
+    g_app.sleep_timeout_minutes = 10;
     xr_shell_set_full_refresh_every(shell, (uint16_t)g_app.full_refresh_every);
     xr_shell_push(shell, app_page_splash());
 }

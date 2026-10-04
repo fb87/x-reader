@@ -4,8 +4,10 @@
 
 #include "app.h"
 #include "xr_fonts.h"
+#include "xr_icons.h"
 
 #define APP_MAX_BOOKS 16
+void app_draw_icon(xr_canvas_t *c, xr_rect_t r, int icon, uint8_t gray);
 
 typedef struct app_book {
     const char *title, *author, *format;
@@ -28,6 +30,7 @@ typedef struct app {
     bool show_progress;
     bool wifi_connected;
     bool bluetooth_connected;
+    int sleep_timeout_minutes;
     bool epub_open;
     uint16_t epub_spine;
 } app_t;
@@ -43,6 +46,8 @@ xr_page_t *app_page_splash(void);
 xr_page_t *app_page_home(void);
 xr_page_t *app_page_library(void);
 xr_page_t *app_page_favorites(void);
+xr_page_t *app_page_file_manager(void);
+xr_page_t *app_page_sleep(void);
 xr_page_t *app_page_reader(void);
 xr_page_t *app_page_settings(void);
 

@@ -34,6 +34,7 @@ typedef struct library_page {
     int book_index[APP_MAX_BOOKS];
     int pending_book;
     bool favorites_only;
+    bool file_manager;
 } library_page_t;
 
 static library_page_t s_library;
@@ -66,23 +67,17 @@ static void draw_cover(xr_canvas_t *c, xr_rect_t r, const app_book_t *book, int 
 
 static void favorite_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 {
-    xr_canvas_draw_rect(c, xr_rect(r.x + 5, r.y + 2, r.w - 10, r.h - 4), 2, gray);
-    xr_canvas_vline(c, r.x + r.w / 2, r.y + 2, r.h - 4, gray);
+    app_draw_icon(c, r, XR_ICON_BOOK, gray);
 }
 
 static void delete_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 {
-    xr_canvas_draw_rect(c, xr_rect(r.x + 4, r.y + 5, r.w - 8, r.h - 5), 2, gray);
-    xr_canvas_hline(c, r.x + 2, r.y + 3, r.w - 4, gray);
-    xr_canvas_hline(c, r.x + r.w / 2 - 3, r.y + 1, 6, gray);
+    app_draw_icon(c, r, XR_ICON_DELETE, gray);
 }
 
 static void back_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 {
-    xr_canvas_hline(c, r.x + 3, r.y + r.h / 2, r.w - 6, gray);
-    xr_canvas_vline(c, r.x + 3, r.y + r.h / 2 - 5, 11, gray);
-    xr_canvas_hline(c, r.x + 3, r.y + r.h / 2 - 5, 6, gray);
-    xr_canvas_hline(c, r.x + 3, r.y + r.h / 2 + 5, 6, gray);
+    app_draw_icon(c, r, XR_ICON_ARROW_BACK, gray);
 }
 
 static void library_render(xr_page_t *p, xr_canvas_t *c)
@@ -143,7 +138,8 @@ static void library_render(xr_page_t *p, xr_canvas_t *c)
 
 static void update_title(library_page_t *lp)
 {
-    snprintf(lp->title, sizeof lp->title, "%s (%d)", lp->favorites_only ? "Favorites" : "Library",
+    snprintf(lp->title, sizeof lp->title, "%s (%d)", lp->file_manager ? "File Manager" :
+             (lp->favorites_only ? "Favorites" : "Library"),
              lp->list.count);
     xr_page_set_title(&lp->base, lp->title);
 }
@@ -225,6 +221,16 @@ xr_page_t *app_page_library(void)
 {
     xr_page_init(&s_library.base, &k_library_vtbl, "Library", XR_CHROME_ALL);
     s_library.favorites_only = false;
+    s_library.file_manager = false;
+    xr_page_set_actions(&s_library.base, k_library_actions, XR_ARRAY_LEN(k_library_actions));
+    return &s_library.base;
+}
+
+xr_page_t *app_page_file_manager(void)
+{
+    xr_page_init(&s_library.base, &k_library_vtbl, "File Manager", XR_CHROME_ALL);
+    s_library.favorites_only = false;
+    s_library.file_manager = true;
     xr_page_set_actions(&s_library.base, k_library_actions, XR_ARRAY_LEN(k_library_actions));
     return &s_library.base;
 }

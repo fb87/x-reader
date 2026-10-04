@@ -58,6 +58,7 @@ struct xr_shell {
 
     char clock[8];
     int battery;
+    uint32_t last_input_ms;
 };
 
 void xr_shell_init(xr_shell_t *s, xr_display_t *display, const xr_platform_t *platform,

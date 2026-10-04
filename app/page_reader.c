@@ -155,19 +155,17 @@ static void turn(reader_page_t *rp, int delta)
 
 static void smaller_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 {
-    xr_canvas_hline(c, r.x + 2, r.y + r.h / 2, r.w - 4, gray);
+    app_draw_icon(c, r, XR_ICON_REMOVE, gray);
 }
 
 static void larger_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 {
-    xr_canvas_hline(c, r.x + 2, r.y + r.h / 2, r.w - 4, gray);
-    xr_canvas_vline(c, r.x + r.w / 2, r.y + 2, r.h - 4, gray);
+    app_draw_icon(c, r, XR_ICON_ADD, gray);
 }
 
 static void close_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 {
-    xr_canvas_draw_rect(c, xr_rect(r.x + 3, r.y + 2, r.w - 7, r.h - 4), 2, gray);
-    xr_canvas_hline(c, r.x, r.y + r.h / 2, r.w - 7, gray);
+    app_draw_icon(c, r, XR_ICON_CLOSE, gray);
 }
 
 static void toggle_chrome(xr_page_t *p)

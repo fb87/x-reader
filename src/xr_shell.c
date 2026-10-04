@@ -19,6 +19,7 @@ void xr_shell_init(xr_shell_t *s, xr_display_t *display, const xr_platform_t *pl
     s->dock_rect = xr_rect(0, display->height - theme->dock_h, display->width, theme->dock_h);
     xr_refresh_init(&s->sched, s->screen, display->update_align);
     s->battery = -1;
+    s->last_input_ms = 0;
     s->dock_focus = -1;
 }
 
@@ -179,6 +180,7 @@ static void set_dock_focus(xr_shell_t *s, int focus)
 
 void xr_shell_dispatch(xr_shell_t *s, const xr_event_t *ev)
 {
+    s->last_input_ms = xr_shell_now(s);
     /* Layer 2: the top dialog is modal and takes everything. */
     if (s->dialog_count) {
         xr_dialog_t *d = s->dialogs[s->dialog_count - 1];

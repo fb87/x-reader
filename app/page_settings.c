@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 
-enum { ROW_WIFI, ROW_BLUETOOTH, ROW_FONT, ROW_REFRESH, ROW_PROGRESS, ROW_ABOUT, ROW_COUNT };
+enum { ROW_WIFI, ROW_BLUETOOTH, ROW_FONT, ROW_REFRESH, ROW_PROGRESS, ROW_SLEEP, ROW_ABOUT, ROW_COUNT };
 
 static void back_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray);
 
@@ -47,6 +47,11 @@ static void settings_row(xr_list_t *l, int i, const char **primary, const char *
         *primary = "Progress bar";
         *secondary = g_app.show_progress ? "On" : "Off";
         break;
+    case ROW_SLEEP:
+        *primary = "Sleep timeout";
+        snprintf(sp->value, sizeof sp->value, "%d minutes", g_app.sleep_timeout_minutes);
+        *secondary = sp->value;
+        break;
     default:
         *primary = "About";
         *secondary = "X-Reader 0.1";
@@ -77,6 +82,15 @@ static void settings_selected(xr_list_t *l, int i)
     case ROW_PROGRESS:
         g_app.show_progress = !g_app.show_progress;
         break;
+    case ROW_SLEEP:
+        g_app.sleep_timeout_minutes = g_app.sleep_timeout_minutes == 10 ? 30 :
+                                      g_app.sleep_timeout_minutes == 30 ? 60 : 10;
+        break;
+    case ROW_ABOUT:
+        app_confirm("About X-Reader",
+                    "Author: X-Reader Team\nSoftware: X-Reader 0.1\nRelease: 2026-10-04",
+                    "Close", NULL, NULL, NULL);
+        return;
     default:
         return;
     }
@@ -86,10 +100,7 @@ static void settings_selected(xr_list_t *l, int i)
 
 static void back_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 {
-    xr_canvas_hline(c, r.x + 3, r.y + r.h / 2, r.w - 6, gray);
-    xr_canvas_vline(c, r.x + 3, r.y + r.h / 2 - 5, 11, gray);
-    xr_canvas_hline(c, r.x + 3, r.y + r.h / 2 - 5, 6, gray);
-    xr_canvas_hline(c, r.x + 3, r.y + r.h / 2 + 5, 6, gray);
+    app_draw_icon(c, r, XR_ICON_ARROW_BACK, gray);
 }
 
 static void settings_create(xr_page_t *p)
