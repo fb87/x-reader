@@ -1,8 +1,17 @@
 #include "app_internal.h"
+#include "book_title.h"
 #include "xr_icons.h"
 
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
+
+#ifdef ESP_PLATFORM
+#include "esp_attr.h"
+#define APP_LARGE_BSS EXT_RAM_BSS_ATTR
+#else
+#define APP_LARGE_BSS
+#endif
 
 #define APP_EPUB_MANIFEST_MAX 640
 #define APP_EPUB_SPINE_MAX 640
@@ -10,6 +19,10 @@
 #define APP_EPUB_TEXT_SIZE (64 * 1024)
 
 app_t g_app;
+static app_epub_loader_fn s_epub_loader;
+static app_dir_entry_fn s_storage_list_dir;
+static void *s_storage_context;
+static char s_storage_root[256];
 
 void app_draw_icon(xr_canvas_t *c, xr_rect_t r, int icon, uint8_t gray)
 {
@@ -21,10 +34,10 @@ void app_draw_icon(xr_canvas_t *c, xr_rect_t r, int icon, uint8_t gray)
                 xr_canvas_fill_rect(c, xr_rect(r.x + x, r.y + y, 1, 1), gray);
 }
 static xr_epub_t s_epub;
-static xr_epub_manifest_item_t s_epub_manifest[APP_EPUB_MANIFEST_MAX];
-static xr_epub_spine_item_t s_epub_spine[APP_EPUB_SPINE_MAX];
-static uint8_t s_epub_scratch[APP_EPUB_SCRATCH_SIZE];
-static char s_epub_text[APP_EPUB_TEXT_SIZE];
+static xr_epub_manifest_item_t s_epub_manifest[APP_EPUB_MANIFEST_MAX] APP_LARGE_BSS;
+static xr_epub_spine_item_t s_epub_spine[APP_EPUB_SPINE_MAX] APP_LARGE_BSS;
+static uint8_t s_epub_scratch[APP_EPUB_SCRATCH_SIZE] APP_LARGE_BSS;
+static char s_epub_text[APP_EPUB_TEXT_SIZE] APP_LARGE_BSS;
 static bool s_epub_cover_placeholder;
 static char s_chapter_title[96];
 
@@ -64,24 +77,128 @@ void app_library_clear(void) { g_app.book_count = 0; g_app.current = -1; }
 
 bool app_library_add(const char *title)
 {
-    if (!title || g_app.book_count >= APP_MAX_BOOKS) return false;
+    return app_library_add_path(title, title);
+}
+
+bool app_library_add_path(const char *path, const char *title)
+{
+    if (!path || !title || g_app.book_count >= APP_LIBRARY_MAX_BOOKS) return false;
     int index = g_app.book_count++;
-    snprintf(g_app.book_titles[index], sizeof g_app.book_titles[index], "%s", title);
-    g_app.books[index] = (app_book_t) { g_app.book_titles[index], "FatFS EPUB", "EPUB", 0, 0, 0, false, true };
+    app_book_display_title(g_app.book_titles[index], sizeof g_app.book_titles[index], title);
+    g_app.books[index] = (app_book_t) {
+        .title = g_app.book_titles[index], .author = "FatFS EPUB", .format = "EPUB",
+        .epub_source = true,
+    };
+    snprintf(g_app.books[index].path, sizeof g_app.books[index].path, "%s", path);
     if (g_app.current < 0) g_app.current = 0;
     return true;
+}
+
+void app_set_epub_loader(app_epub_loader_fn loader) { s_epub_loader = loader; }
+
+void app_register_storage(const char *root, app_dir_entry_fn list_dir, void *context)
+{
+    s_storage_list_dir = list_dir;
+    s_storage_context = context;
+    if (!root) {
+        s_storage_root[0] = '\0';
+        return;
+    }
+    snprintf(s_storage_root, sizeof s_storage_root, "%s", root);
+    size_t length = strlen(s_storage_root);
+    while (length > 1 && s_storage_root[length - 1] == '/') s_storage_root[--length] = '\0';
+}
+
+const char *app_storage_root(void) { return s_storage_root; }
+
+bool app_storage_list(const char *path,
+                      bool (*entry)(const char *name, bool directory, void *user),
+                      void *user)
+{
+    return s_storage_list_dir && path && entry &&
+           s_storage_list_dir(s_storage_context, path, entry, user);
+}
+
+bool app_open_storage_epub(const char *path, const char *title)
+{
+    if (!path || !title || !s_epub_loader) return false;
+    int index = -1;
+    for (int i = 0; i < g_app.book_count; ++i) {
+        if (g_app.books[i].epub_source && strcmp(g_app.books[i].path, path) == 0) {
+            index = i;
+            break;
+        }
+    }
+    if (index < 0 && g_app.book_count < APP_LIBRARY_MAX_BOOKS) {
+        if (!app_library_add_path(path, title)) return false;
+        index = g_app.book_count - 1;
+    } else if (index < 0) {
+        index = APP_LIBRARY_MAX_BOOKS;
+        if (g_app.book_count <= index) g_app.book_count = index + 1;
+        app_book_display_title(g_app.book_titles[index], sizeof g_app.book_titles[index], title);
+        g_app.books[index] = (app_book_t) {
+            g_app.book_titles[index], "Storage EPUB", "EPUB", "", 0, 0, 0,
+            false, true, true
+        };
+        snprintf(g_app.books[index].path, sizeof g_app.books[index].path, "%s", path);
+    }
+    g_app.current = index;
+    if (!s_epub_loader(path, g_app.books[index].title)) return false;
+    xr_shell_push(g_app.shell, app_page_reader());
+    return true;
+}
+
+typedef struct app_scan_context { const char *root; } app_scan_context_t;
+static char s_scan_mount[256];
+static char s_scan_queue[16][256];
+static unsigned s_scan_head, s_scan_tail;
+static bool scan_entry(const char *name, bool directory, void *user)
+{
+    app_scan_context_t *scan = user;
+    char path[512];
+    int written = snprintf(path, sizeof path, "%s/%s", scan->root, name);
+    if (written < 0 || (size_t)written >= sizeof path) return true;
+    if (directory) {
+        size_t length = strlen(path);
+        if (s_scan_tail < sizeof(s_scan_queue) / sizeof(s_scan_queue[0]) &&
+            length < sizeof s_scan_queue[0]) {
+            memcpy(s_scan_queue[s_scan_tail], path, length + 1);
+            ++s_scan_tail;
+        }
+        return true;
+    }
+    size_t n = strlen(name);
+    if ((n > 5 && strcasecmp(name + n - 5, ".epub") == 0) || (n > 4 && strcasecmp(name + n - 4, ".epu") == 0))
+        app_library_add_path(path + strlen(s_scan_mount) +
+                             (path[strlen(s_scan_mount)] == '/' ? 1 : 0), name);
+    return true;
+}
+void app_scan_library(const char *root, app_dir_entry_fn list_dir, void *context)
+{
+    if (!root || !list_dir) return;
+    app_library_clear();
+    s_scan_head = s_scan_tail = 0;
+    snprintf(s_scan_mount, sizeof s_scan_mount, "%s", root);
+    snprintf(s_scan_queue[s_scan_tail++], sizeof s_scan_queue[0], "%s", root);
+    while (s_scan_head < s_scan_tail) {
+        app_scan_context_t scan = { s_scan_queue[s_scan_head++] };
+        if (!list_dir(context, scan.root, scan_entry, &scan)) break;
+    }
 }
 
 void app_open_book(int index)
 {
     if (index < 0 || index >= g_app.book_count) return;
     g_app.current = index;
+    if (g_app.books[index].epub_source) {
+        if (!s_epub_loader || !s_epub_loader(g_app.books[index].path, g_app.books[index].title)) return;
+    }
     xr_shell_push(g_app.shell, app_page_reader());
 }
 
 bool app_load_epub(const xr_storage_t *storage, const char *title)
 {
-    if (!storage || !title || g_app.book_count >= APP_MAX_BOOKS) return false;
+    if (!storage || !title) return false;
     if (xr_epub_open(&s_epub, storage, s_epub_scratch, sizeof(s_epub_scratch),
                      s_epub_manifest, XR_ARRAY_LEN(s_epub_manifest),
                      s_epub_spine, XR_ARRAY_LEN(s_epub_spine)) != XR_EPUB_OK)
@@ -91,13 +208,27 @@ bool app_load_epub(const xr_storage_t *storage, const char *title)
         return false;
     s_epub_cover_placeholder = !s_epub_text[0];
     if (s_epub_cover_placeholder) strcpy(s_epub_text, "Cover");
-    int existing = -1;
-    for (int i = 0; i < g_app.book_count; ++i)
-        if (strcmp(g_app.books[i].title, title) == 0) { existing = i; break; }
+    int existing = (g_app.current >= 0 && g_app.current < g_app.book_count &&
+                    g_app.books[g_app.current].epub_source) ? g_app.current : -1;
+    if (existing < 0)
+        for (int i = 0; i < g_app.book_count; ++i)
+            if (strcmp(g_app.books[i].title, title) == 0) { existing = i; break; }
+    if (existing < 0 && g_app.book_count >= APP_MAX_BOOKS) return false;
     int index = existing >= 0 ? existing : g_app.book_count++;
     app_book_t *book = &g_app.books[index];
-    *book = (app_book_t) { s_epub.title[0] ? s_epub.title : title, "Imported EPUB", "EPUB", 0, 0, 0, false, true };
-    g_app.current = g_app.book_count - 1;
+    char path[sizeof book->path];
+    bool transient = existing >= 0 && book->transient;
+    if (existing >= 0) snprintf(path, sizeof path, "%s", book->path);
+    const char *loaded_title = s_epub.title[0] ? s_epub.title : title;
+    if (loaded_title != g_app.book_titles[index])
+        snprintf(g_app.book_titles[index], sizeof g_app.book_titles[index], "%s", loaded_title);
+    *book = (app_book_t) {
+        .title = g_app.book_titles[index], .author = "Imported EPUB", .format = "EPUB",
+        .epub_source = true,
+    };
+    book->transient = transient;
+    snprintf(book->path, sizeof book->path, "%s", existing >= 0 ? path : title);
+    g_app.current = index;
     g_app.epub_open = true;
     g_app.epub_spine = 0;
     return true;
@@ -160,9 +291,18 @@ uint16_t app_epub_chapter_count(void) { return g_app.epub_open ? s_epub.spine_co
 void app_delete_book(int index)
 {
     if (index < 0 || index >= g_app.book_count) return;
+    if (!g_app.books[index].transient && g_app.book_count == APP_MAX_BOOKS &&
+        g_app.books[APP_LIBRARY_MAX_BOOKS].transient) {
+        if (g_app.current == APP_LIBRARY_MAX_BOOKS) g_app.current = -1;
+        g_app.book_count--;
+    }
     memmove(&g_app.books[index], &g_app.books[index + 1],
             (size_t)(g_app.book_count - index - 1) * sizeof(app_book_t));
     g_app.book_count--;
+    for (int i = index; i < g_app.book_count; ++i) {
+        snprintf(g_app.book_titles[i], sizeof g_app.book_titles[i], "%s", g_app.books[i].title);
+        g_app.books[i].title = g_app.book_titles[i];
+    }
     if (g_app.current == index) g_app.current = g_app.book_count ? 0 : -1;
     else if (g_app.current > index) g_app.current--;
 }

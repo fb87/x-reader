@@ -2,8 +2,11 @@
 #include <SDL.h>
 #include <zlib.h>
 #include <stdbool.h>
+#include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <sys/stat.h>
 
 #include "app.h"
 #include "app_internal.h"
@@ -26,6 +29,8 @@ typedef struct gui_app {
 } gui_app_t;
 
 typedef struct sim_epub_file { FIL file; xr_storage_t storage; } sim_epub_file_t;
+static sim_epub_file_t s_active_epub;
+static char s_library_root[512] = ".";
 
 static bool epub_read(void *context, uint32_t offset, void *destination, uint32_t size)
 {
@@ -68,17 +73,39 @@ static bool epub_open(sim_epub_file_t *epub, const char *path)
     return true;
 }
 
-static void scan_library(const char *root)
+static bool load_selected_epub(const char *path, const char *title)
 {
+    sim_fatfs_mount(s_library_root);
+    if (f_open(&s_active_epub.file, path, FA_READ) != FR_OK) return false;
+    s_active_epub.storage = (xr_storage_t) { &s_active_epub.file, f_size(&s_active_epub.file), epub_read, epub_inflate };
+    return app_load_epub(&s_active_epub.storage, title);
+}
+
+static bool list_sim_directory(void *context, const char *path,
+                               bool (*callback)(const char *, bool, void *), void *user)
+{
+    (void)context;
     FDIR dir; FILINFO info;
-    sim_fatfs_mount(root);
-    if (f_opendir(&dir, root) != FR_OK) return;
-    app_library_clear();
+    if (f_opendir(&dir, path) != FR_OK) return false;
     while (f_readdir(&dir, &info) == FR_OK && info.fname[0]) {
-        size_t n = strlen(info.fname);
-        if (n > 5 && strcmp(info.fname + n - 5, ".epub") == 0) app_library_add(info.fname);
+        if (!strcmp(info.fname, ".") || !strcmp(info.fname, "..")) continue;
+        struct stat st;
+        char full[512];
+        int full_len = snprintf(full, sizeof full, "%s/%s", path, info.fname);
+        if (full_len < 0 || (size_t)full_len >= sizeof full) continue;
+        bool directory = stat(full, &st) == 0 && S_ISDIR(st.st_mode);
+        if (!callback(info.fname, directory, user)) break;
     }
     f_closedir(&dir);
+    return true;
+}
+
+static void scan_library(const char *root)
+{
+    sim_fatfs_mount(root);
+    snprintf(s_library_root, sizeof s_library_root, "%s", root);
+    app_register_storage(root, list_sim_directory, NULL);
+    app_scan_library(root, list_sim_directory, NULL);
 }
 
 static const char *epub_display_name(const char *path)
@@ -194,11 +221,11 @@ int main(int argc, char **argv)
     sim_platform_init(&app.platform);
     xr_shell_init(&app.shell, &app.display.display, &app.platform.platform, app_theme());
     app_start(&app.shell);
-    char library_root[512] = ".";
-    if (argc > 1) {
-        const char *slash = strrchr(argv[1], '/');
-        if (slash) { size_t n = (size_t)(slash - argv[1]); if (n >= sizeof library_root) n = sizeof library_root - 1; memcpy(library_root, argv[1], n); library_root[n] = '\0'; }
-    }
+    app_set_epub_loader(load_selected_epub);
+    char library_root[512];
+    const char *configured_root = getenv("XREADER_SDCARD");
+    if (configured_root) snprintf(library_root, sizeof library_root, "%s", configured_root);
+    else snprintf(library_root, sizeof library_root, "%s/data/sdcard", getenv("HOME") ? getenv("HOME") : ".");
     scan_library(library_root);
     sim_epub_file_t epub;
     bool has_epub = argc > 1 && epub_open(&epub, argv[1]);

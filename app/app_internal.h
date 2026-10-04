@@ -6,17 +6,21 @@
 #include "xr_fonts.h"
 #include "xr_icons.h"
 
-#define APP_MAX_BOOKS 16
+#define APP_LIBRARY_MAX_BOOKS 16
+#define APP_MAX_BOOKS (APP_LIBRARY_MAX_BOOKS + 1)
 void app_draw_icon(xr_canvas_t *c, xr_rect_t r, int icon, uint8_t gray);
 
 typedef struct app_book {
     const char *title, *author, *format;
+    char path[256];
     uint16_t pages;
     uint8_t progress; /* percent */
     uint16_t size_kb;
     bool favorite;
     bool epub_source;
+    bool transient;
 } app_book_t;
+
 
 typedef struct app {
     xr_shell_t *shell;
@@ -37,6 +41,13 @@ typedef struct app {
 
 void app_library_clear(void);
 bool app_library_add(const char *title);
+bool app_library_add_path(const char *path, const char *title);
+void app_set_epub_loader(app_epub_loader_fn loader);
+const char *app_storage_root(void);
+bool app_storage_list(const char *path,
+                      bool (*entry)(const char *name, bool directory, void *user),
+                      void *user);
+bool app_open_storage_epub(const char *path, const char *title);
 
 extern app_t g_app;
 extern const xr_font_t *const app_body_fonts[3];

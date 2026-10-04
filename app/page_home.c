@@ -118,9 +118,13 @@ static void sleep_icon(xr_canvas_t *c, xr_rect_t r, uint8_t gray)
 static void update_stats(home_page_t *hp)
 {
     int reading = 0;
+    int books = 0;
     for (int i = 0; i < g_app.book_count; i++)
-        if (g_app.books[i].progress > 0 && g_app.books[i].progress < 100) reading++;
-    snprintf(hp->stats_buf, sizeof hp->stats_buf, "%d books  |  %d in progress", g_app.book_count, reading);
+        if (!g_app.books[i].transient) {
+            books++;
+            if (g_app.books[i].progress > 0 && g_app.books[i].progress < 100) reading++;
+        }
+    snprintf(hp->stats_buf, sizeof hp->stats_buf, "%d books  |  %d in progress", books, reading);
 }
 
 static void home_create(xr_page_t *p)

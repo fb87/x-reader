@@ -1,2 +1,5 @@
 build/
 out/
+build-host/
+build-config-failed*/
+sdkconfig.old

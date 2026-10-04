@@ -34,7 +34,6 @@ typedef struct library_page {
     int book_index[APP_MAX_BOOKS];
     int pending_book;
     bool favorites_only;
-    bool file_manager;
 } library_page_t;
 
 static library_page_t s_library;
@@ -138,8 +137,7 @@ static void library_render(xr_page_t *p, xr_canvas_t *c)
 
 static void update_title(library_page_t *lp)
 {
-    snprintf(lp->title, sizeof lp->title, "%s (%d)", lp->file_manager ? "File Manager" :
-             (lp->favorites_only ? "Favorites" : "Library"),
+    snprintf(lp->title, sizeof lp->title, "%s (%d)", lp->favorites_only ? "Favorites" : "Library",
              lp->list.count);
     xr_page_set_title(&lp->base, lp->title);
 }
@@ -148,7 +146,8 @@ static void library_sync(library_page_t *lp)
 {
     int n = 0;
     for (int i = 0; i < g_app.book_count; i++)
-        if (!lp->favorites_only || g_app.books[i].favorite) lp->book_index[n++] = i;
+        if (!g_app.books[i].transient && (!lp->favorites_only || g_app.books[i].favorite))
+            lp->book_index[n++] = i;
     xr_list_set_count(&lp->list, n);
     update_title(lp);
 }
@@ -221,16 +220,6 @@ xr_page_t *app_page_library(void)
 {
     xr_page_init(&s_library.base, &k_library_vtbl, "Library", XR_CHROME_ALL);
     s_library.favorites_only = false;
-    s_library.file_manager = false;
-    xr_page_set_actions(&s_library.base, k_library_actions, XR_ARRAY_LEN(k_library_actions));
-    return &s_library.base;
-}
-
-xr_page_t *app_page_file_manager(void)
-{
-    xr_page_init(&s_library.base, &k_library_vtbl, "File Manager", XR_CHROME_ALL);
-    s_library.favorites_only = false;
-    s_library.file_manager = true;
     xr_page_set_actions(&s_library.base, k_library_actions, XR_ARRAY_LEN(k_library_actions));
     return &s_library.base;
 }

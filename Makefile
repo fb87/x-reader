@@ -8,6 +8,7 @@ APP   := $(wildcard app/*.c)
 SIM   := $(wildcard port/sim/*.c)
 SDL_SIM := port/sdl/m5_gui.c port/sim/sim_port.c port/sim/sim_fatfs.c
 EPUB_TEST := tests/epub_import_test.c src/xr_epub.c port/sim/sim_fatfs.c
+TITLE_TEST := tests/book_title_test.c app/book_title.c
 
 all: build/xr_sim
 
@@ -28,6 +29,13 @@ build/xr_epub_import_test: $(EPUB_TEST) include/xr/xr_epub.h include/xr/xr_stora
 test-epub: build/xr_epub_import_test
 	./build/xr_epub_import_test /home/dao/data/sample.epub
 
+build/xr_book_title_test: $(TITLE_TEST) app/book_title.h
+	@mkdir -p build
+	$(CC) $(CFLAGS) $(TITLE_TEST) -o $@
+
+test-title: build/xr_book_title_test
+	./build/xr_book_title_test
+
 fonts:
 	python3 tools/gen_font.py fonts
 
@@ -37,4 +45,4 @@ run: build/xr_sim
 clean:
 	rm -rf build out
 
-.PHONY: all fonts gui test-epub run clean
+.PHONY: all fonts gui test-epub test-title run clean
