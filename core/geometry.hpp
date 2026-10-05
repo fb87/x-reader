@@ -62,6 +62,9 @@ constexpr rect merge(rect a, rect b) {
 /** @brief Shrinks (or grows, for negative `d`) a rect by `d` on every side. */
 constexpr rect inset(rect r, int d) { return make(r.x + d, r.y + d, r.w - 2 * d, r.h - 2 * d); }
 
+/** @brief Clips a rect to a 0,0,width,height surface; a defensive bound display::update relies on. */
+constexpr rect clamp(rect r, int width, int height) { return intersect(r, make(0, 0, width, height)); }
+
 /** @brief Pixel area of the rect, or 0 when empty. */
 constexpr std::int32_t area(rect r) {
   return empty(r) ? 0 : static_cast<std::int32_t>(r.w) * r.h;
