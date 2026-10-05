@@ -46,3 +46,51 @@ clean:
 	rm -rf build out
 
 .PHONY: all fonts gui test-epub test-title run clean
+
+# --- refactor/cpp-design: restricted-C++20 tree (core/ reader/ app/ boards/) ---
+# Scaffolding only until the corresponding phases land; see docs/MIGRATION.md.
+CXX      ?= clang++
+BOARD    ?= sim
+CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -fno-exceptions -fno-rtti \
+            -fno-threadsafe-statics
+
+CPP_HEADERS := $(shell find core reader app boards -type f -name '*.hpp' 2>/dev/null)
+SELECTED    := build/selected_board.hpp
+
+$(SELECTED):
+	@mkdir -p build
+	printf '#pragma once\n#include "boards/$(BOARD)/runtime.hpp"\nnamespace selected_board = board::$(BOARD);\n' > $@
+
+build/reader: app_main.cpp $(CPP_HEADERS) $(SELECTED)
+	$(CXX) $(CXXFLAGS) -I. -Ibuild app_main.cpp -o $@ -lz
+
+build/simulator_gui: boards/sim/gui.cpp $(CPP_HEADERS)
+	$(CXX) $(CXXFLAGS) $$(pkg-config --cflags sdl2) -I. boards/sim/gui.cpp -o $@ $$(pkg-config --libs sdl2) -lz
+
+build/simulator_test: tests/simulator_test.cpp $(CPP_HEADERS)
+	$(CXX) $(CXXFLAGS) -I. tests/simulator_test.cpp -o $@ -lz
+
+build/epub_test: tests/epub_test.cpp $(CPP_HEADERS)
+	$(CXX) $(CXXFLAGS) -I. tests/epub_test.cpp -o $@ -lz
+
+cpp-all: build/reader
+
+cpp-gui: build/simulator_gui
+	./build/simulator_gui
+
+test: build/reader build/simulator_test build/epub_test
+	./build/simulator_test
+	./build/epub_test
+
+format:
+	clang-format -i $$(find core reader app boards tests -type f \( -name '*.hpp' -o -name '*.cpp' \) 2>/dev/null) app_main.cpp 2>/dev/null || true
+
+format-check:
+	@if command -v clang-format >/dev/null 2>&1; then \
+		find core reader app boards tests -type f \( -name '*.hpp' -o -name '*.cpp' \) -print0 2>/dev/null | \
+		xargs -0 -r clang-format --dry-run --Werror; \
+	else \
+		echo 'clang-format not installed; format check skipped'; \
+	fi
+
+.PHONY: cpp-all cpp-gui test format format-check
