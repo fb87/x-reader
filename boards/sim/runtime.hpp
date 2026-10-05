@@ -9,6 +9,7 @@
 #include "../../core/input.hpp"
 #include "../../core/platform.hpp"
 #include "../../core/refresh.hpp"
+#include "../../core/secret.hpp"
 #include "../../core/storage.hpp"
 
 #include <array>
@@ -34,6 +35,16 @@ inline constexpr int width = 540;
 inline constexpr int height = 960;
 inline constexpr auto pixel_format = display::pixel_format::gray4;
 inline constexpr std::size_t input_queue_size = 64;
+inline constexpr std::size_t secret_capacity = 16;
+inline constexpr std::size_t secret_key_max = 64;
+inline constexpr std::size_t secret_value_max = 128;
+
+/** @brief One in-memory credential entry; never written to disk (see `secret` below). */
+struct secret_entry {
+  char key[secret_key_max] = {0};
+  char value[secret_value_max] = {0};
+  bool used = false;
+};
 
 /** @brief A simulated board instance: framebuffer, input queue, and all capability backends. */
 struct runtime {
@@ -49,11 +60,19 @@ struct runtime {
 
   char storage_mount[storage::path_max] = {0};  ///< see detail::resolve's doc comment.
 
+  // Credentials live only here, in memory, for the process lifetime -- never through
+  // state::store (which can be checkpointed to a debug-visible persistent file) and
+  // never written to disk by this board at all. A real board's secret-store backend
+  // might choose to persist through a platform keystore; the simulator's choice not
+  // to is at least as conservative as the design contract requires, not less.
+  std::array<secret_entry, secret_capacity> secrets{};
+
   display::device display{};
   platform::device platform{};
   input::device input{};
   storage::device storage{};
   wifi::device wifi{};
+  secret::store secret{};
   capability::registry capabilities{};
 
   // Optional diagnostic frame dump (PGM + CSV refresh log), mirroring sim_display_t.
@@ -243,6 +262,49 @@ inline bool wifi_connect(wifi::device&, const char*, const char*) { return true;
 inline void wifi_disconnect(wifi::device&) {}
 inline bool wifi_connected(wifi::device&) { return true; }
 
+inline bool secret_get(secret::store& self, const char* key, char* destination,
+                       std::size_t capacity) {
+  auto& self_runtime = *static_cast<runtime*>(self.context);
+  for (auto& entry : self_runtime.secrets) {
+    if (entry.used && std::strcmp(entry.key, key) == 0) {
+      std::snprintf(destination, capacity, "%s", entry.value);
+      return true;
+    }
+  }
+  return false;
+}
+
+inline bool secret_set(secret::store& self, const char* key, const char* value) {
+  auto& self_runtime = *static_cast<runtime*>(self.context);
+  if (std::strlen(key) >= secret_key_max || std::strlen(value) >= secret_value_max) return false;
+  for (auto& entry : self_runtime.secrets) {
+    if (entry.used && std::strcmp(entry.key, key) == 0) {
+      std::snprintf(entry.value, sizeof(entry.value), "%s", value);
+      return true;
+    }
+  }
+  for (auto& entry : self_runtime.secrets) {
+    if (!entry.used) {
+      entry.used = true;
+      std::snprintf(entry.key, sizeof(entry.key), "%s", key);
+      std::snprintf(entry.value, sizeof(entry.value), "%s", value);
+      return true;
+    }
+  }
+  return false;  // capacity exceeded.
+}
+
+inline bool secret_remove(secret::store& self, const char* key) {
+  auto& self_runtime = *static_cast<runtime*>(self.context);
+  for (auto& entry : self_runtime.secrets) {
+    if (entry.used && std::strcmp(entry.key, key) == 0) {
+      entry = secret_entry{};
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace detail
 
 /** @brief Sets the host directory relative paths are resolved against for reads/inflate. */
@@ -292,13 +354,19 @@ inline void init(runtime& self) {
   self.wifi.disconnect = detail::wifi_disconnect;
   self.wifi.connected = detail::wifi_connected;
 
+  self.secret.context = &self;
+  self.secret.get = detail::secret_get;
+  self.secret.set = detail::secret_set;
+  self.secret.remove = detail::secret_remove;
+
   capability::set(self.capabilities, capability::id::display, &self.display);
   capability::set(self.capabilities, capability::id::input, &self.input);
   capability::set(self.capabilities, capability::id::platform, &self.platform);
   capability::set(self.capabilities, capability::id::storage, &self.storage);
   capability::set(self.capabilities, capability::id::wifi, &self.wifi);
-  // bluetooth/power/rtc/front_light/usb/secret intentionally left unregistered: no board
-  // backs them yet (secret lands in a later phase; the rest have no real hardware at all).
+  capability::set(self.capabilities, capability::id::secret, &self.secret);
+  // bluetooth/power/rtc/front_light/usb intentionally left unregistered: no real
+  // hardware exists for any of them on this or any other board today.
 }
 
 /** @brief Appends one event to the injection queue; drops it when the queue is full. */

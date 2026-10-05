@@ -64,6 +64,22 @@ int main() {
                "tests/fixtures/library");
   test::expect(initialized, "app::init should succeed with all mandatory capabilities present");
 
+  // --- secret store: real on the sim board, structurally separate from state ---
+  test::expect(capability::has(sim.capabilities, capability::id::secret),
+              "sim board registers a real secret-store capability");
+  char secret_buf[64] = {0};
+  test::expect(!secret::get(sim.secret, "network.wifi.password", secret_buf, sizeof(secret_buf)),
+              "an unset secret key reports absent, not a default/empty success");
+  test::expect(secret::set(sim.secret, "network.wifi.password", "s3cr3t"),
+              "setting a secret succeeds");
+  test::expect(secret::get(sim.secret, "network.wifi.password", secret_buf, sizeof(secret_buf)) &&
+                  std::strcmp(secret_buf, "s3cr3t") == 0,
+              "the secret round-trips exactly");
+  test::expect(secret::remove(sim.secret, "network.wifi.password"),
+              "removing an existing secret succeeds");
+  test::expect(!secret::get(sim.secret, "network.wifi.password", secret_buf, sizeof(secret_buf)),
+              "the secret is gone after removal");
+
   // --- startup/splash --------------------------------------------------------
   test::expect(shell::top(application.shell) == &nav.splash.base, "splash is the initial page");
   test::expect(nav.splash.base.chrome == page::chrome::none, "splash has no chrome");
