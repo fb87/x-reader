@@ -44,6 +44,8 @@ struct runtime {
 
   std::uint32_t simulated_ms = 0;
   int battery = 87;
+  int refresh_count = 0;  ///< bumped on every display update; a GUI backend diffs this to
+                          ///< know when to re-present without needing dump_dir enabled.
 
   char storage_mount[storage::path_max] = {0};  ///< see detail::resolve's doc comment.
 
@@ -78,6 +80,7 @@ inline const char* refresh_mode_name(refresh::mode mode) {
 
 inline void display_update(display::device& self, geometry::rect area, refresh::mode mode) {
   auto& self_runtime = *static_cast<runtime*>(self.context);
+  ++self_runtime.refresh_count;
   if (self_runtime.dump_dir == nullptr) return;
   canvas::surface view{};
   canvas::init(view, self.framebuffer, self.width, self.height, self.stride, self.format);
