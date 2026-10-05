@@ -102,6 +102,11 @@ inline const char* sample_text() {
 /** @brief The currently-open book's EPUB session plus pagination of its current chapter. */
 struct session {
   epub::context doc{};
+  // Owned, not just referenced: epub::context only stores a pointer to this, and a chapter
+  // load can happen long after the caller's own file_view (e.g. a local in open_book) would
+  // have gone out of scope. Keeping the storage view here, with doc.storage pointing at it,
+  // keeps it alive for the session's whole lifetime.
+  epub::file_view storage_view{};
   std::array<epub::manifest_item, epub_manifest_max> manifest{};
   std::array<epub::spine_item, epub_spine_max> spine{};
   std::array<std::uint8_t, epub_scratch_size> scratch{};
@@ -138,7 +143,8 @@ inline bool load_chapter(session& s, std::uint16_t chapter) {
  * the EPUB's own `<dc:title>` is empty.
  */
 inline bool open(session& s, const epub::file_view& storage, const char* fallback_title) {
-  if (epub::open(s.doc, storage, s.scratch.data(), s.scratch.size(), s.manifest.data(),
+  s.storage_view = storage;  // own a copy; see storage_view's doc comment on session.
+  if (epub::open(s.doc, s.storage_view, s.scratch.data(), s.scratch.size(), s.manifest.data(),
                  static_cast<std::uint16_t>(s.manifest.size()), s.spine.data(),
                  static_cast<std::uint16_t>(s.spine.size())) != epub::status::ok) {
     return false;
