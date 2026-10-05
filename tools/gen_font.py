@@ -10,25 +10,25 @@ import sys
 
 from PIL import Image, ImageDraw, ImageFont
 
-DEJAVU_DIR = "/usr/share/fonts/truetype/dejavu/"
+DEJAVU_DIR = os.environ.get("DEJAVU_FONT_DIR", "/usr/share/fonts/truetype/dejavu/")
 ALEGREYA_DIR = os.environ.get("ALEGREYA_FONT_DIR", "/usr/share/fonts/truetype/alegreya/")
 
 # (C name, font file, pixel size, extra leading)
 FONTS = [
-    ("sans_14", os.path.join(DEJAVU_DIR, "DejaVuSans.ttf"), 14, 3),
-    ("sans_18", os.path.join(DEJAVU_DIR, "DejaVuSans.ttf"), 18, 4),
-    ("sans_bold_18", os.path.join(DEJAVU_DIR, "DejaVuSans-Bold.ttf"), 18, 4),
-    ("sans_bold_26", os.path.join(DEJAVU_DIR, "DejaVuSans-Bold.ttf"), 26, 4),
-    ("serif_17", os.path.join(DEJAVU_DIR, "DejaVuSerif.ttf"), 17, 8),
-    ("serif_20", os.path.join(DEJAVU_DIR, "DejaVuSerif.ttf"), 20, 9),
-    ("serif_24", os.path.join(DEJAVU_DIR, "DejaVuSerif.ttf"), 24, 10),
-    ("alegreya_14", os.path.join(ALEGREYA_DIR, "Alegreya-Regular.ttf"), 14, 3),
-    ("alegreya_18", os.path.join(ALEGREYA_DIR, "Alegreya-Regular.ttf"), 18, 4),
-    ("alegreya_bold_18", os.path.join(ALEGREYA_DIR, "Alegreya-Bold.ttf"), 18, 4),
-    ("alegreya_bold_26", os.path.join(ALEGREYA_DIR, "Alegreya-Bold.ttf"), 26, 4),
-    ("alegreya_17", os.path.join(ALEGREYA_DIR, "Alegreya-Regular.ttf"), 17, 8),
-    ("alegreya_20", os.path.join(ALEGREYA_DIR, "Alegreya-Regular.ttf"), 20, 9),
-    ("alegreya_24", os.path.join(ALEGREYA_DIR, "Alegreya-Regular.ttf"), 24, 10),
+    ("sans_14", os.path.join(DEJAVU_DIR, "DejaVuSans.ttf"), 16, 3),
+    ("sans_18", os.path.join(DEJAVU_DIR, "DejaVuSans.ttf"), 20, 4),
+    ("sans_bold_18", os.path.join(DEJAVU_DIR, "DejaVuSans-Bold.ttf"), 20, 4),
+    ("sans_bold_26", os.path.join(DEJAVU_DIR, "DejaVuSans-Bold.ttf"), 28, 4),
+    ("serif_17", os.path.join(DEJAVU_DIR, "DejaVuSerif.ttf"), 19, 8),
+    ("serif_20", os.path.join(DEJAVU_DIR, "DejaVuSerif.ttf"), 22, 9),
+    ("serif_24", os.path.join(DEJAVU_DIR, "DejaVuSerif.ttf"), 26, 10),
+    ("alegreya_14", os.path.join(ALEGREYA_DIR, "Alegreya-Regular.ttf"), 16, 3),
+    ("alegreya_18", os.path.join(ALEGREYA_DIR, "Alegreya-Regular.ttf"), 20, 4),
+    ("alegreya_bold_18", os.path.join(ALEGREYA_DIR, "Alegreya-Bold.ttf"), 20, 4),
+    ("alegreya_bold_26", os.path.join(ALEGREYA_DIR, "Alegreya-Bold.ttf"), 28, 4),
+    ("alegreya_17", os.path.join(ALEGREYA_DIR, "Alegreya-Regular.ttf"), 19, 8),
+    ("alegreya_20", os.path.join(ALEGREYA_DIR, "Alegreya-Regular.ttf"), 22, 9),
+    ("alegreya_24", os.path.join(ALEGREYA_DIR, "Alegreya-Regular.ttf"), 26, 10),
 ]
 
 UNICODE_RANGES = ((0x0020, 0x007E), (0x00A0, 0x00FF), (0x0100, 0x024F),

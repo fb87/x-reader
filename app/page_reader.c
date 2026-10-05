@@ -149,7 +149,6 @@ static void turn(reader_page_t *rp, int delta)
     }
     rp->page = np;
     app_set_reading_progress(rp->page, rp->total_pages);
-    /* QUALITY: counts toward the "full refresh every N pages" budget. */
     xr_page_invalidate(&rp->base, XR_REFRESH_QUALITY);
 }
 

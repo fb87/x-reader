@@ -19,7 +19,7 @@
 
 /* Gray palette (4 levels map cleanly onto 1/2/4/8 bpp panels). */
 #define XR_BLACK 0x00
-#define XR_DARK  0x55
+#define XR_DARK  0x22
 #define XR_LIGHT 0xAA
 #define XR_WHITE 0xFF
 

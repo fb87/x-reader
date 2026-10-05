@@ -51,6 +51,7 @@ struct port_t {
     bool rotary_right = false;
     bool rotary_left = false;
     bool rotary_press = false;
+    uint8_t fast_updates = 0;
 };
 
 static uint32_t now_ms(void*)
@@ -105,15 +106,38 @@ static void display_update(xr_display_t* display, xr_rect_t area, xr_refresh_t m
                     transfer_width / 2);
     }
 
-    const auto panel_mode = mode == XR_REFRESH_FAST
-        ? xreader::drivers::it8951e::refresh_du
-        : xreader::drivers::it8951e::refresh_gc16;
+    bool force_full = false;
+    if (mode == XR_REFRESH_FAST) {
+        force_full = ++port->fast_updates >= 15;
+        if (force_full) port->fast_updates = 0;
+    } else {
+        port->fast_updates = 0;
+    }
+    if (force_full) {
+        x = 0;
+        y = 0;
+        right = width;
+        bottom = height;
+    }
+    const auto panel_mode = force_full || mode != XR_REFRESH_FAST
+        ? xreader::drivers::it8951e::refresh_gc16
+        : xreader::drivers::it8951e::refresh_du;
+    if (force_full) {
+        heap_caps_free(transfer);
+        const size_t full_bytes = static_cast<size_t>(width / 2) * height;
+        transfer = static_cast<uint8_t*>(heap_caps_malloc(full_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (!transfer) transfer = static_cast<uint8_t*>(heap_caps_malloc(full_bytes, MALLOC_CAP_8BIT));
+        if (!transfer) return;
+        for (int row = 0; row < height; ++row)
+            std::memcpy(transfer + static_cast<size_t>(row) * width / 2,
+                        port->framebuffer + static_cast<size_t>(row) * stride, width / 2);
+    }
     if (xreader::drivers::it8951e::write_image_4bpp(
             &port->epd, transfer, static_cast<uint16_t>(x), static_cast<uint16_t>(y),
-            transfer_width, transfer_height) == ESP_OK) {
+            force_full ? width : transfer_width, force_full ? height : transfer_height) == ESP_OK) {
         (void)xreader::drivers::it8951e::refresh(
             &port->epd, static_cast<uint16_t>(x), static_cast<uint16_t>(y),
-            transfer_width, transfer_height, panel_mode);
+            force_full ? width : transfer_width, force_full ? height : transfer_height, panel_mode);
     }
     heap_caps_free(transfer);
 }
