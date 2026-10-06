@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 namespace text {
 
@@ -137,6 +138,42 @@ inline int width(const char* value, int scale = 2) {
   return count == 0 ? 0 : (count * 6 - 1) * scale;
 }
 
+/** @brief Copies a string into a bounded single-line buffer, adding an ellipsis when needed. */
+inline int fit(const char* value, int max_width, int scale, char* output, std::size_t capacity) {
+  if (output == nullptr || capacity == 0) return 0;
+  if (value == nullptr) {
+    output[0] = '\0';
+    return 0;
+  }
+  const int total = width(value, scale);
+  if (total <= max_width) {
+    std::snprintf(output, capacity, "%s", value);
+    return total;
+  }
+  const char* cursor = value;
+  std::size_t used = 0;
+  const int ellipsis_width = width("...", scale);
+  while (*cursor != '\0') {
+    const char* next = cursor;
+    (void)next_codepoint(next);
+    const std::size_t bytes = static_cast<std::size_t>(next - cursor);
+    if (used + bytes + 4 >= capacity) break;
+    char candidate[256] = {0};
+    std::memcpy(candidate, value, used + bytes);
+    candidate[used + bytes] = '\0';
+    if (width(candidate, scale) + ellipsis_width > max_width) break;
+    std::memcpy(output + used, cursor, bytes);
+    used += bytes;
+    cursor = next;
+  }
+  if (used + 4 <= capacity) {
+    std::memcpy(output + used, "...", 4);
+    return width(output, scale);
+  }
+  output[used < capacity ? used : capacity - 1] = '\0';
+  return width(output, scale);
+}
+
 /** @brief Draws a NUL-terminated UTF-8 bitmap string. */
 inline void draw(display::device& display, int x, int y, const char* value, int scale = 2,
                  canvas::gray color = canvas::gray::black) {
@@ -146,6 +183,14 @@ inline void draw(display::device& display, int x, int y, const char* value, int 
     draw_codepoint(display, x, y, next_codepoint(cursor), scale, color);
     x += 6 * scale;
   }
+}
+
+/** @brief Draws one line clipped and ellipsized to a horizontal width. */
+inline void draw_in(display::device& display, int x, int y, int max_width, const char* value,
+                    int scale = 2, canvas::gray color = canvas::gray::black) {
+  char fitted[256] = {0};
+  fit(value, max_width, scale, fitted, sizeof(fitted));
+  draw(display, x, y, fitted, scale, color);
 }
 
 /** @brief Returns the common bitmap height used by every UTF-8 glyph. */

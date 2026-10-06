@@ -34,8 +34,9 @@ inline void status(display::device& display, platform::device& platform, const c
   const int clock_x = display.width - 14 - 3 - battery_width -
                       (battery_value >= 0 ? text::width(battery, style.text_scale) + 6 : 0) -
                       text::width(clock, style.text_scale);
-  text::draw(display, clock_x, 13, clock, style.text_scale, style.foreground);
-  text::draw(display, 14, 13, title, style.text_scale, style.foreground);
+  text::draw_in(display, clock_x, 13, text::width(clock, style.text_scale), clock,
+                style.text_scale, style.foreground);
+  text::draw_in(display, 14, 13, clock_x - 28, title, style.text_scale, style.foreground);
 }
 
 }  // namespace widget
