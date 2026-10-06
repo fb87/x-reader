@@ -148,10 +148,10 @@ inline void display_update(display::device& self, geometry::rect area, refresh::
     right = width;
     bottom = height;
   }
-  const auto panel_mode = force_full || mode == refresh::mode::full || mode == refresh::mode::quality
+  const auto panel_mode = force_full || mode == refresh::mode::full
                               ? drivers::it8951::refresh_gc16
-                              : mode == refresh::mode::reader_quality ? drivers::it8951::refresh_gl16
-                                                                       : drivers::it8951::refresh_du;
+                              : mode == refresh::mode::quality ? drivers::it8951::refresh_gl16
+                                                               : drivers::it8951::refresh_du;
   if (force_full) {
     heap_caps_free(transfer);
     const std::size_t full_bytes = static_cast<std::size_t>(width / 2) * height;
@@ -328,22 +328,15 @@ inline bool storage_file_size(storage::device& self, const char* path, std::uint
   return true;
 }
 
-inline bool storage_inflate(storage::device& self, const char* path, std::uint32_t source_offset,
-                            std::uint32_t source_size, void* destination,
-                            std::uint32_t destination_size) {
-  // No zlib on this target: read the whole compressed range into a SPIRAM buffer and
-  // run the custom RFC 1951 decoder, matching the old app_main.cpp's epub_inflate.
+inline bool storage_inflate(storage::device&, const void* source, std::uint32_t source_size,
+                            void* destination, std::uint32_t destination_size) {
+  // The ZIP parser has already read the compressed range; decode it with the
+  // hardware-safe RFC 1951 implementation.
   if (source_size == 0) return destination_size == 0;
-  auto* source =
-      static_cast<std::uint8_t*>(heap_caps_malloc(source_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-  if (source == nullptr) return false;
-  const bool ok_read = storage_read(self, path, source_offset, source, source_size);
   std::size_t output_size = 0;
-  const esp_err_t error =
-      ok_read ? drivers::inflate::decode(source, source_size, static_cast<std::uint8_t*>(destination),
-                                         destination_size, &output_size)
-              : ESP_FAIL;
-  heap_caps_free(source);
+  const esp_err_t error = drivers::inflate::decode(
+      static_cast<const std::uint8_t*>(source), source_size,
+      static_cast<std::uint8_t*>(destination), destination_size, &output_size);
   return error == ESP_OK && output_size == destination_size;
 }
 
@@ -353,7 +346,7 @@ inline bool storage_inflate(storage::device& self, const char* path, std::uint32
 inline bool init(runtime& self) {
   self = runtime{};
   self.framebuffer = static_cast<std::uint8_t*>(
-      heap_caps_calloc(canvas::buffer_size(width, height, pixel_format), 1,
+      heap_caps_calloc(static_cast<std::size_t>(width / 2) * height, 1,
                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
   if (self.framebuffer == nullptr) {
     ESP_LOGE(log_tag, "framebuffer allocation failed");
@@ -402,16 +395,13 @@ inline bool init(runtime& self) {
   self.display.height = height;
   self.display.format = pixel_format;
    self.display.framebuffer = self.framebuffer;
-  self.display.stride = canvas::stride_for(width, pixel_format);
-  self.display.update_align = 4;  // IT8951 partial updates require 4-pixel horizontal alignment.
+  self.display.stride = width / 2;
   self.display.context = &self;
   self.display.update = detail::display_update;
 
   self.platform.context = &self;
   self.platform.now_ms = detail::platform_now_ms;
-  self.platform.wall_time = detail::platform_wall_time;
   self.platform.battery_percent = detail::platform_battery_percent;
-  self.platform.enter_deep_sleep = detail::platform_enter_deep_sleep;
 
   self.input.context = &self;
   self.input.poll = detail::input_poll;
@@ -419,7 +409,7 @@ inline bool init(runtime& self) {
   self.storage.context = &self;
   self.storage.list = detail::storage_list;
   self.storage.read = detail::storage_read;
-  self.storage.file_size = detail::storage_file_size;
+  self.storage.size = detail::storage_file_size;
   self.storage.inflate = detail::storage_inflate;
 
   capability::set(self.capabilities, capability::id::display, &self.display);

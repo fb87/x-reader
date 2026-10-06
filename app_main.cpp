@@ -5,10 +5,13 @@
 #include <cstdio>
 
 /** @brief Composition root wiring the build-selected board to the board-independent application. */
-int main()
-{
+static int run_application() {
     selected_board::runtime board{};
+#ifdef ESP_PLATFORM
+    if (!selected_board::init(board) || !selected_board::mount(board, "/sdcard")) return 1;
+#else
     selected_board::init(board);
+#endif
 
     state::store memory{};
     state::store persistent{};
@@ -25,3 +28,9 @@ int main()
     (void)state::save(persistent, "build/state.db");
     return 0;
 }
+
+#ifdef ESP_PLATFORM
+extern "C" void app_main() { (void)run_application(); }
+#else
+int main() { return run_application(); }
+#endif
