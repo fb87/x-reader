@@ -34,6 +34,12 @@ int main() {
 
   if (!app::init(application, nav, board.capabilities, memory, persistent, theme, root)) return 1;
 
+  // Show the boot screen before the potentially slow storage walk (real SD cards can
+  // have many files), matching the old app_main.cpp's ordering.
+  shell::tick(application.shell);
+  shell::flush(application.shell);
+  app::scan_library(application);
+
   bool running = true;
   while (running) {
     app::pump(application);

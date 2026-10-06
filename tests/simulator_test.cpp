@@ -84,6 +84,10 @@ int main() {
   test::expect(shell::top(application.shell) == &nav.splash.base, "splash is the initial page");
   test::expect(nav.splash.base.chrome == page::chrome::none, "splash has no chrome");
 
+  // scan_library is deliberately separate from init() (see its doc comment): the
+  // real composition root shows the splash before walking storage.
+  app::scan_library(application);
+
   settle(sim, application, 100);
   test::expect(shell::top(application.shell) == &nav.splash.base,
               "splash should not time out before 1500ms");

@@ -1327,10 +1327,22 @@ inline bool init(context& self, pages& nav, capability::registry& capabilities,
                                 static_cast<std::uint16_t>(state::get(memory, key::full_refresh_every,
                                                                       std::int64_t{6})));
 
-  library::scan(self.library, *storage_device, storage_root);
-
   shell::push(self.shell, *page_splash(self, nav));
   return true;
+}
+
+/**
+ * @brief Scans the storage root into the library. Deliberately NOT part of init():
+ * the old app_main.cpp showed the splash/boot screen before walking the SD card
+ * (`xr_shell_tick/flush` the splash, then `mount_and_scan_sd()`), so a real card
+ * with many files doesn't leave the user staring at a blank screen. Callers should
+ * call this only after an initial tick+flush of the pushed splash page -- see
+ * app_main.cpp.
+ */
+inline void scan_library(context& self) {
+  auto* storage_device =
+      capability::get<storage::device>(*self.capabilities, capability::id::storage);
+  if (storage_device != nullptr) library::scan(self.library, *storage_device, self.storage_root);
 }
 
 /** @brief Polls queued input, dispatches it, ticks the top page, and flushes any redraw. */

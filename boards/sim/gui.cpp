@@ -126,6 +126,9 @@ int main() {
     std::fprintf(stderr, "simulator_gui: app::init failed (check XREADER_SDCARD=%s)\n", root);
     return 3;
   }
+  shell::tick(application.shell);
+  shell::flush(application.shell);
+  app::scan_library(application);
 
   present(g, sim);
 
