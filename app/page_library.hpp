@@ -189,7 +189,7 @@ inline void library_action(page::context& p, std::uint16_t id) {
     else
       widget::invalidate_row(lp.list, lp.list.selected, refresh::mode::quality);
   } else if (id == static_cast<std::uint16_t>(library_action::del)) {
-    std::snprintf(lp.confirm_msg, sizeof(lp.confirm_msg), "Delete \"%s\" from the device?",
+    std::snprintf(lp.confirm_msg, sizeof(lp.confirm_msg), "Delete \"%.68s\" from the device?",
                   lp.app->library.books[book].title.data());
     lp.pending_book = book;
     show_delete_confirm(*lp.app, *lp.nav, lp);

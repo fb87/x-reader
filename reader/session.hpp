@@ -220,6 +220,27 @@ inline void paginate(session& s, const text::font& font, geometry::rect text_rec
   }
 }
 
+/** @brief Counts all rendered pages in an opened EPUB without changing its current position. */
+inline int total_book_pages(session& s, const text::font& font, geometry::rect text_rect) {
+  if (!s.epub_open) return 0;
+  const std::uint16_t saved_chapter = s.current_chapter;
+  const int saved_page = s.page;
+  int total = 0;
+  for (std::uint16_t chapter = 0; chapter < s.doc.spine_count; ++chapter) {
+    if (!load_chapter(s, chapter)) continue;
+    paginate(s, font, text_rect);
+    total += s.page_count;
+    if (total >= 65535) {
+      total = 65535;
+      break;
+    }
+  }
+  (void)load_chapter(s, saved_chapter);
+  paginate(s, font, text_rect);
+  s.page = saved_page < s.page_count ? saved_page : 0;
+  return total;
+}
+
 /**
  * @brief Moves by `delta` pages, crossing a chapter boundary (and repaginating the new
  * chapter) when `delta` runs off the current one. Returns false only when already at the
@@ -263,7 +284,7 @@ inline int progress_percent(const session& s, int total_pages_in_chapter) {
       static_cast<std::uint32_t>(s.page + 1) * 100u / static_cast<std::uint32_t>(total_pages_in_chapter);
   std::uint32_t progress = (static_cast<std::uint32_t>(s.current_chapter) * 100u + chapter_progress) / chapters;
   if (progress == 0 && (s.page > 0 || s.current_chapter > 0)) progress = 1;
-  return static_cast<int>(std::min(progress, 100u));
+  return static_cast<int>(std::min(progress, static_cast<std::uint32_t>(100)));
 }
 
 }  // namespace reader

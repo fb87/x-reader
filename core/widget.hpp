@@ -477,9 +477,10 @@ inline void select(list& l, int index) {
     l.top = (index / vis) * vis;
     invalidate_rect(l.base_widget, l.base_widget.rect, refresh::mode::quality);
   } else {
-    // Only two rows changed: fast partial update, no flash.
-    invalidate_row(l, old, refresh::mode::fast);
-    invalidate_row(l, index, refresh::mode::fast);
+    // Both rows must clear/repaint cleanly; DU can leave the previous inverted
+    // row visible when the rotary is turned rapidly on the e-ink panel.
+    invalidate_row(l, old, refresh::mode::quality);
+    invalidate_row(l, index, refresh::mode::quality);
   }
 }
 

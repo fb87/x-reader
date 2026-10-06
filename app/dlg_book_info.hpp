@@ -36,6 +36,28 @@ inline void info_layout(dialog::context& d, geometry::rect bounds) {
   book_info_dialog& bi = info_of(d);
   const shell::theme& t = app::theme_of(d);
   const book::item& b = bi.app->library.books[bi.book];
+  book::item& metadata = bi.app->library.books[bi.book];
+  if (metadata.epub_source) {
+    auto* storage_device =
+        capability::get<storage::device>(*bi.app->capabilities, capability::id::storage);
+    if (storage_device != nullptr) {
+      epub::file_view view{storage_device, metadata.path.data(), 0};
+      if (storage::file_size(*storage_device, view.path, view.size)) {
+        metadata.size_kb = static_cast<std::uint16_t>(
+            std::min<std::uint32_t>((view.size + 1023U) / 1024U, 65535U));
+        if (reader::open(bi.app->session, view, metadata.title.data())) {
+          if (bi.app->session.doc.title[0] != '\0') {
+            std::snprintf(metadata.title.data(), metadata.title.size(), "%s",
+                          bi.app->session.doc.title);
+          }
+          // Keep opening the dialog responsive. The EPUB spine count is immediately
+          // available and replaces the old zero placeholder; full pagination remains
+          // lazy and is performed by the reader as chapters are opened.
+          metadata.pages = bi.app->session.doc.spine_count;
+        }
+      }
+    }
+  }
   const int pad = t.pad;
   const int w = std::min(bounds.w * 90 / 100, 480);
   const int iw = w - 2 * pad;

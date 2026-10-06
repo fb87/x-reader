@@ -21,6 +21,7 @@
 #include <dirent.h>
 #include <driver/gpio.h>
 #include <esp_heap_caps.h>
+#include <esp_log.h>
 #include <esp_timer.h>
 #include <esp_vfs_fat.h>
 #include <driver/sdspi_host.h>
@@ -49,14 +50,19 @@
  */
 namespace board::m5paper {
 
+inline constexpr const char* log_tag = "m5paper";
+
 inline constexpr int width = 540;   // logical (post-rotation) width, matches board::sim.
 inline constexpr int height = 960;  // logical (post-rotation) height, matches board::sim.
 inline constexpr auto pixel_format = display::pixel_format::gray4;
 inline constexpr std::size_t input_queue_size = 8;
 inline constexpr int fast_refresh_budget = 15;  ///< force a full flash after N fast updates.
+inline constexpr std::uint32_t rotary_hold_ms = 500;
+inline constexpr std::uint32_t battery_sample_interval_ms = 60000;
+inline constexpr std::uint32_t battery_display_interval_ms = 600000;
 
 struct runtime {
-  std::array<std::uint8_t, canvas::buffer_size(width, height, pixel_format)> framebuffer{};
+  std::uint8_t* framebuffer = nullptr;
   std::array<event::value, input_queue_size> events{};
   std::size_t event_head = 0;
   std::size_t event_tail = 0;
@@ -74,7 +80,15 @@ struct runtime {
   bool rotary_right = false;
   bool rotary_left = false;
   bool rotary_press = false;
+  std::uint32_t rotary_right_at = 0;
+  std::uint32_t rotary_left_at = 0;
+  bool rotary_right_long = false;
+  bool rotary_left_long = false;
   std::uint8_t fast_updates = 0;
+  int battery_cached = -1;
+  std::uint32_t battery_sample_ms = 0;
+  int battery_displayed = -1;
+  std::uint32_t battery_display_ms = 0;
 
   display::device display{};
   platform::device platform{};
@@ -116,7 +130,7 @@ inline void display_update(display::device& self, geometry::rect area, refresh::
 
   for (std::uint16_t row = 0; row < transfer_height; ++row) {
     const std::uint8_t* source =
-        rt.framebuffer.data() + static_cast<std::size_t>(y + row) * stride + x / 2;
+        rt.framebuffer + static_cast<std::size_t>(y + row) * stride + x / 2;
     std::memcpy(transfer + static_cast<std::size_t>(row) * transfer_width / 2, source,
                 transfer_width / 2);
   }
@@ -134,9 +148,10 @@ inline void display_update(display::device& self, geometry::rect area, refresh::
     right = width;
     bottom = height;
   }
-  const auto panel_mode = force_full || mode != refresh::mode::fast
+  const auto panel_mode = force_full || mode == refresh::mode::full || mode == refresh::mode::quality
                               ? drivers::it8951::refresh_gc16
-                              : drivers::it8951::refresh_du;
+                              : mode == refresh::mode::reader_quality ? drivers::it8951::refresh_gl16
+                                                                       : drivers::it8951::refresh_du;
   if (force_full) {
     heap_caps_free(transfer);
     const std::size_t full_bytes = static_cast<std::size_t>(width / 2) * height;
@@ -146,35 +161,52 @@ inline void display_update(display::device& self, geometry::rect area, refresh::
     if (transfer == nullptr) return;
     for (int row = 0; row < height; ++row) {
       std::memcpy(transfer + static_cast<std::size_t>(row) * width / 2,
-                  rt.framebuffer.data() + static_cast<std::size_t>(row) * stride, width / 2);
+                  rt.framebuffer + static_cast<std::size_t>(row) * stride, width / 2);
     }
   }
+  bool refreshed = false;
   if (drivers::it8951::write_image_4bpp(&rt.epd, transfer, static_cast<std::uint16_t>(x),
                                         static_cast<std::uint16_t>(y),
                                         force_full ? width : transfer_width,
                                         force_full ? height : transfer_height) == ESP_OK) {
-    (void)drivers::it8951::refresh(&rt.epd, static_cast<std::uint16_t>(x),
-                                   static_cast<std::uint16_t>(y),
-                                   force_full ? width : transfer_width,
-                                   force_full ? height : transfer_height, panel_mode);
+    refreshed = drivers::it8951::refresh(&rt.epd, static_cast<std::uint16_t>(x),
+                                         static_cast<std::uint16_t>(y),
+                                         force_full ? width : transfer_width,
+                                         force_full ? height : transfer_height, panel_mode) == ESP_OK;
   }
   heap_caps_free(transfer);
+  if (refreshed && (force_full || mode == refresh::mode::full)) {
+    rt.battery_display_ms = static_cast<std::uint32_t>(esp_timer_get_time() / 1000);
+  }
 }
 
 inline std::uint32_t platform_now_ms(platform::device&) {
   return static_cast<std::uint32_t>(esp_timer_get_time() / 1000);
 }
 
-inline void platform_wall_time(platform::device&, int& hour, int& minute) {
+inline bool platform_wall_time(platform::device&, int& hour, int& minute) {
   // No RTC on this board, matching the old app_main.cpp exactly.
   hour = -1;
   minute = -1;
+  return false;
 }
 
-inline int platform_battery_percent(platform::device&) {
-  std::uint16_t millivolts = 0;
-  if (battery_voltage_mv(&millivolts) != ESP_OK) return -1;
-  return battery_percent(millivolts);
+inline int platform_battery_percent(platform::device& self) {
+  auto& rt = *static_cast<runtime*>(self.context);
+  const std::uint32_t now = platform_now_ms(self);
+  if (rt.battery_cached < 0 || now - rt.battery_sample_ms >= battery_sample_interval_ms) {
+    std::uint16_t millivolts = 0;
+    if (battery_voltage_mv(&millivolts) == ESP_OK) {
+      rt.battery_cached = battery_percent(millivolts);
+      rt.battery_sample_ms = now;
+    }
+  }
+  if (rt.battery_cached < 0) return -1;
+  if (rt.battery_displayed < 0 || now - rt.battery_display_ms >= battery_display_interval_ms) {
+    rt.battery_displayed = rt.battery_cached;
+    rt.battery_display_ms = now;
+  }
+  return rt.battery_displayed;
 }
 
 inline void platform_enter_deep_sleep(platform::device&, std::uint32_t wake_after_ms) {
@@ -207,11 +239,28 @@ inline bool input_poll(input::device& self, event::value& out) {
     }
   }
 
+  const std::uint32_t now = platform_now_ms(rt.platform);
   const bool right = gpio_get_level(pins::rotary_right_pin) == 0;
   const bool left = gpio_get_level(pins::rotary_left_pin) == 0;
   const bool press = gpio_get_level(pins::rotary_press_pin) == 0;
-  if (rt.rotary_right && !right) inject(rt, event::key(event::key_code::down));
-  if (rt.rotary_left && !left) inject(rt, event::key(event::key_code::up));
+  if (right && !rt.rotary_right) {
+    rt.rotary_right_at = now;
+    rt.rotary_right_long = false;
+  } else if (right && !rt.rotary_right_long && now - rt.rotary_right_at >= rotary_hold_ms) {
+    inject(rt, event::key(event::key_code::down, true));
+    rt.rotary_right_long = true;
+  } else if (!right && rt.rotary_right && !rt.rotary_right_long) {
+    inject(rt, event::key(event::key_code::down));
+  }
+  if (left && !rt.rotary_left) {
+    rt.rotary_left_at = now;
+    rt.rotary_left_long = false;
+  } else if (left && !rt.rotary_left_long && now - rt.rotary_left_at >= rotary_hold_ms) {
+    inject(rt, event::key(event::key_code::up, true));
+    rt.rotary_left_long = true;
+  } else if (!left && rt.rotary_left && !rt.rotary_left_long) {
+    inject(rt, event::key(event::key_code::up));
+  }
   if (rt.rotary_press && !press) inject(rt, event::key(event::key_code::ok));
   rt.rotary_right = right;
   rt.rotary_left = left;
@@ -303,7 +352,17 @@ inline bool storage_inflate(storage::device& self, const char* path, std::uint32
 /** @brief Powers on, initializes the IT8951/GT911 drivers and rotary GPIOs. Does not mount SD. */
 inline bool init(runtime& self) {
   self = runtime{};
-  if (power_on() != ESP_OK) return false;
+  self.framebuffer = static_cast<std::uint8_t*>(
+      heap_caps_calloc(canvas::buffer_size(width, height, pixel_format), 1,
+                       MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (self.framebuffer == nullptr) {
+    ESP_LOGE(log_tag, "framebuffer allocation failed");
+    return false;
+  }
+  if (power_on() != ESP_OK) {
+    ESP_LOGE(log_tag, "power rails failed");
+    return false;
+  }
 
   const gpio_config_t rotary_config = {
       .pin_bit_mask = (1ULL << pins::rotary_right_pin) | (1ULL << pins::rotary_left_pin) |
@@ -315,23 +374,34 @@ inline bool init(runtime& self) {
       .pull_down_en = GPIO_PULLDOWN_DISABLE,
       .intr_type = GPIO_INTR_DISABLE,
   };
-  if (gpio_config(&rotary_config) != ESP_OK) return false;
+  if (gpio_config(&rotary_config) != ESP_OK) {
+    ESP_LOGE(log_tag, "rotary GPIO setup failed");
+    return false;
+  }
 
   const drivers::it8951::config_t epd_config{
       pins::epd_spi_host, pins::epd_sck_pin, pins::epd_mosi_pin, pins::epd_miso_pin,
       pins::epd_cs_pin,   pins::epd_busy_pin, pins::panel_width,  pins::panel_height,
       pins::panel_rotation, 10000000,
   };
-  if (drivers::it8951::init(&self.epd, &epd_config) != ESP_OK) return false;
+  ESP_LOGI(log_tag, "initializing IT8951");
+  if (drivers::it8951::init(&self.epd, &epd_config) != ESP_OK) {
+    ESP_LOGE(log_tag, "IT8951 setup failed");
+    return false;
+  }
 
   const drivers::gt911::config_t touch_config{I2C_NUM_0, pins::touch_sda_pin, pins::touch_scl_pin,
                                               100000};
-  if (drivers::gt911::init(&self.touch, &touch_config) != ESP_OK) return false;
+  ESP_LOGI(log_tag, "initializing GT911");
+  if (drivers::gt911::init(&self.touch, &touch_config) != ESP_OK) {
+    ESP_LOGE(log_tag, "GT911 setup failed");
+    return false;
+  }
 
   self.display.width = width;
   self.display.height = height;
   self.display.format = pixel_format;
-  self.display.framebuffer = self.framebuffer.data();
+   self.display.framebuffer = self.framebuffer;
   self.display.stride = canvas::stride_for(width, pixel_format);
   self.display.update_align = 4;  // IT8951 partial updates require 4-pixel horizontal alignment.
   self.display.context = &self;

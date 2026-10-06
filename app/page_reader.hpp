@@ -127,7 +127,7 @@ inline void reader_turn(reader_page& rp, int delta) {
   if (percent >= 0 && current >= 0 && current < rp.app->library.count) {
     rp.app->library.books[current].progress = static_cast<std::uint8_t>(percent);
   }
-  page::invalidate(rp.base, refresh::mode::quality);
+  page::invalidate(rp.base, refresh::mode::reader_quality);
 }
 
 inline void reader_toggle_chrome(page::context& p) {
@@ -183,7 +183,7 @@ inline void reader_set_font(reader_page& rp, std::int64_t idx) {
   // Font changes alter every chapter's page count, so rebuild the whole-book page map
   // before updating the progress bar.
   reader_layout(rp.base);
-  page::invalidate(rp.base, refresh::mode::quality);
+  page::invalidate(rp.base, refresh::mode::reader_quality);
 }
 
 inline void reader_action(page::context& p, std::uint16_t id) {

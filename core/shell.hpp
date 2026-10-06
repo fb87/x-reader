@@ -365,9 +365,10 @@ inline void tick(context& s) {
 
   int hh = 0;
   int mm = 0;
-  platform::wall_time(*s.platform, hh, mm);
+  const bool have_wall_time = platform::wall_time(*s.platform, hh, mm);
   char new_clock[8] = {0};
-  std::snprintf(new_clock, sizeof(new_clock), "%02d:%02d", hh % 24, mm % 60);
+  std::snprintf(new_clock, sizeof(new_clock), have_wall_time ? "%02d:%02d" : "--:--",
+                hh % 24, mm % 60);
   const int batt = platform::battery_percent(*s.platform);
   if (std::strcmp(new_clock, s.clock) != 0 || batt != s.battery) {
     std::memcpy(s.clock, new_clock, sizeof(new_clock));

@@ -90,6 +90,8 @@ inline const char* refresh_mode_name(refresh::mode mode) {
       return "FAST";
     case refresh::mode::quality:
       return "QUALITY";
+    case refresh::mode::reader_quality:
+      return "READER_QUALITY";
     case refresh::mode::full:
       return "FULL";
     default:
@@ -127,11 +129,12 @@ inline std::uint32_t platform_now_ms(platform::device& self) {
 
 /** @brief Deterministic wall clock starting at 9:41 (the simulator's fixed epoch), advancing
  * with simulated_ms -- the same convention the old sim_port.c used. */
-inline void platform_wall_time(platform::device& self, int& hour, int& minute) {
+inline bool platform_wall_time(platform::device& self, int& hour, int& minute) {
   auto& self_runtime = *static_cast<runtime*>(self.context);
   const std::uint32_t total_minutes = 9 * 60 + 41 + self_runtime.simulated_ms / 60000;
   hour = static_cast<int>(total_minutes / 60) % 24;
   minute = static_cast<int>(total_minutes % 60);
+  return true;
 }
 
 inline int platform_battery_percent(platform::device& self) {

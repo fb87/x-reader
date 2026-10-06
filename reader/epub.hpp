@@ -3,6 +3,7 @@
 #include "../core/storage.hpp"
 
 #include <cstdint>
+#include <array>
 #include <cstring>
 
 /**
@@ -152,18 +153,21 @@ inline constexpr std::uint32_t zip_central_header_size = 46u;
 /** @brief Finds a central-directory entry's 46-byte header and its file offset. */
 inline status zip_find(const file_view& view, const char* path, unsigned char header[46],
                        std::uint32_t& header_at) {
-  unsigned char end[22];
-  if (view.device == nullptr || path == nullptr || view.size < sizeof(end)) return status::format;
-  const std::uint32_t start = view.size > 65557u ? view.size - 65557u : 0;
-  const std::uint32_t end_at = view.size - sizeof(end);
-  std::uint32_t pos = end_at;
-  for (;; --pos) {
-    std::uint32_t signature = 0;
-    if (read_u32(view, pos, signature) != status::ok) return status::io;
-    if (signature == zip_end_signature) break;
-    if (pos == start) return status::format;
+  constexpr std::uint32_t tail_capacity = 65557u;
+  static std::array<unsigned char, tail_capacity> tail{};
+  if (view.device == nullptr || path == nullptr || view.size < 22U) return status::format;
+  const std::uint32_t tail_size = view.size > tail_capacity ? tail_capacity : view.size;
+  const std::uint32_t tail_start = view.size - tail_size;
+  if (read_at(view, tail_start, tail.data(), tail_size) != status::ok) return status::io;
+  int end_offset = -1;
+  for (std::int64_t offset = static_cast<std::int64_t>(tail_size) - 22; offset >= 0; --offset) {
+    if (le32(tail.data() + offset) == zip_end_signature) {
+      end_offset = static_cast<int>(offset);
+      break;
+    }
   }
-  if (read_at(view, pos, end, sizeof(end)) != status::ok) return status::io;
+  if (end_offset < 0) return status::format;
+  const unsigned char* end = tail.data() + end_offset;
   if (le16(end + 4) != 0 || le16(end + 6) != 0 || le16(end + 8) != le16(end + 10) ||
       le16(end + 8) == 0xFFFFu || le32(end + 12) == 0xFFFFFFFFu ||
       le32(end + 16) == 0xFFFFFFFFu) {
@@ -174,7 +178,7 @@ inline status zip_find(const file_view& view, const char* path, unsigned char he
   const std::uint32_t directory_at = le32(end + 16);
   if (!range_ok(directory_at, directory_size, view.size)) return status::format;
   const std::uint32_t directory_end = directory_at + directory_size;
-  pos = directory_at;
+  std::uint32_t pos = directory_at;
   for (std::uint16_t i = 0; i < entries; ++i) {
     if (!range_ok(pos, zip_central_header_size, directory_end) ||
         read_at(view, pos, header, zip_central_header_size) != status::ok) {

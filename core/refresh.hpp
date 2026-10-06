@@ -22,7 +22,8 @@ namespace refresh {
 enum class mode {
   none = 0,
   fast,     ///< partial, 1-bit-ish, no flash: focus moves, menus.
-  quality,  ///< partial, full grayscale: text pages, dialogs.
+  reader_quality,  ///< partial GL16 grayscale: reader page turns with reduced flash.
+  quality,  ///< partial GC16 grayscale: dialogs and general UI content.
   full,     ///< full screen with flash: clears ghosting.
 };
 
@@ -127,7 +128,7 @@ inline bool take(scheduler& s, dirty& out) {
 
   if (out.kind == mode::full) {
     s.quality_since_full = 0;
-  } else if (out.kind == mode::quality) {
+  } else if (out.kind == mode::reader_quality || out.kind == mode::quality) {
     ++s.quality_since_full;
     if (s.full_every != 0 && s.quality_since_full >= s.full_every) {
       // Ghost budget spent: one full flash covers everything pending.

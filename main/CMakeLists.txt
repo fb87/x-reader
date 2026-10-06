@@ -8,8 +8,8 @@ file(GLOB XR_FONT_SRCS "../fonts/*.c")
 # app_main.cpp expects "build/selected_board.hpp" on its include path (the Makefile
 # generates this literally; ESP-IDF's CMake build generates the same content here).
 set(XR_SELECTED_BOARD_DIR "${CMAKE_CURRENT_BINARY_DIR}/selected_board")
-file(MAKE_DIRECTORY "${XR_SELECTED_BOARD_DIR}/build")
-file(WRITE "${XR_SELECTED_BOARD_DIR}/build/selected_board.hpp"
+file(MAKE_DIRECTORY "${XR_SELECTED_BOARD_DIR}")
+file(WRITE "${XR_SELECTED_BOARD_DIR}/selected_board.hpp"
     "#pragma once\n#include \"boards/m5paper/runtime.hpp\"\nnamespace selected_board = board::m5paper;\n")
 
 idf_component_register(
@@ -22,6 +22,7 @@ idf_component_register(
         ${XR_FONT_SRCS}
     INCLUDE_DIRS
         ".."
+        "../include"
         "../fonts"
         "${XR_SELECTED_BOARD_DIR}"
     REQUIRES
@@ -34,4 +35,5 @@ idf_component_register(
 
 target_compile_features(${COMPONENT_LIB} PRIVATE cxx_std_20)
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Wpedantic -Werror
-                       -fno-exceptions -fno-rtti -fno-threadsafe-statics)
+                       -Wno-pedantic -Wno-error=missing-field-initializers
+                       $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions -fno-rtti -fno-threadsafe-statics>)

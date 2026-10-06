@@ -18,7 +18,7 @@ namespace platform {
 struct device {
   void* context = nullptr;
   std::uint32_t (*now_ms)(device& self) = nullptr;
-  void (*wall_time)(device& self, int& hour, int& minute) = nullptr;
+  bool (*wall_time)(device& self, int& hour, int& minute) = nullptr;
   int (*battery_percent)(device& self) = nullptr;  ///< < 0 = unknown/unavailable.
   /** Enters a board-defined low-power sleep, waking after at most `wake_after_ms` (0 = no
    * timer bound, rely on the board's other wake sources only). Optional: boards without a
@@ -32,8 +32,7 @@ inline std::uint32_t now_ms(device& self) { return self.now_ms == nullptr ? 0U :
 /** @brief Reads the wall-clock hour/minute; returns false when unavailable. */
 inline bool wall_time(device& self, int& hour, int& minute) {
   if (self.wall_time == nullptr) return false;
-  self.wall_time(self, hour, minute);
-  return true;
+  return self.wall_time(self, hour, minute);
 }
 
 /** @brief Returns battery level as a percentage, or -1 when unavailable. */

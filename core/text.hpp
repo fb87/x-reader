@@ -185,6 +185,12 @@ inline int draw_text(surface& c, const text::font& f, int x, int y, const char* 
 /** @brief One line, vertically centered in `r`, ellipsized with "..." if too wide. */
 inline void draw_text_in(surface& c, const text::font& f, geometry::rect r, const char* s,
                          text::align align, std::uint8_t g) {
+  const geometry::rect saved_clip = c.clip;
+  c.clip = geometry::intersect(c.clip, r);
+  if (geometry::empty(c.clip)) {
+    c.clip = saved_clip;
+    return;
+  }
   int len = static_cast<int>(std::strlen(s));
   int w = text::width(f, s, len);
   bool ellipsis = false;
@@ -207,6 +213,7 @@ inline void draw_text_in(surface& c, const text::font& f, geometry::rect r, cons
   const int y = r.y + (r.h - (f.ascent + f.descent)) / 2;
   x = draw_text(c, f, x, y, s, len, g);
   if (ellipsis) draw_text(c, f, x, y, "...", 3, g);
+  c.clip = saved_clip;
 }
 
 /** @brief Word-wrapped paragraph(s) from the top of `r`. Returns the height used. */

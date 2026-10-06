@@ -20,6 +20,7 @@ namespace {
 
 constexpr int window_width = board::sim::width;
 constexpr int window_height = board::sim::height;
+constexpr std::uint32_t rotary_hold_ms = 500;
 
 struct gui {
   SDL_Window* window = nullptr;
@@ -60,10 +61,14 @@ void present(gui& g, const board::sim::runtime& sim) {
   SDL_RenderPresent(g.renderer);
 }
 
-void inject_key(board::sim::runtime& sim, SDL_Keycode key) {
+void inject_key(board::sim::runtime& sim, SDL_Keycode key, bool long_press = false) {
   switch (key) {
-    case SDLK_UP: board::sim::rotary_left(sim); break;
-    case SDLK_DOWN: board::sim::rotary_right(sim); break;
+    case SDLK_UP:
+      board::sim::inject(sim, event::key(event::key_code::up, long_press));
+      break;
+    case SDLK_DOWN:
+      board::sim::inject(sim, event::key(event::key_code::down, long_press));
+      break;
     case SDLK_LEFT: board::sim::inject(sim, event::key(event::key_code::left)); break;
     case SDLK_RIGHT: board::sim::inject(sim, event::key(event::key_code::right)); break;
     case SDLK_RETURN:
@@ -133,6 +138,9 @@ int main() {
   present(g, sim);
 
   bool running = true;
+  SDL_Keycode held_key = SDLK_UNKNOWN;
+  bool long_press_sent = false;
+  std::uint32_t held_at = 0;
   while (running) {
     SDL_Event event{};
     bool need_redraw = false;
@@ -140,7 +148,17 @@ int main() {
       if (event.type == SDL_QUIT) {
         running = false;
       } else if (event.type == SDL_KEYDOWN && event.key.repeat == 0) {
-        inject_key(sim, event.key.keysym.sym);
+        const SDL_Keycode key = event.key.keysym.sym;
+        if (key == SDLK_UP || key == SDLK_DOWN) {
+          held_key = key;
+          long_press_sent = false;
+          held_at = SDL_GetTicks();
+        } else {
+          inject_key(sim, key);
+        }
+      } else if (event.type == SDL_KEYUP && event.key.keysym.sym == held_key) {
+        if (!long_press_sent) inject_key(sim, held_key);
+        held_key = SDLK_UNKNOWN;
       } else if (event.type == SDL_MOUSEBUTTONDOWN) {
         if (event.button.button == SDL_BUTTON_LEFT) {
           board::sim::touch(sim, event.button.x, event.button.y);
@@ -151,6 +169,12 @@ int main() {
       } else if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_EXPOSED) {
         need_redraw = true;
       }
+    }
+
+    const std::uint32_t now = SDL_GetTicks();
+    if (held_key != SDLK_UNKNOWN && !long_press_sent && now - held_at >= rotary_hold_ms) {
+      inject_key(sim, held_key, true);
+      long_press_sent = true;
     }
 
     const int refresh_before = sim.refresh_count;

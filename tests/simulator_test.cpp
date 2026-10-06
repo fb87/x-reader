@@ -157,6 +157,14 @@ int main() {
                     nav.reader.base.area.y + 10);  // center third -> toggle chrome.
   settle(sim, application);
   test::expect(nav.reader.base.chrome == page::chrome::all, "center tap reveals reader chrome");
+  board::sim::inject(sim, event::key(event::key_code::down, true));
+  settle(sim, application);
+  test::expect(application.shell.dock_focus == 0,
+               "long Down enters the reader dock without a short-step event");
+  board::sim::inject(sim, event::key(event::key_code::up, true));
+  settle(sim, application);
+  test::expect(application.shell.dock_focus == -1,
+               "long Up returns from the reader dock to page content");
 
   // --- back navigation: reader -> library -> home -----------------------------
   board::sim::inject(sim, event::key(event::key_code::back));
