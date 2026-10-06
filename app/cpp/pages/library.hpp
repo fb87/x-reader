@@ -3,6 +3,7 @@
 #include "app/cpp/pages/common.hpp"
 #include "app/cpp/routes.hpp"
 
+#include <algorithm>
 #include <cstdio>
 
 namespace app::pages::library {
@@ -31,18 +32,64 @@ inline bool activate_book_info(context& self) {
   return selected == 0 ? open_selected_book(self) : true;
 }
 
+inline int list_offset(const context& self, int count) {
+  if (count <= 10) return 0;
+  const int selected = static_cast<int>(state::get(*self.memory, "reader.library.selected", std::int64_t{0}));
+  return (selected / 10) * 10;
+}
+
+inline void draw_cover(display::device& d, geometry::rect rect, const book::item& book, int index) {
+  canvas::fill(d, rect, canvas::gray::light);
+  canvas::border(d, rect, 2, canvas::gray::black);
+  canvas::fill(d, {rect.x + 3, rect.y + 3, rect.w - 6, 11},
+               index % 3 == 0 ? canvas::gray::black : canvas::gray::dark);
+  char initial[2] = {book.title[0], '\0'};
+  text::center(d, {rect.x + 2, rect.y + 16, rect.w - 4, rect.h - 18}, initial, 2,
+               canvas::gray::black);
+}
+
 inline void render(context& self) {
   auto& d = *self.shell.display;
   canvas::fill(d, {0, 0, d.width, d.height}, canvas::gray::white);
   const bool favorites = current_page(self) == page::favorites;
   draw_status(self, favorites ? "FAVORITES" : "LIBRARY");
   const int count = visible_book_count(self);
-  for (int row = 0; row < count && row < 10; ++row) {
-    const int index = visible_book_index(self, row);
+  const int offset = list_offset(self, count);
+  const int visible = std::min(10, count - offset);
+  const bool focused = static_cast<focus_area>(state::get(
+      *self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content))) == focus_area::content;
+  const int row_width = self.shell.display->width - 24 - (count > 10 ? 10 : 0);
+  for (int row = 0; row < visible; ++row) {
+    const int visible_index = offset + row;
+    const int index = visible_book_index(self, visible_index);
     auto& book = self.reader.library.books[static_cast<std::size_t>(index)];
+    const geometry::rect rr{4, 58 + row * 76, row_width, 72};
+    const bool selected = visible_index == static_cast<int>(state::get(
+        *self.memory, "reader.library.selected", std::int64_t{0}));
+    const bool inverted = selected && focused;
+    const auto fg = inverted ? canvas::gray::white : canvas::gray::black;
+    canvas::fill(d, rr, inverted ? canvas::gray::black : canvas::gray::white);
+    if (selected && !focused) canvas::fill(d, {rr.x, rr.y + 6, 5, rr.h - 12}, canvas::gray::black);
+    if (!inverted) canvas::hline(d, rr.x, rr.y + rr.h - 1, rr.w, canvas::gray::light);
+    char number[12]{};
+    std::snprintf(number, sizeof(number), "%d", visible_index + 1);
+    text::draw_in(d, rr.x + 2, rr.y + 22, 28, number, 2, fg);
+    const geometry::rect cover{rr.x + 36, rr.y + 7, 42, 58};
+    draw_cover(d, cover, book, index);
+    const int text_x = cover.x + cover.w + 10;
+    text::draw_in(d, text_x, rr.y + 12, rr.x + rr.w - text_x - 8, book.title.data(), 2, fg);
     char meta[64]{};
-    std::snprintf(meta, sizeof(meta), "%s  %d%%", book.favorite ? "FAV" : "EPUB", book.progress);
-    draw_row(self, row, 58 + row * 76, book.title.data(), meta);
+    std::snprintf(meta, sizeof(meta), "%s  |  %d%%", book.author.data(), book.progress);
+    text::draw_in(d, text_x, rr.y + 42, rr.x + rr.w - text_x - 8, meta, 1,
+                  inverted ? canvas::gray::white : canvas::gray::dark);
+  }
+  if (count > 10) {
+    const geometry::rect track{self.shell.display->width - 18, 58, 6, 10 * 72};
+    canvas::fill(d, track, canvas::gray::white);
+    canvas::vline(d, track.x + 3, track.y, track.h, canvas::gray::light);
+    const int thumb_h = std::max(track.h * 10 / count, 16);
+    const int thumb_y = track.y + (track.h - thumb_h) * offset / std::max(count - 10, 1);
+    canvas::fill(d, {track.x, thumb_y, 6, thumb_h}, canvas::gray::black);
   }
   if (count == 0) text::center(d, {0, 300, d.width, 80}, "NO BOOKS", 3, canvas::gray::dark);
   const char* actions[] = {favorites ? "REMOVE" : "FAVORITE", "DELETE", "BACK"};
@@ -115,7 +162,7 @@ inline bool event(context& self, const event::value& value) {
   if (value.event_type == event::type::tap) {
     if (value.y < 58 || value.y >= 58 + count * 76) return false;
     state::set(*self.memory, "reader.library.selected",
-               static_cast<std::int64_t>((value.y - 58) / 76));
+               static_cast<std::int64_t>(list_offset(self, count) + (value.y - 58) / 76));
     return show_book_info(self);
   }
   if (value.event_type != event::type::key) return false;
