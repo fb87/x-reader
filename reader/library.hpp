@@ -31,9 +31,12 @@ inline bool supported(const char* name)
         return false;
     }
     const char* suffix = name + length - 5;
-    return (suffix[0] == '.' && (suffix[1] == 'e' || suffix[1] == 'E') &&
-            (suffix[2] == 'p' || suffix[2] == 'P') && (suffix[3] == 'u' || suffix[3] == 'U') &&
-            (suffix[4] == 'b' || suffix[4] == 'B'));
+    if (suffix[0] == '.' && (suffix[1] == 'e' || suffix[1] == 'E') &&
+        (suffix[2] == 'p' || suffix[2] == 'P') && (suffix[3] == 'u' || suffix[3] == 'U') &&
+        (suffix[4] == 'b' || suffix[4] == 'B')) return true;
+    return length >= 4 && name[length - 4] == '.' && (name[length - 3] == 'e' || name[length - 3] == 'E') &&
+           (name[length - 2] == 'p' || name[length - 2] == 'P') &&
+           (name[length - 1] == 'u' || name[length - 1] == 'U');
 }
 
 /** @brief Adds a document to the in-memory library cache. */

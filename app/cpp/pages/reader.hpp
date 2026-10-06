@@ -3,71 +3,76 @@
 #include "app/cpp/pages/common.hpp"
 #include "app/cpp/routes.hpp"
 
+#include <algorithm>
 #include <cstdio>
+#include <cstring>
 
 namespace app::pages::reader {
+
+inline int scale(const context& self) {
+  return 2 + static_cast<int>(state::get(*self.memory, "reader.settings.font_size", std::int64_t{1}));
+}
+
+inline geometry::rect text_rect(const context& self) {
+  const bool chrome = state::get(*self.memory, "app.reader.chrome", false);
+  const int top = chrome ? 60 : 28;
+  const int bottom = chrome ? 88 : 36;
+  return geometry::rect{28, top, self.shell.display->width - 56,
+                        self.shell.display->height - top - bottom - 24};
+}
 
 inline void render(context& self) {
   auto& d = *self.shell.display;
   canvas::fill(d, {0, 0, d.width, d.height}, canvas::gray::white);
   const bool chrome = state::get(*self.memory, "app.reader.chrome", false);
   if (chrome) draw_status(self, state::get(*self.memory, "reader.book.title", "READING"));
-  const int top = chrome ? 60 : 28;
-  const int bottom = chrome ? 88 : 36;
-  const auto page_number = state::get(*self.memory, "reader.book.page", std::int64_t{0});
-  char line[64]{};
-  std::snprintf(line, sizeof(line), "CHAPTER 1  PAGE %lld",
-                static_cast<long long>(page_number + 1));
-  text::draw(d, 28, top + 10, line, 2, canvas::gray::dark);
-  const char* body[] = {
-      "IT IS A TRUTH UNIVERSALLY ACKNOWLEDGED,",
-      "THAT A SINGLE MAN IN POSSESSION OF A GOOD",
-      "FORTUNE, MUST BE IN WANT OF A WIFE.",
-      "",
-      "HOWEVER LITTLE KNOWN THE FEELINGS OR VIEWS",
-      "OF SUCH A MAN MAY BE ON HIS FIRST ENTERING",
-      "A NEIGHBOURHOOD, THIS TRUTH IS SO WELL FIXED",
-      "IN THE MINDS OF THE SURROUNDING FAMILIES.",
-  };
-  int y = top + 58;
-  const int scale = 2 + static_cast<int>(
-      state::get(*self.memory, "reader.settings.font_size", std::int64_t{1}));
-  for (const char* paragraph : body) {
-    text::draw(d, 28, y, paragraph, scale > 3 ? 3 : scale);
-    y += 38;
+
+  const int font_scale = std::min(scale(self), 4);
+  const auto area = text_rect(self);
+  ::reader::paginate(self.reader.current, area, font_scale);
+  const char* body = ::reader::current_text(self.reader.current);
+  std::size_t offset = self.reader.current.page_start[self.reader.current.page];
+  int y = area.y;
+  for (int line = 0; line < self.reader.current.lines_per_page && body[offset] != '\0'; ++line) {
+    std::size_t next = 0;
+    const std::size_t length = ::reader::line_span(body + offset, area.w, font_scale, next);
+    char text_line[256]{};
+    const std::size_t copied = std::min(length, sizeof(text_line) - 1);
+    std::memcpy(text_line, body + offset, copied);
+    text::draw(d, area.x, y, text_line, font_scale, canvas::gray::black);
+    y += 7 * font_scale + 4;
+    offset += next;
   }
+
+  const int bottom = chrome ? 88 : 36;
   if (state::get(*self.memory, "reader.settings.show_progress", true)) {
-    const int progress = static_cast<int>(
-        state::get(*self.memory, "reader.book.progress", std::int64_t{0}));
+    const int progress = static_cast<int>(::reader::progress_percent(self.reader.current));
     canvas::border(d, {28, d.height - bottom, d.width - 56, 10}, 1, canvas::gray::light);
     canvas::fill(d, {29, d.height - bottom + 1, (d.width - 58) * progress / 100, 8},
                  canvas::gray::dark);
   }
+  char pages[32]{};
+  std::snprintf(pages, sizeof(pages), "%d / %d", self.reader.current.page + 1,
+                self.reader.current.page_count);
+  text::draw(d, 28, d.height - bottom + 16,
+             ::reader::current_chapter_title(self.reader.current), 1, canvas::gray::dark);
+  text::draw(d, d.width - text::width(pages, 1) - 28, d.height - bottom + 16, pages, 1,
+             canvas::gray::dark);
   if (chrome) {
     const char* actions[] = {"CLOSE", "A-", "A+"};
     draw_dock(self, actions, 3);
   }
 }
 
-inline bool activate_dock(context& self) {
-  const int action = static_cast<int>(
-      state::get(*self.memory, "app.dock.selected", std::int64_t{0}));
-  if (action == 0) {
-    routes::set_page(self, page::home);
-    return true;
-  }
-  ::reader::adjust_font(*self.memory, action == 1 ? -1 : 1);
-  ++self.invalidations;
-  return true;
-}
-
 inline bool event(context& self, const event::value& value) {
+  const auto area = text_rect(self);
+  const int font_scale = std::min(scale(self), 4);
   if (value.event_type == event::type::tap) {
     const int third = self.shell.display->width / 3;
     if (value.x < third)
-      ::reader::previous_page(*self.memory);
+      ::reader::previous_page(self.reader, *self.memory, area, font_scale);
     else if (value.x >= third * 2)
-      ::reader::next_page(*self.memory);
+      ::reader::next_page(self.reader, *self.memory, area, font_scale);
     else
       state::set(*self.memory, "app.reader.chrome",
                  !state::get(*self.memory, "app.reader.chrome", false));
@@ -79,42 +84,18 @@ inline bool event(context& self, const event::value& value) {
     routes::set_page(self, page::home);
     return true;
   }
-
-  const auto area = static_cast<focus_area>(state::get(
-      *self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content)));
-  if (area == focus_area::dock) {
-    auto selected = state::get(*self.memory, "app.dock.selected", std::int64_t{0});
-    if (value.key == event::key_code::up) {
-      state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content));
-      ++self.invalidations;
-      return true;
-    }
-    if (value.key == event::key_code::left && selected > 0) {
-      state::set(*self.memory, "app.dock.selected", selected - 1);
-      ++self.invalidations;
-      return true;
-    }
-    if (value.key == event::key_code::right && selected < 2) {
-      state::set(*self.memory, "app.dock.selected", selected + 1);
-      ++self.invalidations;
-      return true;
-    }
-    if (value.key == event::key_code::down) return true;
-    if (value.key == event::key_code::ok) return activate_dock(self);
-  }
-
   if (value.key == event::key_code::right || value.key == event::key_code::down) {
     if (value.key == event::key_code::down &&
         state::get(*self.memory, "app.reader.chrome", false)) {
       state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::dock));
     } else {
-      ::reader::next_page(*self.memory);
+      ::reader::next_page(self.reader, *self.memory, area, font_scale);
     }
     ++self.invalidations;
     return true;
   }
   if (value.key == event::key_code::left || value.key == event::key_code::up) {
-    ::reader::previous_page(*self.memory);
+    ::reader::previous_page(self.reader, *self.memory, area, font_scale);
     ++self.invalidations;
     return true;
   }

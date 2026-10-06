@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -44,6 +45,7 @@ std::size_t source_fingerprint(const char* root, const char* extension) {
 int main() {
   board::sim::runtime sim{};
   board::sim::init(sim);
+  if (const char* root = std::getenv("XREADER_SDCARD")) board::sim::mount(sim, root);
 
   board::sim::wayland::backend window{};
   if (!board::sim::wayland::open(window, sim, "Ebook Reader - Lua / M5Paper Simulator")) {

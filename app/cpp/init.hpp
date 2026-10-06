@@ -20,7 +20,9 @@ inline bool init(context& self, capability::registry& capabilities, state::store
   auto* display = capability::get<display::device>(capabilities);
   auto* input = capability::get<input::device>(capabilities);
   auto* platform_device = capability::get<platform::device>(capabilities);
+  auto* storage_device = capability::get<storage::device>(capabilities);
   if (display == nullptr || input == nullptr || platform_device == nullptr) return false;
+  self.reader.storage = storage_device;
 
   restore_persistent(self);
   reader::init(self.reader, memory);

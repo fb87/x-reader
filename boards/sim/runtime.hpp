@@ -14,6 +14,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <cstdlib>
 #include <zlib.h>
 
 namespace board::sim {
@@ -43,6 +46,8 @@ struct runtime {
     const char* wifi_ssid = nullptr;
     std::array<file, max_files> files{};
     std::size_t file_count = 0;
+    char storage_root[storage::path_max] = {0};
+    bool host_storage = false;
 
     display::device display{};
     input::device input{};
@@ -86,6 +91,24 @@ inline int battery_percent(platform::device& self)
 inline bool storage_list(storage::device& self, const char* path, storage::entry_fn callback,
                          void* user) {
   auto& sim = *static_cast<runtime*>(self.context);
+  if (sim.host_storage) {
+    DIR* directory = ::opendir(path == nullptr || path[0] == '\0' ? sim.storage_root : path);
+    if (directory == nullptr) return false;
+    struct dirent* item = nullptr;
+    while ((item = ::readdir(directory)) != nullptr) {
+      if (std::strcmp(item->d_name, ".") == 0 || std::strcmp(item->d_name, "..") == 0) continue;
+      char child[storage::path_max * 2] = {0};
+      const char* base = path == nullptr || path[0] == '\0' ? sim.storage_root : path;
+      std::snprintf(child, sizeof(child), "%s/%s", base, item->d_name);
+      struct stat info{};
+      if (::stat(child, &info) != 0) continue;
+      const storage::entry value{item->d_name, S_ISDIR(info.st_mode),
+                                 S_ISREG(info.st_mode) ? static_cast<std::uint32_t>(info.st_size) : 0};
+      if (!callback(value, user)) break;
+    }
+    ::closedir(directory);
+    return true;
+  }
   char prefix[storage::path_max]{};
   const char* source = path == nullptr ? "" : path;
   while (*source == '/') ++source;
@@ -127,6 +150,22 @@ inline bool storage_read(storage::device& self, const char* path, std::uint32_t 
                          void* destination, std::uint32_t size)
 {
     auto& sim = *static_cast<runtime*>(self.context);
+    if (sim.host_storage) {
+        char full[storage::path_max * 2] = {0};
+        const char* value = path == nullptr ? "" : path;
+        const std::size_t root_length = std::strlen(sim.storage_root);
+        if (std::strncmp(value, sim.storage_root, root_length) == 0 &&
+            (value[root_length] == '/' || value[root_length] == '\0'))
+            std::snprintf(full, sizeof(full), "%s", value);
+        else
+            std::snprintf(full, sizeof(full), "%s/%s", sim.storage_root, value);
+        std::FILE* file = std::fopen(full, "rb");
+        if (file == nullptr) return false;
+        const bool ok = std::fseek(file, static_cast<long>(offset), SEEK_SET) == 0 &&
+                        std::fread(destination, 1, size, file) == size;
+        std::fclose(file);
+        return ok;
+    }
     const char* name = path;
     if (name != nullptr && name[0] == '/') {
         ++name;
@@ -148,6 +187,20 @@ inline bool storage_read(storage::device& self, const char* path, std::uint32_t 
 inline bool storage_size(storage::device& self, const char* path, std::uint32_t& out)
 {
     auto& sim = *static_cast<runtime*>(self.context);
+    if (sim.host_storage) {
+        char full[storage::path_max * 2] = {0};
+        const char* value = path == nullptr ? "" : path;
+        const std::size_t root_length = std::strlen(sim.storage_root);
+        if (std::strncmp(value, sim.storage_root, root_length) == 0 &&
+            (value[root_length] == '/' || value[root_length] == '\0'))
+            std::snprintf(full, sizeof(full), "%s", value);
+        else
+            std::snprintf(full, sizeof(full), "%s/%s", sim.storage_root, value);
+        struct stat info{};
+        if (::stat(full, &info) != 0 || !S_ISREG(info.st_mode)) return false;
+        out = static_cast<std::uint32_t>(info.st_size);
+        return true;
+    }
     const char* name = path;
     if (name != nullptr && name[0] == '/') {
         ++name;
@@ -251,6 +304,17 @@ inline void init(runtime& self)
     capability::set(self.capabilities, capability::id::platform, &self.platform);
     capability::set(self.capabilities, capability::id::storage, &self.storage);
     capability::set(self.capabilities, capability::id::wifi, &self.wifi);
+}
+
+/** @brief Switches the interactive simulator to a host-backed SD-card directory. */
+inline bool mount(runtime& self, const char* root) {
+    if (root == nullptr || root[0] == '\0') return false;
+    struct stat info{};
+    if (::stat(root, &info) != 0 || !S_ISDIR(info.st_mode)) return false;
+    std::snprintf(self.storage_root, sizeof(self.storage_root), "%s", root);
+    self.host_storage = true;
+    self.storage.root = self.storage_root;
+    return true;
 }
 
 /** @brief Injects an event into the simulator queue. */

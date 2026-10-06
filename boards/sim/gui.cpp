@@ -4,12 +4,14 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <thread>
 
 /** @brief Runs the interactive Wayland simulator. */
 int main() {
   board::sim::runtime sim{};
   board::sim::init(sim);
+  if (const char* root = std::getenv("XREADER_SDCARD")) board::sim::mount(sim, root);
 
   board::sim::wayland::backend window{};
   if (!board::sim::wayland::open(window, sim, "Ebook Reader - M5Paper Simulator")) {

@@ -11,7 +11,7 @@ inline bool open_selected_book(context& self) {
   const int index = selected_book_index(self);
   if (index < 0 || index >= static_cast<int>(self.reader.library.count)) return false;
   state::set(*self.memory, "reader.library.selected", static_cast<std::int64_t>(index));
-  if (!reader::open_selected(self.reader, *self.memory)) return false;
+  if (!::reader::open_selected(self.reader, *self.memory)) return false;
   routes::set_page(self, page::reader);
   return true;
 }

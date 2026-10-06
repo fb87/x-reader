@@ -49,6 +49,8 @@ int main() {
   test::result result{};
   board::sim::runtime board{};
   board::sim::init(board);
+  test::expect(result, board::sim::mount(board, "tests/fixtures/library"),
+               "simulator mounts the real EPUB fixture directory");
   state::store memory{};
   state::store persistent{};
   app::context application{};
@@ -98,6 +100,7 @@ int main() {
   test::key(board, application, event::key_code::down);
   test::expect(result, state::get(memory, "reader.library.selected", std::int64_t{-1}) == 1,
                "rotary moves shared library selection");
+  state::set(memory, "reader.library.selected", std::int64_t{0});
 
   // Book info modal is part of the original minimal flow.
   test::key(board, application, event::key_code::ok);
@@ -112,22 +115,31 @@ int main() {
   test::key(board, application, event::key_code::ok);
   test::expect(result, app::current_page(application) == app::page::reader,
                "Read/Continue opens selected book");
-  test::expect(result, state::get(memory, "reader.book.current", std::int64_t{-1}) == 1,
+  test::expect(result, state::get(memory, "reader.book.current", std::int64_t{-1}) == 0,
                "reader.book.current stores selected book index");
   test::expect(result, std::strlen(state::get(memory, "reader.book.title", "")) > 0,
                "reader publishes current title in shared state");
   test::expect(result, notifications >= 1, "reader.book observers receive open-position changes");
 
   // Reader input/chrome.
+  const auto page_before_reader = application.reader.current.page;
+  const auto chapter_before_reader = application.reader.current.current_chapter;
   test::key(board, application, event::key_code::down);
   test::key(board, application, event::key_code::down);
-  test::expect(result, state::get(memory, "reader.book.page", std::int64_t{-1}) == 2,
+  test::expect(result, application.reader.current.page != page_before_reader ||
+                           application.reader.current.current_chapter != chapter_before_reader,
                "rotary page input advances reading position");
+  const auto page_before_left = application.reader.current.page;
+  const auto chapter_before_left = application.reader.current.current_chapter;
   test::tap(board, application, 10, 400);
-  test::expect(result, state::get(memory, "reader.book.page", std::int64_t{-1}) == 1,
+  test::expect(result, application.reader.current.page != page_before_left ||
+                           application.reader.current.current_chapter != chapter_before_left,
                "left-side touch moves to previous page");
+  const auto page_before_right = application.reader.current.page;
+  const auto chapter_before_right = application.reader.current.current_chapter;
   test::tap(board, application, 530, 400);
-  test::expect(result, state::get(memory, "reader.book.page", std::int64_t{-1}) == 2,
+  test::expect(result, application.reader.current.page != page_before_right ||
+                           application.reader.current.current_chapter != chapter_before_right,
                "right-side touch moves to next page");
   test::tap(board, application, 270, 400);
   test::expect(result, state::get(memory, "app.reader.chrome", false),

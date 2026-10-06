@@ -3,6 +3,7 @@
 #include "selected_board.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 
 /** @brief Composition root wiring the build-selected board to the board-independent application. */
 static int run_application() {
@@ -11,6 +12,7 @@ static int run_application() {
     if (!selected_board::init(board) || !selected_board::mount(board, "/sdcard")) return 1;
 #else
     selected_board::init(board);
+    if (const char* root = std::getenv("XREADER_SDCARD")) selected_board::mount(board, root);
 #endif
 
     state::store memory{};

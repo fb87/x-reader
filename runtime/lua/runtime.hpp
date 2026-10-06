@@ -5,6 +5,7 @@
 #include "core/connectivity.hpp"
 #include "runtime/lua/api.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -347,14 +348,28 @@ inline int l_reader_open_selected(api::state* vm) {
 
 inline int l_reader_next(api::state* vm) {
   auto& h = bound(vm);
-  reader::next_page(*h.app->memory);
+  const bool chrome = state::get(*h.app->memory, "app.reader.chrome", false);
+  const int top = chrome ? 60 : 28;
+  const int bottom = chrome ? 88 : 36;
+  const geometry::rect area{28, top, h.app->shell.display->width - 56,
+                            h.app->shell.display->height - top - bottom - 24};
+  const int scale = std::min(4, 2 + static_cast<int>(state::get(
+                                  *h.app->memory, "reader.settings.font_size", std::int64_t{1})));
+  reader::next_page(h.app->reader, *h.app->memory, area, scale);
   ++h.app->invalidations;
   return 0;
 }
 
 inline int l_reader_previous(api::state* vm) {
   auto& h = bound(vm);
-  reader::previous_page(*h.app->memory);
+  const bool chrome = state::get(*h.app->memory, "app.reader.chrome", false);
+  const int top = chrome ? 60 : 28;
+  const int bottom = chrome ? 88 : 36;
+  const geometry::rect area{28, top, h.app->shell.display->width - 56,
+                            h.app->shell.display->height - top - bottom - 24};
+  const int scale = std::min(4, 2 + static_cast<int>(state::get(
+                                  *h.app->memory, "reader.settings.font_size", std::int64_t{1})));
+  reader::previous_page(h.app->reader, *h.app->memory, area, scale);
   ++h.app->invalidations;
   return 0;
 }
