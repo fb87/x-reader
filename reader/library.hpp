@@ -26,9 +26,14 @@ inline constexpr int max_books = 16;
 inline constexpr int scan_queue_depth = 16;
 inline constexpr std::size_t scan_path_max = 256;
 
-/** @brief The in-memory set of discovered/added books. */
+/**
+ * @brief The in-memory set of discovered/added books. `books` has one extra slot beyond
+ * `max_books`: a single, reused "transient" overflow entry (index `max_books`) that lets
+ * File Manager always open a book even when the regular scan-populated library is full,
+ * ported from the old app's dedicated 17th slot (`APP_MAX_BOOKS` in `app_internal.h`).
+ */
 struct index {
-  std::array<book::item, max_books> books{};
+  std::array<book::item, max_books + 1> books{};
   int count = 0;
 };
 
@@ -57,9 +62,56 @@ inline bool add(index& lib, const char* path, const char* title) {
   return true;
 }
 
-/** @brief Removes book `index_to_remove`, compacting the array; invalid indices are a no-op. */
+/** @brief True when slot `max_books` currently holds a live transient overflow book. */
+inline bool has_transient_overflow(const index& lib) {
+  return lib.count == max_books + 1 && lib.books[max_books].transient;
+}
+
+/**
+ * @brief Opens `path`/`title` through the transient-overflow slot, ported from the old
+ * app's `app_open_storage_epub`: reuses an existing entry with the same path if one is
+ * already in the library; else adds normally while under `max_books`; else writes into
+ * the single reused slot `max_books`, marking it transient. Always succeeds (returns a
+ * valid index) unless `path`/`title` is null. Used by File Manager, which must be able to
+ * open a book even when the regularly-scanned library is already full.
+ */
+inline int open_transient(index& lib, const char* path, const char* title) {
+  if (path == nullptr || title == nullptr) return -1;
+  int found = -1;
+  for (int i = 0; i < lib.count; ++i) {
+    if (lib.books[i].epub_source && std::strcmp(lib.books[i].path.data(), path) == 0) {
+      found = i;
+      break;
+    }
+  }
+  if (found >= 0) return found;
+  if (lib.count < max_books) {
+    if (!add(lib, path, title)) return -1;
+    return lib.count - 1;
+  }
+  const int slot = max_books;
+  if (lib.count <= slot) lib.count = slot + 1;
+  book::item& item = lib.books[slot];
+  book::make_title(item.title.data(), item.title.size(), title);
+  item.author = "EPUB";
+  item.format = "EPUB";
+  item.epub_source = true;
+  item.favorite = false;
+  item.transient = true;
+  item.progress = 0;
+  std::snprintf(item.path.data(), item.path.size(), "%s", path);
+  return slot;
+}
+
+/**
+ * @brief Removes book `index_to_remove`, compacting the array; invalid indices are a no-op.
+ * Guards the transient overflow slot (`max_books`): deleting a regular book while the slot
+ * is occupied drops the transient entry first, so it's never shifted into a lower, regular
+ * index -- preserving the invariant that only slot `max_books` can ever be transient.
+ */
 inline void remove(index& lib, int index_to_remove) {
   if (index_to_remove < 0 || index_to_remove >= lib.count) return;
+  if (!lib.books[index_to_remove].transient && has_transient_overflow(lib)) --lib.count;
   for (int i = index_to_remove; i < lib.count - 1; ++i) lib.books[i] = lib.books[i + 1];
   --lib.count;
 }

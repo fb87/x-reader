@@ -46,17 +46,21 @@ build/xteink_test: tests/xteink_test.cpp $(CPP_HEADERS) $(FONT_BRIDGE_OBJ)
 build/book_title_test: tests/book_title_test.cpp $(CPP_HEADERS)
 	$(CXX) $(CXXFLAGS) -I. tests/book_title_test.cpp -o $@
 
+build/library_test: tests/library_test.cpp $(CPP_HEADERS)
+	$(CXX) $(CXXFLAGS) -I. tests/library_test.cpp -o $@
+
 all: build/reader
 
 gui: build/simulator_gui
 	./build/simulator_gui
 
-test: build/reader build/simulator_test build/epub_test build/font_coverage_test build/xteink_test build/book_title_test
+test: build/reader build/simulator_test build/epub_test build/font_coverage_test build/xteink_test build/book_title_test build/library_test
 	./build/simulator_test
 	./build/epub_test
 	./build/font_coverage_test
 	./build/xteink_test
 	./build/book_title_test
+	./build/library_test
 
 fonts:
 	python3 tools/gen_font.py fonts

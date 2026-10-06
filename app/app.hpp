@@ -651,9 +651,8 @@ inline void file_manager_selected(widget::list& list, int index) {
     open_path = path + root_length;
     if (*open_path == '/') ++open_path;
   }
-  if (library::add(page.app->library, open_path, entry.display)) {
-    open_book(*page.app, *page.nav, page.app->library.count - 1);
-  }
+  const int opened = library::open_transient(page.app->library, open_path, entry.display);
+  if (opened >= 0) open_book(*page.app, *page.nav, opened);
 }
 
 inline void file_manager_create(page::context& base) {
@@ -1157,7 +1156,25 @@ inline void delete_confirm_result(dialog::context& d, dialog::result result, voi
   (void)d;
   auto& lp = *static_cast<library_page*>(user);
   if (result != dialog::result::yes) return;
-  library::remove(lp.app->library, lp.pending_book);
+  context& app = *lp.app;
+  const int removed = lp.pending_book;
+
+  // Mirrors the old app_delete_book's two-step book_current fixup, in the same order: first,
+  // if the transient overflow slot is about to be dropped (deleting a *different*, regular
+  // book while the library is full) and book_current was pointing at it, that index is gone
+  // -- reset before the shift below renumbers everything else.
+  const bool drops_transient = removed >= 0 && removed < app.library.count &&
+                               !app.library.books[removed].transient &&
+                               library::has_transient_overflow(app.library);
+  std::int64_t current = state::get(*app.memory, key::book_current, std::int64_t{-1});
+  if (drops_transient && current == library::max_books) current = -1;
+
+  library::remove(app.library, removed);
+
+  if (current == removed) current = app.library.count > 0 ? 0 : -1;
+  else if (current > removed) --current;
+  state::set(*app.memory, key::book_current, current);
+
   library_sync(lp);
 }
 
