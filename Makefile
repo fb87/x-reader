@@ -90,15 +90,19 @@ build/epub_test: tests/epub_test.cpp $(CPP_HEADERS)
 build/font_coverage_test: tests/font_coverage_test.cpp $(CPP_HEADERS) $(FONT_BRIDGE_OBJ)
 	$(CXX) $(CXXFLAGS) -I. tests/font_coverage_test.cpp $(FONT_BRIDGE_OBJ) -o $@ -lz
 
+build/xteink_test: tests/xteink_test.cpp $(CPP_HEADERS) $(FONT_BRIDGE_OBJ)
+	$(CXX) $(CXXFLAGS) -I. tests/xteink_test.cpp $(FONT_BRIDGE_OBJ) -o $@ -lz
+
 cpp-all: build/reader
 
 cpp-gui: build/simulator_gui
 	./build/simulator_gui
 
-test: build/reader build/simulator_test build/epub_test build/font_coverage_test
+test: build/reader build/simulator_test build/epub_test build/font_coverage_test build/xteink_test
 	./build/simulator_test
 	./build/epub_test
 	./build/font_coverage_test
+	./build/xteink_test
 
 format:
 	clang-format -i $$(find core reader app boards tests -type f \( -name '*.hpp' -o -name '*.cpp' \) 2>/dev/null) app_main.cpp 2>/dev/null || true
