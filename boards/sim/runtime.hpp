@@ -81,6 +81,15 @@ inline std::uint32_t now_ms(platform::device& self)
     return static_cast<runtime*>(self.context)->simulated_ms;
 }
 
+inline bool wall_time(platform::device& self, int& hour, int& minute)
+{
+    auto& sim = *static_cast<runtime*>(self.context);
+    const std::uint32_t total = 9U * 60U + 41U + sim.simulated_ms / 60000U;
+    hour = static_cast<int>((total / 60U) % 24U);
+    minute = static_cast<int>(total % 60U);
+    return true;
+}
+
 /** @brief Returns the simulated battery percentage. */
 inline int battery_percent(platform::device& self)
 {
@@ -286,7 +295,8 @@ inline void init(runtime& self)
                     .context = &self,
                     .update = display_update};
     self.input = {.context = &self, .poll = input_poll};
-    self.platform = {.context = &self, .now_ms = now_ms, .battery_percent = battery_percent};
+    self.platform = {.context = &self, .now_ms = now_ms, .wall_time = wall_time,
+                     .battery_percent = battery_percent};
     self.storage = {.context = &self,
                     .root = "/",
                     .list = storage_list,

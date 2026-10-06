@@ -401,6 +401,7 @@ inline bool init(runtime& self) {
 
   self.platform.context = &self;
   self.platform.now_ms = detail::platform_now_ms;
+  self.platform.wall_time = detail::platform_wall_time;
   self.platform.battery_percent = detail::platform_battery_percent;
 
   self.input.context = &self;
