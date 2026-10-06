@@ -121,7 +121,7 @@ struct session {
   int page_count = 0;
   int page = 0;
   int lines_per_page = 1;
-  int total_pages = 0;  ///< set by the caller's layout step; see paginate()'s doc comment.
+  int total_pages = 0;  ///< kept in sync by the layout step and by turn_page; see paginate()'s doc comment.
 };
 
 /** @brief Loads chapter `chapter`'s text; false on any parse failure or out-of-range index. */
@@ -188,11 +188,13 @@ inline std::uint16_t chapter_count(const session& s) {
 /**
  * @brief Re-paginates the current chapter's text into `text_rect` using `font`, preserving
  * the reading position (the page containing the previous first character stays current).
- * Does NOT update `total_pages` -- the caller's layout step does that (reader_layout's old
- * role), matching the old app's split: `turn()`'s chapter-crossing branch repaginates
- * without refreshing total_pages, so progress briefly uses the prior chapter's page count
- * for one render. That's a real, if minor, quirk of the shipped app and is preserved
- * rather than silently fixed mid-migration.
+ * Does NOT update `total_pages` itself -- callers that repaginate as part of a layout change
+ * (font size, chrome toggle) set it right after calling this. `turn_page` below is the one
+ * exception that used to skip this: the old app's `turn()` repaginated on a chapter crossing
+ * without refreshing its own total_pages, so the progress bar briefly used the prior
+ * chapter's page count for one render. That quirk was inherited verbatim during the initial
+ * port; it's fixed now (turn_page sets total_pages itself), since an accurate progress bar
+ * is more correct than matching an old app bug.
  */
 inline void paginate(session& s, const text::font& font, geometry::rect text_rect) {
   const std::uint32_t keep = s.page_count != 0 ? s.page_start[s.page] : 0;
@@ -232,6 +234,7 @@ inline bool turn_page(session& s, int delta, const text::font& font, geometry::r
   }
   if (!turn_chapter(s, delta)) return false;
   paginate(s, font, text_rect);
+  s.total_pages = s.page_count;  // keep progress accurate across the chapter crossing too.
   s.page = delta > 0 ? 0 : s.page_count - 1;
   return true;
 }

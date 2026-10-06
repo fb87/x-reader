@@ -136,6 +136,22 @@ int main() {
   settle(sim, application);
   test::expect(application.session.page != page_before || application.session.current_chapter != 0,
               "tapping the right third turns the page (or crosses a chapter)");
+
+  // Keep tapping until a chapter boundary is actually crossed (the first tap above may
+  // just advance within a long chapter 0) -- this is the only way to exercise the
+  // chapter-crossing branch of turn_page end to end, through the real input path.
+  const int chapter_before_crossing = application.session.current_chapter;
+  bool crossed_chapter = false;
+  for (int i = 0; i < 500 && !crossed_chapter; ++i) {
+    board::sim::touch(sim, nav.reader.base.area.x + nav.reader.base.area.w - 10,
+                      nav.reader.base.area.y + 10);
+    settle(sim, application);
+    crossed_chapter = application.session.current_chapter != chapter_before_crossing;
+  }
+  test::expect(crossed_chapter, "repeated right-third taps eventually cross a chapter boundary");
+  test::expect(application.session.total_pages == application.session.page_count,
+              "total_pages is refreshed immediately on a chapter-crossing page turn, not "
+              "left stale for one render (fixed tech debt inherited from the old app's turn())");
   test::expect(nav.reader.base.chrome == page::chrome::none, "reader chrome still hidden");
   board::sim::touch(sim, nav.reader.base.area.x + nav.reader.base.area.w / 2,
                     nav.reader.base.area.y + 10);  // center third -> toggle chrome.
