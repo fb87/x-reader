@@ -63,6 +63,8 @@ inline bool symbol(void* handle, const char* name, T& out) {
 inline bool load(library& self) {
   self.handle = dlopen("liblua5.4.so.0", RTLD_NOW | RTLD_LOCAL);
   if (self.handle == nullptr) self.handle = dlopen("liblua5.4.so", RTLD_NOW | RTLD_LOCAL);
+  if (self.handle == nullptr) self.handle = dlopen("liblua.so.5.4", RTLD_NOW | RTLD_LOCAL);
+  if (self.handle == nullptr) self.handle = dlopen("liblua.so", RTLD_NOW | RTLD_LOCAL);
   if (self.handle == nullptr) return false;
 
   return symbol(self.handle, "luaL_newstate", self.new_state) &&
