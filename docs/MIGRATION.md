@@ -1,89 +1,84 @@
 # Migration Status
 
-Tracks progress of `docs/DESIGN.md`'s refactor, on branch `refactor/cpp-design` (branched from
-`dev/minimal`). `dev/minimal` remains the behavioral reference throughout — nothing here is
-claimed as done until it has test parity against that branch.
-
-This document favors honesty over completeness: a step is listed as done only once a Make target
-actually exercises it, and the hardware phase is never described as "verification remaining" for
-code that does not exist or has not been built/flashed.
+Tracks `docs/DESIGN.md`'s refactor from the old C99 `dev/minimal` tree to the restricted-C++20
+tree, on branch `refactor/cpp-design`. This document favors honesty over completeness: a step is
+listed as done only once a Make target actually exercises it, and the hardware phase is never
+described as "verification remaining" for code that has not been built or flashed.
 
 ## Done, simulator-verified
 
 - `core/`: geometry, refresh (incl. the dirty-rect scheduler), event, display, platform, input,
   storage, capability, connectivity, secret, state, canvas, text, widget, page, dialog, shell.
-  Verified with differential tests against the real old C implementation using real production
-  font data and an 18-step scripted shell scenario (navigation, dialogs, refresh merging/
-  promotion) — byte-identical output.
 - `reader/`: epub (real bounded ZIP/OPF/XHTML parser), book (Vietnamese mojibake title repair),
   library (BFS scan over `storage::list`), session (EPUB-backed pagination/chapter-turn/
-  progress). Verified against the real 2.8MB sample.epub fixture (602 manifest / 596 spine items,
-  real Vietnamese chapter text) and the real book-title mojibake fixtures — byte-identical to the
-  old implementation.
-- `boards/sim/`: the M5Paper logical profile (540x960 GRAY4) over host storage/zlib, plus the
-  interactive SDL2 GUI (`boards/sim/gui.cpp`), confirmed rendering correctly on a real Wayland
-  session. A real `secret::store` backs `capability::id::secret` here (fixed in-memory table,
-  never persisted to disk).
-- `app/`: all eight pages/dialogs (splash, home, library, favorites, file manager, settings,
-  sleep, reader, book-info) wired to real `reader::session`/`reader::library`, real fonts (full
-  Vietnamese coverage, bridged from the same compiled `fonts/*.c` objects the old app uses — not
-  copies), and `state::store`-backed, checkpointed settings.
-- `tests/`: `simulator_test.cpp` (47 input-injection checks covering splash timing, library
-  discovery, the full EPUB-open pipeline, touch/chrome, back navigation, favorites, settings
-  mutation, delete confirmation, sleep/wake, and a persistence round trip — exclusively through
-  `board::sim::inject/touch -> app::pump -> shell::dispatch`, never by calling a page handler
-  directly), `epub_test.cpp` (real-fixture EPUB regression), `font_coverage_test.cpp` (guards the
-  real Vietnamese/combining-mark glyph coverage).
-- `make test` passes end to end; the untouched `dev/minimal`-era Makefile targets (`make run`,
-  `make test-title`, `make test-epub`) still pass unmodified.
+  progress) — verified against the real 2.8MB sample.epub fixture (602 manifest / 596 spine
+  items, real Vietnamese chapter text).
+- `boards/sim/`: the M5Paper logical profile (540x960 GRAY4) over host storage/zlib, the
+  interactive SDL2 GUI, a real `secret::store`, and a second logical profile (480x800 MONO1,
+  `boards/sim/xteink.hpp`) that exercises `app/`/`reader/` against a different width/pixel-format
+  shape to catch hidden assumptions.
+- `app/`: all eight pages/dialogs, wired to real `reader::session`/`reader::library`, real fonts
+  (full Vietnamese coverage, bridged from the same compiled `fonts/*.c` objects the old app used —
+  not copies), and `state::store`-backed, checkpointed settings.
+- `tests/`: `simulator_test.cpp` (47 checks, exclusively through
+  `board::sim::inject/touch -> app::pump -> shell::dispatch`, never a page handler directly),
+  `epub_test.cpp`, `font_coverage_test.cpp`, `xteink_test.cpp` (11 checks), `book_title_test.cpp`.
+  `make test` passes end to end; the interactive GUI was confirmed rendering correctly on a real
+  Wayland session.
 
 Simplifications made along the way, flagged rather than silently dropped:
 - File Manager opens a book through the same 16-book-capped `reader::library::add` used by
-  scanning, not the old app's dedicated 17th "transient" slot (`app_open_storage_epub`'s overflow
-  path in the old `app/app.c`).
-- No app-level credential-entry flow exists yet to exercise the real secret store with (the
-  ported Settings page's Wi-Fi/Bluetooth rows are UI-only booleans, matching the old C app
-  exactly — it never had a real connect-with-password UI either).
+  scanning, not the old app's dedicated 17th "transient" slot.
+- No app-level credential-entry UI exists to exercise the real secret store with — the ported
+  Settings page's Wi-Fi/Bluetooth rows are UI-only booleans, matching the old C app exactly.
 
 ## Done, but NOT hardware-verified — no ESP-IDF toolchain in this sandbox
 
-- `drivers/it8951/`, `drivers/gt911/`, `drivers/inflate/`: ported from `port/m5paper/drivers/*`
-  and `port/m5paper/inflate.*`, preserving every piece of hardware-verified logic verbatim —
-  the 90-degree rotation coordinate remap, the chunked/DMA-safe pixel upload with periodic
-  watchdog resets, GC16/DU waveform selection, and the dual I2C address probe (0x14/0x5d).
-- `boards/m5paper/`: `pins.hpp`/`board.hpp`/`.cpp` ported verbatim (power rails, battery ADC
-  curve, deep sleep). `runtime.hpp` is new: it composes the drivers above plus ESP-IDF's SD/FatFS
-  VFS into the exact same capability surface `boards/sim/runtime.hpp` publishes.
-- `enter_deep_sleep()` — present in the old `board.cpp` but never called from the old
-  `app_main.cpp`'s loop — is now wired through `platform::device.enter_deep_sleep`, closing that
-  gap for real on the one board where it matters.
-- `main/CMakeLists.txt` points at the new source tree (`app_main.cpp`, the three driver `.cpp`
-  files, `boards/m5paper/board.cpp`, `fonts/*.c`) and requests `cxx_std_20` with
-  `-fno-exceptions -fno-rtti`. `sdkconfig` already disables C++ exceptions/RTTI at the Kconfig
-  level (`CONFIG_COMPILER_CXX_EXCEPTIONS`/`CONFIG_COMPILER_CXX_RTTI` are both unset), so no
-  Kconfig change was needed there. `partitions.csv`'s 6MB factory partition has ample headroom
-  for the new tree's comparable binary size — reviewed, not changed.
+- `drivers/it8951/`, `drivers/gt911/`, `drivers/inflate/`: ported preserving every piece of
+  hardware-verified logic verbatim — the 90-degree rotation coordinate remap, the chunked/
+  DMA-safe pixel upload with periodic watchdog resets, GC16/DU waveform selection, and the dual
+  I2C address probe (0x14/0x5d).
+- `boards/m5paper/`: pins/power/battery/sleep ported verbatim; `runtime.hpp` composes the drivers
+  above plus ESP-IDF's SD/FatFS VFS into the same capability surface `boards/sim/runtime.hpp`
+  publishes. `enter_deep_sleep()` — present in the old board code but never called from the old
+  app's loop — is now wired through `platform::device.enter_deep_sleep`, closing that gap.
+- `main/CMakeLists.txt` points at the new tree and requests `cxx_std_20` with
+  `-fno-exceptions -fno-rtti`; `sdkconfig` already disabled those at the Kconfig level, so no
+  change was needed there. `partitions.csv` reviewed (6MB factory partition, ample headroom).
 
-**None of the above has been compiled, flashed, or run.** This sandbox has no ESP-IDF toolchain
-(the `flake.nix` that would fetch one was never exercised in this session). The deliverable is
-code and build wiring believed correct via careful line-by-line preservation of the old driver
-logic, not a verified result. Before this phase can be called done, the user must, on real
-M5Paper hardware:
+**None of the above has been compiled, flashed, or run.** Before this can be called done, the user
+must, on real M5Paper hardware: `idf.py build` (confirms the pinned toolchain accepts C++20 for
+the xtensa target — not independently confirmed here), `idf.py flash monitor`, and manually verify
+rotation correctness, page-turn latency (no watchdog reset), touch at both I2C addresses, battery
+sanity, and sleep/wake via both ext0 and timer wakeup.
 
-1. `idf.py build` — confirms the pinned ESP-IDF toolchain actually accepts C++20 for the xtensa
-   target (not independently confirmed here).
-2. `idf.py flash monitor`.
-3. Manually verify: rotation correctness (no mirrored/offset partial updates), page-turn latency
-   (no watchdog reset under the chunked upload), touch responsiveness at both I2C addresses,
-   battery percentage sanity against a multimeter, and sleep/wake via both the rotary-press ext0
-   wakeup and the timer fallback.
+## Old tree retired
+
+`include/xr/xr_hal.h`, `xr_widget.h`, `xr_page.h`, `xr_dialog.h`, `xr_shell.h`, `xr_refresh.h`,
+`xr_storage.h`, `xr_epub.h`, `xr.h`; `src/*.c`; the old `app/*.c`/`.h` (app.c, app_internal.h,
+book_title.c/h, dlg_book_info.c, page_*.c); `port/sim/`, `port/sdl/`, `port/template/`; the old
+`tests/epub_import_test.c`, `tests/book_title_test.c`; and the Makefile targets that built them.
+All superseded with proven test parity (differential tests during the port, then the permanent
+suites listed above).
+
+**Kept, not retired, for two different reasons:**
+- `port/m5paper/` — its replacement (`boards/m5paper/` + `drivers/`) is not yet hardware-verified.
+  Per the design contract's own rule, the last known-good hardware port stays until its
+  replacement has had a real-hardware pass.
+- `include/xr/xr_types.h`, `xr_canvas.h`, `xr_text.h` — NOT old framework code in active use;
+  `fonts/xr_fonts.h` (generated by `tools/gen_font.py`, which was not changed) includes
+  `xr/xr_text.h` for the `xr_font_t`/`xr_glyph_t` struct definitions the generated `fonts/*.c`
+  files still use. These three headers are the font-generator's output contract, not retired
+  framework surface — deleting them broke the font bridge (caught by rebuilding `make test`
+  immediately after the first retirement pass, before committing it).
+
+The only remaining `xr_`-prefixed identifiers anywhere in `core/`, `reader/`, `app/`, `boards/`,
+`drivers/` are the font/icon bridge symbols in `app/assets.hpp` (`xr_font_alegreya_*`, `xr_icons`)
+— `extern "C"` declarations binding to the generated data by its existing symbol name, not a
+requirement on old framework code. Regenerating fonts under new, non-`xr_`-prefixed symbol names
+is tracked as a follow-up for whenever `tools/gen_font.py` is next touched, not blocking.
 
 ## Not started
 
-Xteink (simulator-only logical profile; no real hardware driver exists anywhere today, old or
-new tree). Old-tree retirement (`include/xr/`, `src/`, `port/sim/`, `port/sdl/`, `port/m5paper/`
-— the last of these stays until `boards/m5paper/` has had its real-hardware pass).
-
-## Explicitly out of scope for this pass
-
-- Lua application bindings and hot reload (`docs/DESIGN.md` §24/§25).
+Lua application bindings and hot reload (`docs/DESIGN.md` §24/§25) — explicitly out of scope for
+this migration pass.
