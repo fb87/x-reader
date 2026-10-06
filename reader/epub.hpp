@@ -6,6 +6,13 @@
 #include <array>
 #include <cstring>
 
+#ifdef ESP_PLATFORM
+#include "esp_attr.h"
+#define EPUB_WORK_BSS EXT_RAM_BSS_ATTR
+#else
+#define EPUB_WORK_BSS
+#endif
+
 /**
  * @brief Bounded EPUB 2/3 container and plain-text extraction, ported
  * function-by-function from `xr_epub_t`/`xr_epub_*` (include/xr/xr_epub.h,
@@ -76,7 +83,7 @@ inline bool inflate_raw(const file_view& view, std::uint32_t source_offset,
                         std::uint32_t source_size, void* destination,
                         std::uint32_t destination_size) {
   if (view.device == nullptr || source_size > 128U * 1024U) return false;
-  static std::array<std::uint8_t, 128U * 1024U> compressed{};
+  static EPUB_WORK_BSS std::array<std::uint8_t, 128U * 1024U> compressed{};
   if (!read(view, source_offset, compressed.data(), source_size)) return false;
   return storage::inflate(*view.device, compressed.data(), source_size, destination,
                           destination_size);
@@ -157,7 +164,7 @@ inline constexpr std::uint32_t zip_central_header_size = 46u;
 inline status zip_find(const file_view& view, const char* path, unsigned char header[46],
                        std::uint32_t& header_at) {
   constexpr std::uint32_t tail_capacity = 65557u;
-  static std::array<unsigned char, tail_capacity> tail{};
+  static EPUB_WORK_BSS std::array<unsigned char, tail_capacity> tail{};
   if (view.device == nullptr || path == nullptr || view.size < 22U) return status::format;
   const std::uint32_t tail_size = view.size > tail_capacity ? tail_capacity : view.size;
   const std::uint32_t tail_start = view.size - tail_size;

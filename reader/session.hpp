@@ -165,9 +165,10 @@ inline int progress_percent(const session& s) {
   if (!s.epub_open || s.document.spine_count == 0 || s.page_count == 0) return -1;
   const std::uint32_t current = static_cast<std::uint32_t>(s.page + 1) * 100U /
                                 static_cast<std::uint32_t>(s.page_count);
-  return static_cast<int>(std::min(100U, (static_cast<std::uint32_t>(s.current_chapter) * 100U +
-                                          current) /
-                                         s.document.spine_count));
+  const std::uint32_t progress =
+      (static_cast<std::uint32_t>(s.current_chapter) * 100U + current) /
+      static_cast<std::uint32_t>(s.document.spine_count);
+  return static_cast<int>(std::min<std::uint32_t>(100U, progress));
 }
 
 inline bool open_selected(context& self, state::store& shared) {
