@@ -85,4 +85,9 @@ inline void draw_progress(canvas::surface& c, geometry::rect r, int percent) {
   canvas::fill(c, geometry::make(in.x, in.y, in.w * percent / 100, in.h), canvas::gray::dark);
 }
 
+/** @brief The "back" chevron, shared by the Library/Favorites and Settings action bars. */
+inline void back_icon(canvas::surface& c, geometry::rect r, std::uint8_t g) {
+  draw_icon(c, r, icon::arrow_back, g);
+}
+
 }  // namespace app
