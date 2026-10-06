@@ -19,7 +19,7 @@ inline void draw_row(context& self, int index, int y, const char* primary,
       static_cast<focus_area>(state::get(*self.memory, "app.focus.area",
           static_cast<std::int64_t>(focus_area::content))) == focus_area::content;
   widget::row(*self.shell.display, {12, y, self.shell.display->width - 24, 68}, primary, secondary,
-              selected);
+              selected, {}, icon::for_label(primary));
 }
 
 inline void draw_dock(context& self, const char* const* labels, int count) {

@@ -1,15 +1,20 @@
 #pragma once
 
 #include "core/text.hpp"
+#include "core/icons.hpp"
 #include "core/widgets/style.hpp"
 
 namespace widget {
 
 /** @brief Renders one two-column list row. */
 inline void row(display::device& display, geometry::rect rect, const char* primary,
-                const char* secondary, bool selected, const style& style = {}) {
+                const char* secondary, bool selected, const style& style = {}, int icon_value = 0) {
   canvas::fill(display, rect, selected ? style.focus_background : style.background);
-  text::draw_in(display, rect.x + 14, rect.y + 16, rect.w - 28, primary, style.text_scale,
+  const int text_x = icon_value > 0 ? rect.x + 48 : rect.x + 14;
+  if (icon_value > 0)
+    icon::draw(display, {rect.x + 14, rect.y + 22, 24, 24}, icon_value,
+               selected ? style.focus_foreground : style.foreground);
+  text::draw_in(display, text_x, rect.y + 16, rect.x + rect.w - text_x - 14, primary, style.text_scale,
                 selected ? style.focus_foreground : style.foreground);
   if (secondary != nullptr && secondary[0] != '\0') {
     const int secondary_width = text::width(secondary, style.text_scale);

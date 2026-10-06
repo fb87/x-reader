@@ -1,4 +1,5 @@
 CXX ?= clang++
+CC ?= gcc
 BOARD ?= sim
 APP ?= cpp
 CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -fno-exceptions -fno-rtti \
@@ -6,6 +7,7 @@ CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -fno-exceptions -fno
 
 PROJECT_ROOT := $(CURDIR)
 BUILD := build
+CHECKPOINT_DIR ?= $(BUILD)/checkpoints
 GENERATED := $(BUILD)/generated
 SELECTED := $(BUILD)/selected_board.hpp
 PLUGIN_CONFIG ?= .config
@@ -15,12 +17,15 @@ PLUGIN_STAMP := $(GENERATED)/.plugins.$(PLUGIN_KEY).stamp
 HEADERS := $(shell find core reader app runtime boards plugins -type f -name '*.hpp' 2>/dev/null)
 LUA_SOURCES := $(shell find app/lua runtime/lua plugins -type f -name '*.lua' 2>/dev/null)
 LANG_SOURCES := $(shell find lang -type f -name '*.txt')
+FONT_SOURCES := $(wildcard fonts/xr_font_alegreya_14.c fonts/xr_font_alegreya_17.c fonts/xr_font_alegreya_20.c fonts/xr_font_alegreya_24.c fonts/xr_icons.c)
+FONT_OBJECTS := $(patsubst fonts/%.c,$(BUILD)/fonts/%.o,$(FONT_SOURCES))
 LUA_LIBS := -ldl
 WAYLAND_LIBS ?= $(shell pkg-config --libs wayland-client 2>/dev/null || echo -Wl,-l:libwayland-client.so.0)
 CPPFLAGS += -I$(PROJECT_ROOT) -I$(PROJECT_ROOT)/$(BUILD) -I$(PROJECT_ROOT)/$(GENERATED) \
+            -I$(PROJECT_ROOT)/include -I$(PROJECT_ROOT)/fonts \
             -include $(PROJECT_ROOT)/$(GENERATED)/plugin_config.hpp
 
-.PHONY: all gui cpp-gui lua-gui test test-cpp test-lua test-structure test-plugins test-wifi-plugin clean format format-check bundle plugins plugin-kconfig
+.PHONY: all gui cpp-gui lua-gui test checkpoints test-cpp test-lua test-structure test-plugins test-wifi-plugin clean format format-check bundle plugins plugin-kconfig
 
 ifeq ($(APP),lua)
 APP_MAIN := lua_main.cpp
@@ -50,17 +55,24 @@ plugin-kconfig: $(PLUGIN_STAMP)
 $(SELECTED): | $(BUILD)
 	printf '#pragma once\n#include "boards/$(BOARD)/runtime.hpp"\nnamespace selected_board = board::$(BOARD);\n' > $@
 
-$(BUILD)/reader: app_main.cpp $(HEADERS) $(SELECTED) $(PLUGIN_STAMP) | $(BUILD)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) app_main.cpp -o $@ -lz
+$(BUILD)/fonts/%.o: fonts/%.c fonts/xr_fonts.h include/xr/xr_text.h | $(BUILD)
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) -c $< -o $@
 
-$(BUILD)/reader-lua: lua_main.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(SELECTED) $(PLUGIN_STAMP) | $(BUILD)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) lua_main.cpp -o $@ -lz $(LUA_LIBS)
+$(BUILD)/reader: app_main.cpp $(HEADERS) $(SELECTED) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) app_main.cpp $(FONT_OBJECTS) -o $@ -lz
 
-$(BUILD)/simulator_gui: boards/sim/gui.cpp $(HEADERS) $(PLUGIN_STAMP) | $(BUILD)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) boards/sim/gui.cpp -o $@ -lz $(WAYLAND_LIBS)
+$(BUILD)/reader-lua: lua_main.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(SELECTED) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) lua_main.cpp $(FONT_OBJECTS) -o $@ -lz $(LUA_LIBS)
 
-$(BUILD)/simulator_lua_gui: boards/sim/lua_gui.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(PLUGIN_STAMP) | $(BUILD)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) boards/sim/lua_gui.cpp -o $@ -lz $(WAYLAND_LIBS) $(LUA_LIBS)
+$(BUILD)/simulator_gui: boards/sim/gui.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) boards/sim/gui.cpp $(FONT_OBJECTS) -o $@ -lz $(WAYLAND_LIBS)
+
+$(BUILD)/simulator_lua_gui: boards/sim/lua_gui.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) boards/sim/lua_gui.cpp $(FONT_OBJECTS) -o $@ -lz $(WAYLAND_LIBS) $(LUA_LIBS)
+
+$(BUILD)/checkpoint_capture: tests/checkpoint_capture.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/checkpoint_capture.cpp $(FONT_OBJECTS) -o $@ -lz
 
 cpp-gui: $(BUILD)/simulator_gui
 	./$(BUILD)/simulator_gui
@@ -70,26 +82,30 @@ lua-gui: $(BUILD)/simulator_lua_gui
 
 gui: $(if $(filter lua,$(APP)),lua-gui,cpp-gui)
 
-$(BUILD)/simulator_test: tests/simulator_test.cpp $(HEADERS) $(PLUGIN_STAMP) | $(BUILD)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/simulator_test.cpp -o $@ -lz
+checkpoints: $(BUILD)/checkpoint_capture
+	mkdir -p $(CHECKPOINT_DIR)
+	XREADER_CHECKPOINT_DIR=$(CHECKPOINT_DIR) ./$(BUILD)/checkpoint_capture
 
-$(BUILD)/epub_test: tests/epub_test.cpp $(HEADERS) $(PLUGIN_STAMP) | $(BUILD)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/epub_test.cpp -o $@ -lz
+$(BUILD)/simulator_test: tests/simulator_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/simulator_test.cpp $(FONT_OBJECTS) -o $@ -lz
 
-$(BUILD)/architecture_test: tests/architecture_test.cpp $(HEADERS) $(PLUGIN_STAMP) | $(BUILD)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/architecture_test.cpp -o $@
+$(BUILD)/epub_test: tests/epub_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/epub_test.cpp $(FONT_OBJECTS) -o $@ -lz
 
-$(BUILD)/router_test: tests/router_test.cpp $(HEADERS) $(PLUGIN_STAMP) | $(BUILD)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/router_test.cpp -o $@
+$(BUILD)/architecture_test: tests/architecture_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/architecture_test.cpp $(FONT_OBJECTS) -o $@
 
-$(BUILD)/lua_parity_test: tests/lua_parity_test.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(PLUGIN_STAMP) | $(BUILD)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/lua_parity_test.cpp -o $@ -lz $(LUA_LIBS)
+$(BUILD)/router_test: tests/router_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/router_test.cpp $(FONT_OBJECTS) -o $@
 
-$(BUILD)/lua_app_test: tests/lua_app_test.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(PLUGIN_STAMP) | $(BUILD)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/lua_app_test.cpp -o $@ -lz $(LUA_LIBS)
+$(BUILD)/lua_parity_test: tests/lua_parity_test.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/lua_parity_test.cpp $(FONT_OBJECTS) -o $@ -lz $(LUA_LIBS)
 
-$(BUILD)/lua_hot_reload_test: tests/lua_hot_reload_test.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(PLUGIN_STAMP) | $(BUILD)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/lua_hot_reload_test.cpp -o $@ -lz $(LUA_LIBS)
+$(BUILD)/lua_app_test: tests/lua_app_test.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/lua_app_test.cpp $(FONT_OBJECTS) -o $@ -lz $(LUA_LIBS)
+
+$(BUILD)/lua_hot_reload_test: tests/lua_hot_reload_test.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/lua_hot_reload_test.cpp $(FONT_OBJECTS) -o $@ -lz $(LUA_LIBS)
 
 test-cpp: $(BUILD)/reader $(BUILD)/simulator_gui $(BUILD)/simulator_test $(BUILD)/epub_test $(BUILD)/architecture_test $(BUILD)/router_test
 	./$(BUILD)/reader

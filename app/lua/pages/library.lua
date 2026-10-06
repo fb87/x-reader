@@ -27,6 +27,9 @@ local function render_info(books)
         buttons = { book.progress > 0 and i18n.t("continue") or i18n.t("read"), i18n.t("close") },
         selected = state.get("app.dialog.selected") or 0,
     }
+    shell.api.text(60, 378, book.author or "", 2, widget.gray.dark)
+    shell.api.text(60, 414, string.format("EPUB  |  %d%%", book.progress or 0), 1, widget.gray.dark)
+    shell.api.progress(60, 452, shell.api.width() - 120, 14, book.progress or 0)
 end
 
 function M.render()

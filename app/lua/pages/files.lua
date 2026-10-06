@@ -7,12 +7,16 @@ local M = { id = model.page.files }
 
 function M.render()
     shell.api.clear(widget.gray.white)
-    widget.status(i18n.t("file_manager"))
+    widget.status("FILES")
     local selected = state.get("reader.library.selected") or 0
     for i = 0, math.min(shell.library.count() - 1, 9) do
         local book = shell.library.book(i)
         widget.row { y = 58 + i * 76, primary = book.title, secondary = i18n.t("epub"),
                      selected = selected == i and (state.get("app.focus.area") or 0) == 0 }
+    end
+    if shell.library.count() == 0 then
+        widget.center { x = 0, y = 300, w = shell.api.width(), h = 80,
+                        text = "NO FILES", scale = 3, gray = widget.gray.dark }
     end
     widget.dock { i18n.t("up_back") }
 end

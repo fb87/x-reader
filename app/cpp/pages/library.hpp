@@ -79,7 +79,7 @@ inline void render(context& self) {
     const int text_x = cover.x + cover.w + 10;
     text::draw_in(d, text_x, rr.y + 12, rr.x + rr.w - text_x - 8, book.title.data(), 2, fg);
     char meta[64]{};
-    std::snprintf(meta, sizeof(meta), "%s  |  %d%%", book.author.data(), book.progress);
+    std::snprintf(meta, sizeof(meta), "%.50s  |  %d%%", book.author.data(), book.progress);
     text::draw_in(d, text_x, rr.y + 42, rr.x + rr.w - text_x - 8, meta, 1,
                   inverted ? canvas::gray::white : canvas::gray::dark);
   }
@@ -100,6 +100,12 @@ inline void render(context& self) {
   if (index < 0) return;
   auto& book = self.reader.library.books[static_cast<std::size_t>(index)];
   draw_dialog(self, "BOOK INFO", book.title.data());
+  text::draw_in(d, 60, 378, d.width - 120, book.author.data(), 2, canvas::gray::dark);
+  char meta[64]{};
+  std::snprintf(meta, sizeof(meta), "EPUB  |  %d%%", book.progress);
+  text::draw_in(d, 60, 414, d.width - 120, meta, 1, canvas::gray::dark);
+  canvas::border(d, {60, 452, d.width - 120, 14}, 1, canvas::gray::light);
+  canvas::fill(d, {61, 453, (d.width - 122) * book.progress / 100, 12}, canvas::gray::dark);
   const int selected = static_cast<int>(
       state::get(*self.memory, "app.dialog.selected", std::int64_t{0}));
   geometry::rect left{70, 500, 180, 54};

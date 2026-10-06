@@ -5,36 +5,30 @@ local i18n = shell.i18n
 local model = require("model")
 local M = { id = model.page.reader }
 
-local body = {
-    "IT IS A TRUTH UNIVERSALLY ACKNOWLEDGED,",
-    "THAT A SINGLE MAN IN POSSESSION OF A GOOD",
-    "FORTUNE, MUST BE IN WANT OF A WIFE.",
-    "",
-    "HOWEVER LITTLE KNOWN THE FEELINGS OR VIEWS",
-    "OF SUCH A MAN MAY BE ON HIS FIRST ENTERING",
-    "A NEIGHBOURHOOD, THIS TRUTH IS SO WELL FIXED",
-    "IN THE MINDS OF THE SURROUNDING FAMILIES.",
-}
-
 function M.render()
     shell.api.clear(widget.gray.white)
     local chrome = state.get("app.reader.chrome") == true
     if chrome then widget.status(state.get("reader.book.title") or i18n.t("reading")) end
+
     local top = chrome and 60 or 28
-    widget.label { x = 28, y = top + 10,
-                   text = i18n.t("chapter_page", (state.get("reader.book.page") or 0) + 1),
-                   gray = widget.gray.dark }
-    local y = top + 58
-    local scale = math.min(3, 2 + (state.get("reader.settings.font_size") or 1))
-    for _, line in ipairs(body) do
-        widget.label { x = 28, y = y, text = line, scale = scale }
-        y = y + 38
+    local bottom = chrome and 88 or 36
+    local scale = math.min(4, 2 + (state.get("reader.settings.font_size") or 1))
+    local y = top
+    for i = 0, shell.reader.line_count() - 1 do
+        shell.api.text(28, y, shell.reader.line(i), scale, widget.gray.black)
+        y = y + 7 * scale + 4
     end
+
+    local progress = shell.reader.progress()
     if state.get("reader.settings.show_progress") ~= false then
-        widget.progress { x = 28, y = shell.api.height() - (chrome and 88 or 36),
-                          w = shell.api.width() - 56, h = 10,
-                          value = state.get("reader.book.progress") or 0 }
+        shell.api.hline(28, shell.api.height() - bottom, shell.api.width() - 56, widget.gray.light)
+        shell.api.fill(28, shell.api.height() - bottom - 1,
+                       (shell.api.width() - 56) * progress / 100, 3, widget.gray.dark)
     end
+    shell.api.text(28, shell.api.height() - bottom + 16, shell.reader.chapter(), 1, widget.gray.dark)
+    local pages = string.format("%d / %d", shell.reader.page() + 1, shell.reader.page_count())
+    shell.api.text(shell.api.width() - 28 - string.len(pages) * 6, shell.api.height() - bottom + 16,
+                   pages, 1, widget.gray.dark)
     if chrome then widget.dock { i18n.t("close"), "A-", "A+" } end
 end
 
@@ -54,11 +48,6 @@ function M.event(ev)
         return true
     end
     if ev.type ~= "key" then return false end
-    if ev.key == "back" then
-        if state.get("app.reader.chrome") then state.set("app.reader.chrome", false)
-        else model.set_page(model.page.home) end
-        return true
-    end
     if (state.get("app.focus.area") or 0) == 1 then
         local selected = state.get("app.dock.selected") or 0
         if ev.key == "up" then state.set("app.focus.area", 0); return true end
@@ -66,6 +55,11 @@ function M.event(ev)
         if ev.key == "right" and selected < 2 then state.set("app.dock.selected", selected + 1); return true end
         if ev.key == "down" then return true end
         if ev.key == "ok" then dock_action(); return true end
+    end
+    if ev.key == "back" then
+        if state.get("app.reader.chrome") then state.set("app.reader.chrome", false)
+        else model.set_page(model.page.home) end
+        return true
     end
     if ev.key == "right" or ev.key == "down" then
         if ev.key == "down" and state.get("app.reader.chrome") then state.set("app.focus.area", 1)
@@ -78,4 +72,5 @@ function M.event(ev)
     end
     return false
 end
+
 return M

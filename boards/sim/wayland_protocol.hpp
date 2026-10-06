@@ -155,7 +155,7 @@ inline wl_surface* compositor_create_surface(wl_compositor* compositor) {
 inline wl_shm_pool* shm_create_pool(wl_shm* shm, int fd, std::int32_t size) {
   return reinterpret_cast<wl_shm_pool*>(wl_proxy_marshal_flags(
       reinterpret_cast<wl_proxy*>(shm), 0, &wl_shm_pool_interface,
-      wl_proxy_get_version(reinterpret_cast<wl_proxy*>(shm)), 0, fd, size, nullptr));
+      wl_proxy_get_version(reinterpret_cast<wl_proxy*>(shm)), 0, nullptr, fd, size));
 }
 
 inline wl_buffer* shm_pool_create_buffer(wl_shm_pool* pool, std::int32_t offset,
@@ -163,8 +163,8 @@ inline wl_buffer* shm_pool_create_buffer(wl_shm_pool* pool, std::int32_t offset,
                                          std::int32_t stride, std::uint32_t format) {
   return reinterpret_cast<wl_buffer*>(wl_proxy_marshal_flags(
       reinterpret_cast<wl_proxy*>(pool), 0, &wl_buffer_interface,
-      wl_proxy_get_version(reinterpret_cast<wl_proxy*>(pool)), 0, offset, width, height, stride,
-      format, nullptr));
+      wl_proxy_get_version(reinterpret_cast<wl_proxy*>(pool)), 0, nullptr, offset, width, height,
+      stride, format));
 }
 
 inline void shm_pool_destroy(wl_shm_pool* pool) {

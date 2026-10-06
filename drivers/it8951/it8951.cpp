@@ -253,8 +253,11 @@ esp_err_t write_image_4bpp(device_t* device, const uint8_t* pixels, uint16_t x, 
     return ESP_ERR_INVALID_ARG;
   }
 
-  esp_err_t error = esp_task_wdt_add_user(tag, &device->watchdog_user);
-  if (error != ESP_OK) device->watchdog_user = nullptr;
+  // The application task is already watched by ESP-IDF. Avoid allocating a
+  // watchdog user for every framebuffer update; this path runs during startup
+  // before the board's heap layout is stable and the upload loop is bounded.
+  esp_err_t error = ESP_OK;
+  device->watchdog_user = nullptr;
   error = set_target_memory_address(device);
   if (error == ESP_OK) {
     error = set_image_area(device, x, y, width, height);

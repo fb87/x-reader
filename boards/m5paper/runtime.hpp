@@ -230,8 +230,15 @@ inline bool input_poll(input::device& self, event::value& out) {
   if (drivers::gt911::read(&rt.touch, &touch_state) == ESP_OK && touch_state.ready) {
     const bool active = touch_state.count != 0;
     if (active) {
-      rt.touch_x = touch_state.points[0].x < width ? touch_state.points[0].x : width - 1;
-      rt.touch_y = touch_state.points[0].y < height ? touch_state.points[0].y : height - 1;
+      if (pins::panel_rotation == 1) {
+        rt.touch_x = touch_state.points[0].y < width ? touch_state.points[0].y : width - 1;
+        rt.touch_y = touch_state.points[0].x < pins::panel_width
+                         ? static_cast<std::uint16_t>(pins::panel_width - 1 - touch_state.points[0].x)
+                         : 0;
+      } else {
+        rt.touch_x = touch_state.points[0].x < width ? touch_state.points[0].x : width - 1;
+        rt.touch_y = touch_state.points[0].y < height ? touch_state.points[0].y : height - 1;
+      }
     }
     if (active != rt.touch_down) {
       rt.touch_down = active;
@@ -247,7 +254,7 @@ inline bool input_poll(input::device& self, event::value& out) {
     rt.rotary_right_at = now;
     rt.rotary_right_long = false;
   } else if (right && !rt.rotary_right_long && now - rt.rotary_right_at >= rotary_hold_ms) {
-    inject(rt, event::key(event::key_code::down, true));
+    inject(rt, event::key(event::key_code::back, true));
     rt.rotary_right_long = true;
   } else if (!right && rt.rotary_right && !rt.rotary_right_long) {
     inject(rt, event::key(event::key_code::down));
@@ -256,7 +263,7 @@ inline bool input_poll(input::device& self, event::value& out) {
     rt.rotary_left_at = now;
     rt.rotary_left_long = false;
   } else if (left && !rt.rotary_left_long && now - rt.rotary_left_at >= rotary_hold_ms) {
-    inject(rt, event::key(event::key_code::up, true));
+    inject(rt, event::key(event::key_code::back, true));
     rt.rotary_left_long = true;
   } else if (!left && rt.rotary_left && !rt.rotary_left_long) {
     inject(rt, event::key(event::key_code::up));
@@ -345,6 +352,7 @@ inline bool storage_inflate(storage::device&, const void* source, std::uint32_t 
 /** @brief Powers on, initializes the IT8951/GT911 drivers and rotary GPIOs. Does not mount SD. */
 inline bool init(runtime& self) {
   self = runtime{};
+  ESP_LOGI(log_tag, "initializing M5Paper runtime");
   self.framebuffer = static_cast<std::uint8_t*>(
       heap_caps_calloc(static_cast<std::size_t>(width / 2) * height, 1,
                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
@@ -440,8 +448,15 @@ inline bool mount(runtime& self, const char* root) {
       .disk_status_check_enable = false,
       .use_one_fat = false,
   };
-  return esp_vfs_fat_sdspi_mount(root, &host, &device_config, &mount_config, &self.sd_card) ==
-         ESP_OK;
+  const esp_err_t error =
+      esp_vfs_fat_sdspi_mount(root, &host, &device_config, &mount_config, &self.sd_card);
+  if (error == ESP_OK) {
+    self.storage.root = self.storage_root;
+    ESP_LOGI(log_tag, "SD mounted at %s", self.storage_root);
+  } else {
+    ESP_LOGE(log_tag, "SD mount failed: %s", esp_err_to_name(error));
+  }
+  return error == ESP_OK;
 }
 
 }  // namespace board::m5paper

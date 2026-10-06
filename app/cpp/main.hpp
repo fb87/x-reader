@@ -43,7 +43,11 @@ inline void render(context& self) {
     case page::sleep: pages::sleep::render(self); break;
   }
   auto& d = *self.shell.display;
-  display::update(d, {0, 0, d.width, d.height}, refresh::mode::quality);
+  const auto mode = self.next_refresh;
+  const auto rect = self.has_next_rect ? self.next_rect : geometry::rect{0, 0, d.width, d.height};
+  self.next_refresh = refresh::mode::fast;
+  self.has_next_rect = false;
+  display::update(d, rect, mode);
 }
 
 inline bool on_event(const event::value& value, void* user) {

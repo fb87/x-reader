@@ -2,6 +2,7 @@ local shell = assert(_G.shell)
 local api = shell.api
 local theme = require("shell.theme")
 local M = { gray = theme.gray }
+M.icon = { book = 1, folder = 2, settings = 4, close = 12, sd_card = 11 }
 local function args(kind, style)
   local s = theme.resolve(kind, style)
   return s.background, s.foreground, s.secondary, s.focus_background,
@@ -11,8 +12,11 @@ function M.status(title, style) api.status(title, args("status", style)) end
 function M.label(spec) api.text(spec.x, spec.y, spec.text or "", spec.scale or 2, spec.gray or M.gray.black) end
 function M.center(spec) api.center(spec.x, spec.y, spec.w, spec.h, spec.text or "", spec.scale or 2, spec.gray or M.gray.black) end
 function M.row(spec)
+  local background, foreground, secondary, focus_background, focus_foreground, divider, border_width, text_scale = args("row", spec.style)
   api.row(spec.x or 12, spec.y, spec.w or (api.width() - 24), spec.h or 68,
-          spec.primary or "", spec.secondary or "", spec.selected == true, args("row", spec.style))
+           spec.primary or "", spec.secondary or "", spec.selected == true,
+           background, foreground, secondary, focus_background, focus_foreground, divider,
+           border_width, text_scale, spec.icon or 0)
 end
 function M.button(spec)
   api.button(spec.x, spec.y, spec.w, spec.h, spec.text or "", spec.active == true,

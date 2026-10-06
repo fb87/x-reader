@@ -212,7 +212,8 @@ inline int l_api_row(api::state* vm) {
   const char* secondary = lib.to_string(vm, 6, nullptr);
   if (display_of(h) != nullptr && primary != nullptr)
     widget::row(*display_of(h), {integer_arg(vm, lib, 1), integer_arg(vm, lib, 2), integer_arg(vm, lib, 3), integer_arg(vm, lib, 4)},
-            primary, secondary, lib.to_boolean(vm, 7) != 0, widget_style_args(vm, lib, 8));
+            primary, secondary, lib.to_boolean(vm, 7) != 0, widget_style_args(vm, lib, 8),
+            integer_arg(vm, lib, 16));
   return 0;
 }
 
@@ -381,6 +382,80 @@ inline int l_reader_adjust_font(api::state* vm) {
   return 0;
 }
 
+inline geometry::rect lua_reader_area(const host& h) {
+  const bool chrome = state::get(*h.app->memory, "app.reader.chrome", false);
+  const int top = chrome ? 60 : 28;
+  const int bottom = chrome ? 88 : 36;
+  return {28, top, h.app->shell.display->width - 56,
+          h.app->shell.display->height - top - bottom - 24};
+}
+
+inline int lua_reader_scale(const host& h) {
+  return std::min(4, 2 + static_cast<int>(state::get(
+                            *h.app->memory, "reader.settings.font_size", std::int64_t{1})));
+}
+
+inline int l_reader_line_count(api::state* vm) {
+  auto& h = bound(vm);
+  const auto area = lua_reader_area(h);
+  ::reader::paginate(h.app->reader.current, area, lua_reader_scale(h));
+  h.lib->push_integer(vm, h.app->reader.current.lines_per_page);
+  return 1;
+}
+
+inline int l_reader_line(api::state* vm) {
+  auto& h = bound(vm);
+  const int line = integer_arg(vm, *h.lib, 1, -1);
+  if (line < 0) {
+    h.lib->push_string(vm, "");
+    return 1;
+  }
+  const auto area = lua_reader_area(h);
+  const int scale = lua_reader_scale(h);
+  ::reader::paginate(h.app->reader.current, area, scale);
+  if (line >= h.app->reader.current.lines_per_page) {
+    h.lib->push_string(vm, "");
+    return 1;
+  }
+  const char* body = ::reader::current_text(h.app->reader.current);
+  std::size_t offset = h.app->reader.current.page_start[h.app->reader.current.page];
+  for (int current = 0; current < line; ++current) {
+    std::size_t next = 0;
+    ::reader::line_span(body + offset, area.w, scale, next);
+    offset += next;
+  }
+  std::size_t next = 0;
+  const std::size_t length = ::reader::line_span(body + offset, area.w, scale, next);
+  char value[256]{};
+  std::memcpy(value, body + offset, std::min(length, sizeof(value) - 1));
+  h.lib->push_string(vm, value);
+  return 1;
+}
+
+inline int l_reader_page(api::state* vm) {
+  auto& h = bound(vm);
+  h.lib->push_integer(vm, h.app->reader.current.page);
+  return 1;
+}
+
+inline int l_reader_page_count(api::state* vm) {
+  auto& h = bound(vm);
+  h.lib->push_integer(vm, h.app->reader.current.page_count);
+  return 1;
+}
+
+inline int l_reader_progress(api::state* vm) {
+  auto& h = bound(vm);
+  h.lib->push_integer(vm, std::max(0, ::reader::progress_percent(h.app->reader.current)));
+  return 1;
+}
+
+inline int l_reader_chapter(api::state* vm) {
+  auto& h = bound(vm);
+  h.lib->push_string(vm, ::reader::current_chapter_title(h.app->reader.current));
+  return 1;
+}
+
 struct wifi_scan_context {
   app::context* app = nullptr;
   int count = 0;
@@ -471,10 +546,13 @@ inline void register_shell(runtime& self) {
     set_module(self, "library", 5, names, callbacks);
   }
   {
-    const char* names[] = {"open_selected", "next", "previous", "adjust_font"};
-    const api::c_function callbacks[] = {l_reader_open_selected, l_reader_next,
-                                         l_reader_previous, l_reader_adjust_font};
-    set_module(self, "reader", 4, names, callbacks);
+    const char* names[] = {"open_selected", "next", "previous", "adjust_font", "line_count",
+                           "line", "page", "page_count", "progress", "chapter"};
+    const api::c_function callbacks[] = {
+        l_reader_open_selected, l_reader_next, l_reader_previous, l_reader_adjust_font,
+        l_reader_line_count,   l_reader_line,  l_reader_page,     l_reader_page_count,
+        l_reader_progress,     l_reader_chapter};
+    set_module(self, "reader", 10, names, callbacks);
   }
 
   self.api.set_global(self.vm, "shell");

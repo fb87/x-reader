@@ -37,7 +37,9 @@ esp_err_t power_on() {
   error = gpio_set_level(pins::epd_power_pin, 1);
   if (error != ESP_OK) return error;
 
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  // Keep startup below the ESP-IDF main-task watchdog window; the panel and
+  // touch drivers perform their own settling delays during initialization.
+  vTaskDelay(pdMS_TO_TICKS(100));
   ESP_LOGI(tag, "M5Paper power rails enabled");
   return ESP_OK;
 }

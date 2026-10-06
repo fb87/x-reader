@@ -2,12 +2,77 @@
 
 #include "core/canvas.hpp"
 #include "core/unicode_glyphs.hpp"
+#include "xr/xr_text.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 
 namespace text {
+
+extern "C" {
+extern const xr_font_t xr_font_alegreya_14;
+extern const xr_font_t xr_font_alegreya_17;
+extern const xr_font_t xr_font_alegreya_20;
+extern const xr_font_t xr_font_alegreya_24;
+}
+
+inline const xr_font_t& rich_font(int scale) {
+  if (scale <= 1) return xr_font_alegreya_14;
+  if (scale == 2) return xr_font_alegreya_17;
+  if (scale == 3) return xr_font_alegreya_20;
+  return xr_font_alegreya_24;
+}
+
+inline std::uint32_t next_codepoint(const char*& cursor);
+
+inline const xr_glyph_t* rich_glyph(const xr_font_t& font, std::uint32_t codepoint) {
+  if (font.codepoints != nullptr) {
+    for (std::uint16_t i = 0; i < font.glyph_count; ++i)
+      if (font.codepoints[i] == codepoint) return &font.glyphs[i];
+    return nullptr;
+  }
+  if (codepoint < font.first || codepoint > font.last) return nullptr;
+  return &font.glyphs[codepoint - font.first];
+}
+
+inline int rich_width(const char* value, int scale) {
+  if (value == nullptr) return 0;
+  const auto& font = rich_font(scale);
+  int result = 0;
+  const char* cursor = value;
+  while (*cursor != '\0') {
+    const auto codepoint = next_codepoint(cursor);
+    const auto* glyph = rich_glyph(font, codepoint);
+    result += glyph != nullptr ? glyph->advance : font.ascent / 2;
+  }
+  return result;
+}
+
+inline void draw_rich(display::device& display, int x, int y, const char* value, int scale,
+                      canvas::gray color) {
+  if (value == nullptr) return;
+  const auto& font = rich_font(scale);
+  const int baseline = y + font.ascent;
+  const char* cursor = value;
+  while (*cursor != '\0') {
+    const auto codepoint = next_codepoint(cursor);
+    const auto* glyph = rich_glyph(font, codepoint);
+    if (glyph == nullptr) {
+      x += font.ascent / 2;
+      continue;
+    }
+    const auto* bitmap = font.bitmap + glyph->offset;
+    for (int row = 0; row < glyph->h; ++row) {
+      for (int column = 0; column < glyph->w; ++column) {
+        if (bitmap[row * glyph->w + column] >= 128)
+          canvas::fill(display, {x + glyph->x_off + column, baseline + glyph->y_off + row, 1, 1},
+                       color);
+      }
+    }
+    x += glyph->advance;
+  }
+}
 
 /** @brief Compact 5x7 bitmap glyph for printable ASCII characters. */
 struct glyph {
@@ -129,13 +194,15 @@ inline void draw_codepoint(display::device& display, int x, int y, std::uint32_t
 /** @brief Returns the rendered width of a UTF-8 string at the requested scale. */
 inline int width(const char* value, int scale = 2) {
   if (value == nullptr) return 0;
+  return rich_width(value, scale);
+  /*
   int count = 0;
   const char* cursor = value;
   while (*cursor != '\0') {
     (void)next_codepoint(cursor);
     ++count;
   }
-  return count == 0 ? 0 : (count * 6 - 1) * scale;
+  return count == 0 ? 0 : (count * 6 - 1) * scale; */
 }
 
 /** @brief Copies a string into a bounded single-line buffer, adding an ellipsis when needed. */
@@ -177,12 +244,15 @@ inline int fit(const char* value, int max_width, int scale, char* output, std::s
 /** @brief Draws a NUL-terminated UTF-8 bitmap string. */
 inline void draw(display::device& display, int x, int y, const char* value, int scale = 2,
                  canvas::gray color = canvas::gray::black) {
+  draw_rich(display, x, y, value, scale, color);
+  return;
+  /*
   if (value == nullptr) return;
   const char* cursor = value;
   while (*cursor != '\0') {
     draw_codepoint(display, x, y, next_codepoint(cursor), scale, color);
     x += 6 * scale;
-  }
+  } */
 }
 
 /** @brief Draws one line clipped and ellipsized to a horizontal width. */
@@ -195,7 +265,7 @@ inline void draw_in(display::device& display, int x, int y, int max_width, const
 
 /** @brief Returns the common bitmap height used by every UTF-8 glyph. */
 inline int height(const char* value, int scale = 2) {
-  return value == nullptr || value[0] == '\0' ? 0 : 7 * scale;
+  return value == nullptr || value[0] == '\0' ? 0 : rich_font(scale).line_height;
 }
 
 /** @brief Draws text centered in a rectangle. */

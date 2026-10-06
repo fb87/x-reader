@@ -46,9 +46,9 @@ inline void render(context& self) {
 
   const int bottom = chrome ? 88 : 36;
   if (state::get(*self.memory, "reader.settings.show_progress", true)) {
-    const int progress = static_cast<int>(::reader::progress_percent(self.reader.current));
-    canvas::border(d, {28, d.height - bottom, d.width - 56, 10}, 1, canvas::gray::light);
-    canvas::fill(d, {29, d.height - bottom + 1, (d.width - 58) * progress / 100, 8},
+    const int progress = std::max(0, static_cast<int>(::reader::progress_percent(self.reader.current)));
+    canvas::hline(d, 28, d.height - bottom, d.width - 56, canvas::gray::light);
+    canvas::fill(d, {28, d.height - bottom - 1, (d.width - 56) * progress / 100, 3},
                  canvas::gray::dark);
   }
   char pages[32]{};
@@ -80,8 +80,36 @@ inline bool event(context& self, const event::value& value) {
     return true;
   }
   if (value.event_type != event::type::key) return false;
+  if (static_cast<focus_area>(state::get(*self.memory, "app.focus.area",
+                                         static_cast<std::int64_t>(focus_area::content))) ==
+      focus_area::dock) {
+    const auto selected = state::get(*self.memory, "app.dock.selected", std::int64_t{0});
+    if (value.key == event::key_code::up) {
+      state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content));
+      ++self.invalidations;
+      return true;
+    }
+    if (value.key == event::key_code::left || value.key == event::key_code::right) {
+      auto next = selected + (value.key == event::key_code::left ? -1 : 1);
+      next = std::max<std::int64_t>(0, std::min<std::int64_t>(2, next));
+      state::set(*self.memory, "app.dock.selected", next);
+      ++self.invalidations;
+      return true;
+    }
+    if (value.key == event::key_code::down) return true;
+    if (value.key == event::key_code::ok) {
+      if (selected == 0) {
+        routes::set_page(self, page::home);
+      } else {
+        ::reader::adjust_font(*self.memory, selected == 1 ? -1 : 1);
+        ++self.invalidations;
+      }
+      return true;
+    }
+  }
   if (value.key == event::key_code::back) {
     routes::set_page(self, page::home);
+    ++self.invalidations;
     return true;
   }
   if (value.key == event::key_code::right || value.key == event::key_code::down) {
