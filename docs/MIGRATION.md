@@ -1,5 +1,9 @@
 # Migration Status
 
+The next migration phase is governed by `docs/ZIP_ADOPTION_PLAN.md` and
+`docs/GUI_PARITY.md`. The ZIP bundle is an architectural source, while this tree remains the
+behavior, visual, performance, and M5Paper hardware reference until every parity gate passes.
+
 Tracks `docs/DESIGN.md`'s refactor from the old C99 `dev/minimal` tree to the restricted-C++20
 tree, on branch `refactor/cpp-design`. This document favors honesty over completeness: a step is
 listed as done only once a Make target actually exercises it, and the hardware phase is never
