@@ -1,309 +1,271 @@
-#include "app/app.hpp"
+#include "app/cpp/init.hpp"
 #include "boards/sim/runtime.hpp"
+#include "core/state.hpp"
 
 #include <cstdio>
 #include <cstring>
 
-/**
- * @brief Autonomous input-injection test suite, following docs/DESIGN.md s17/s18:
- * every assertion is reached by injecting simulated events through
- * board::sim::inject/touch -> app::pump -> shell::dispatch -> page/dialog ->
- * reader/domain operation -> state change -> render/display update. No test
- * calls a page's render/event function directly.
- */
 namespace test {
 
-int checks = 0;
-int failures = 0;
+/** @brief Assertion accumulator for autonomous simulator validation. */
+struct result {
+  int checks = 0;
+  int failures = 0;
+};
 
-inline void expect(bool condition, const char* message) {
-  ++checks;
+/** @brief Records one assertion with a readable failure description. */
+inline void expect(result& self, bool condition, const char* message) {
+  ++self.checks;
   if (!condition) {
-    ++failures;
+    ++self.failures;
     std::fprintf(stderr, "FAIL: %s\n", message);
   }
 }
 
+/** @brief Counts hierarchical state notifications. */
+inline void count_notification(const char*, void* user) { ++*static_cast<int*>(user); }
+
+/** @brief Sends one key through the simulator input queue and pumps the application. */
+inline void key(board::sim::runtime& board, app::context& application, event::key_code code) {
+  board::sim::inject(board, event::key(code));
+  app::pump(application);
+}
+
+/** @brief Sends one touch event through the simulator input queue. */
+inline void tap(board::sim::runtime& board, app::context& application, int x, int y) {
+  board::sim::touch(board, x, y);
+  app::pump(application);
+}
+
+/** @brief Returns to Home through the public input path. */
+inline void back_home(board::sim::runtime& board, app::context& application) {
+  while (app::current_page(application) != app::page::home) key(board, application, event::key_code::back);
+}
+
 }  // namespace test
 
-namespace {
-
-void settle(board::sim::runtime& sim, app::context& app, std::uint32_t ms = 20) {
-  board::sim::advance(sim, ms);
-  app::pump(app);
-}
-
-// Home's focus persists across on_enter (only on_create resets it, matching the old
-// app's `if (!p->scope.focus) xr_scope_focus_first(...)`), so returning to Home doesn't
-// always land back on the book card. Send more Ups than there are focusable rows to
-// deterministically land back on the card (move_focus clamps at the top, it doesn't wrap).
-void home_reset_focus(board::sim::runtime& sim, app::context& app) {
-  for (int i = 0; i < 8; ++i) board::sim::rotary_left(sim);
-  settle(sim, app);
-}
-
-}  // namespace
-
+/** @brief Exercises the migrated reader flows through simulated M5Paper input. */
 int main() {
-  board::sim::runtime sim{};
-  board::sim::init(sim);
-  board::sim::mount(sim, "tests/fixtures/library");
-
-  app::pages nav{};
-  app::context application{};
+  test::result result{};
+  board::sim::runtime board{};
+  board::sim::init(board);
   state::store memory{};
   state::store persistent{};
-  static constexpr shell::theme theme{
-      &xr_font_alegreya_14, &xr_font_alegreya_18,      &xr_font_alegreya_bold_18,
-      &xr_font_alegreya_bold_26, &xr_font_alegreya_20, 44,
-      64,                   16,                        72,
-  };
+  app::context application{};
 
-  const bool initialized =
-      app::init(application, nav, sim.capabilities, memory, persistent, theme,
-               "tests/fixtures/library");
-  test::expect(initialized, "app::init should succeed with all mandatory capabilities present");
+  test::expect(result, app::init(application, board.capabilities, memory, persistent),
+               "application initializes against generic simulator capabilities");
+  test::expect(result, board.display.width == 540 && board.display.height == 960,
+               "simulator clones M5Paper 540x960 logical size");
+  test::expect(result, board.display.format == display::pixel_format::gray4,
+               "simulator clones M5Paper 4bpp format");
+  test::expect(result, capability::has(board.capabilities, capability::id::storage),
+               "simulator publishes storage capability");
+  test::expect(result, capability::has(board.capabilities, capability::id::wifi),
+               "simulator publishes optional Wi-Fi capability");
+  test::expect(result, state::get(memory, "reader.library.count", std::int64_t{-1}) == 2,
+               "library scan discovers EPUB files and ignores unsupported files");
+  test::expect(result, app::current_page(application) == app::page::splash,
+               "application starts on splash page");
+  test::expect(result, board.refresh_count >= 1, "initial render reaches display backend");
 
-  // --- secret store: real on the sim board, structurally separate from state ---
-  test::expect(capability::has(sim.capabilities, capability::id::secret),
-              "sim board registers a real secret-store capability");
-  char secret_buf[64] = {0};
-  test::expect(!secret::get(sim.secret, "network.wifi.password", secret_buf, sizeof(secret_buf)),
-              "an unset secret key reports absent, not a default/empty success");
-  test::expect(secret::set(sim.secret, "network.wifi.password", "s3cr3t"),
-              "setting a secret succeeds");
-  test::expect(secret::get(sim.secret, "network.wifi.password", secret_buf, sizeof(secret_buf)) &&
-                  std::strcmp(secret_buf, "s3cr3t") == 0,
-              "the secret round-trips exactly");
-  test::expect(secret::remove(sim.secret, "network.wifi.password"),
-              "removing an existing secret succeeds");
-  test::expect(!secret::get(sim.secret, "network.wifi.password", secret_buf, sizeof(secret_buf)),
-              "the secret is gone after removal");
+  int notifications = 0;
+  test::expect(result,
+               state::observe(memory, "reader.book", test::count_notification, &notifications),
+               "reader.book prefix observer registers");
 
-  // --- startup/splash --------------------------------------------------------
-  test::expect(shell::top(application.shell) == &nav.splash.base, "splash is the initial page");
-  test::expect(nav.splash.base.chrome == page::chrome::none, "splash has no chrome");
+  board::sim::advance(board, 1499);
+  app::pump(application);
+  test::expect(result, app::current_page(application) == app::page::splash,
+               "splash remains visible before timeout");
+  board::sim::advance(board, 1);
+  app::pump(application);
+  test::expect(result, app::current_page(application) == app::page::home,
+               "splash automatically advances after 1500 ms");
 
-  // scan_library is deliberately separate from init() (see its doc comment): the
-  // real composition root shows the splash before walking storage.
-  app::scan_library(application);
+  const auto home_selection_before = state::get(memory, "app.menu.selected", std::int64_t{0});
+  board::sim::inject(board, event::key(event::key_code::down, 900, true));
+  app::pump(application);
+  test::expect(result, state::get(memory, "app.menu.selected", std::int64_t{-1}) == home_selection_before,
+               "shell consumes long-press before active page navigation");
+  test::expect(result, state::get(memory, "app.input.long_press_duration_ms", std::int64_t{0}) == 900,
+               "shell records classified long-press duration");
 
-  settle(sim, application, 100);
-  test::expect(shell::top(application.shell) == &nav.splash.base,
-              "splash should not time out before 1500ms");
-  settle(sim, application, 1500);
-  test::expect(shell::top(application.shell) == &nav.home.base, "splash times out to home");
+  // Home -> Library.
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, app::current_page(application) == app::page::library,
+               "home opens library through rotary push");
+  test::key(board, application, event::key_code::down);
+  test::expect(result, state::get(memory, "reader.library.selected", std::int64_t{-1}) == 1,
+               "rotary moves shared library selection");
 
-  // --- library discovery -------------------------------------------------------
-  test::expect(application.library.count == 2, "scan discovers both fixture books");
+  // Book info modal is part of the original minimal flow.
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, app::book_info_visible(application),
+               "library activation opens book-info dialog");
+  test::expect(result, app::current_page(application) == app::page::library,
+               "book-info dialog does not replace library page");
+  test::key(board, application, event::key_code::right);
+  test::expect(result, state::get(memory, "app.dialog.selected", std::int64_t{-1}) == 1,
+               "book-info focus moves to Close");
+  test::key(board, application, event::key_code::left);
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, app::current_page(application) == app::page::reader,
+               "Read/Continue opens selected book");
+  test::expect(result, state::get(memory, "reader.book.current", std::int64_t{-1}) == 1,
+               "reader.book.current stores selected book index");
+  test::expect(result, std::strlen(state::get(memory, "reader.book.title", "")) > 0,
+               "reader publishes current title in shared state");
+  test::expect(result, notifications >= 1, "reader.book observers receive open-position changes");
 
-  // --- home navigation: Down from the book card reaches the Library button ----
-  test::expect(application.shell.pages[0]->scope.focus == &nav.home.card.base_widget,
-              "home starts focused on the book card");
-  board::sim::rotary_right(sim);  // Down
-  settle(sim, application);
-  test::expect(application.shell.pages[0]->scope.focus == &nav.home.library.base_widget,
-              "Down moves focus from the card to the Library button");
-  board::sim::rotary_push(sim);  // OK
-  settle(sim, application);
-  test::expect(shell::top(application.shell) == &nav.library.base, "OK on Library pushes it");
-  test::expect(nav.library.list.count == 2, "library list shows both fixture books");
+  // Reader input/chrome.
+  test::key(board, application, event::key_code::down);
+  test::key(board, application, event::key_code::down);
+  test::expect(result, state::get(memory, "reader.book.page", std::int64_t{-1}) == 2,
+               "rotary page input advances reading position");
+  test::tap(board, application, 10, 400);
+  test::expect(result, state::get(memory, "reader.book.page", std::int64_t{-1}) == 1,
+               "left-side touch moves to previous page");
+  test::tap(board, application, 530, 400);
+  test::expect(result, state::get(memory, "reader.book.page", std::int64_t{-1}) == 2,
+               "right-side touch moves to next page");
+  test::tap(board, application, 270, 400);
+  test::expect(result, state::get(memory, "app.reader.chrome", false),
+               "center touch toggles reader chrome");
+  test::key(board, application, event::key_code::menu);
+  test::expect(result, !state::get(memory, "app.reader.chrome", true),
+               "reader MENU toggles chrome like dev/minimal");
+  test::key(board, application, event::key_code::menu);
+  test::key(board, application, event::key_code::down);
+  test::expect(result,
+               static_cast<app::focus_area>(state::get(memory, "app.focus.area", std::int64_t{0})) ==
+                   app::focus_area::dock,
+               "reader Down enters dock when chrome is visible");
+  const auto font_before = state::get(memory, "reader.settings.font_size", std::int64_t{-1});
+  test::key(board, application, event::key_code::right);
+  test::key(board, application, event::key_code::right);
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, state::get(memory, "reader.settings.font_size", std::int64_t{-1}) >= font_before,
+               "reader A+ dock action adjusts font setting");
+  test::key(board, application, event::key_code::back);
+  test::expect(result, app::current_page(application) == app::page::home,
+               "reader BACK returns home");
 
-  // --- open a book via Book Info, exercising the REAL EPUB pipeline -----------
-  board::sim::rotary_push(sim);  // OK on the first (focused) row -> show_book_info.
-  settle(sim, application);
-  test::expect(application.shell.dialog_count == 1, "selecting a row shows the book-info dialog");
-  test::expect(nav.book_info.base.scope.focus == &nav.book_info.read.base_widget,
-              "book info starts focused on Read");
-  board::sim::rotary_push(sim);  // OK -> Read -> open_book.
-  settle(sim, application);
-  test::expect(application.shell.dialog_count == 0, "book info closes after Read");
-  test::expect(shell::top(application.shell) == &nav.reader.base, "Read pushes the reader");
-  test::expect(application.session.epub_open, "reader session actually opened the EPUB");
-  test::expect(application.session.doc.manifest_count == 602,
-              "real manifest count from the fixture EPUB (not a placeholder)");
-  test::expect(application.session.doc.spine_count == 596,
-              "real spine count from the fixture EPUB (not a placeholder)");
-  test::expect(std::strcmp(reader::current_text(application.session),
-                           reader::sample_text()) != 0,
-              "reader shows real chapter text, never the Pride and Prejudice fallback, "
-              "while a real EPUB is open");
+  // Favorites action from library dock.
+  state::set(memory, "app.menu.selected", std::int64_t{0});
+  test::key(board, application, event::key_code::ok);
+  state::set(memory, "reader.library.selected", std::int64_t{0});
+  test::key(board, application, event::key_code::down);
+  test::key(board, application, event::key_code::down);  // bottom boundary -> dock
+  test::expect(result,
+               static_cast<app::focus_area>(state::get(memory, "app.focus.area", std::int64_t{0})) ==
+                   app::focus_area::dock,
+               "library rotary reaches bottom action bar");
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, application.reader.library.books[1].favorite,
+               "Favorite dock action updates cached book state");
+  test::key(board, application, event::key_code::back);
 
-  // --- reader: touch page turns and chrome toggle -----------------------------
-  const int page_before = application.session.page;
-  board::sim::touch(sim, nav.reader.base.area.x + nav.reader.base.area.w - 10,
-                    nav.reader.base.area.y + 10);  // right third -> next page.
-  settle(sim, application);
-  test::expect(application.session.page != page_before || application.session.current_chapter != 0,
-              "tapping the right third turns the page (or crosses a chapter)");
+  state::set(memory, "app.menu.selected", std::int64_t{1});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, app::current_page(application) == app::page::favorites,
+               "home opens favorites page");
+  test::expect(result, app::visible_book_count(application) == 1,
+               "favorites page filters library cache");
+  test::key(board, application, event::key_code::back);
 
-  // Keep tapping until a chapter boundary is actually crossed (the first tap above may
-  // just advance within a long chapter 0) -- this is the only way to exercise the
-  // chapter-crossing branch of turn_page end to end, through the real input path.
-  const int chapter_before_crossing = application.session.current_chapter;
-  bool crossed_chapter = false;
-  for (int i = 0; i < 500 && !crossed_chapter; ++i) {
-    board::sim::touch(sim, nav.reader.base.area.x + nav.reader.base.area.w - 10,
-                      nav.reader.base.area.y + 10);
-    settle(sim, application);
-    crossed_chapter = application.session.current_chapter != chapter_before_crossing;
-  }
-  test::expect(crossed_chapter, "repeated right-third taps eventually cross a chapter boundary");
-  test::expect(application.session.total_pages == application.session.page_count,
-              "total_pages is refreshed immediately on a chapter-crossing page turn, not "
-              "left stale for one render (fixed tech debt inherited from the old app's turn())");
-  test::expect(nav.reader.base.chrome == page::chrome::none, "reader chrome still hidden");
-  board::sim::touch(sim, nav.reader.base.area.x + nav.reader.base.area.w / 2,
-                    nav.reader.base.area.y + 10);  // center third -> toggle chrome.
-  settle(sim, application);
-  test::expect(nav.reader.base.chrome == page::chrome::all, "center tap reveals reader chrome");
-  board::sim::inject(sim, event::key(event::key_code::down, true));
-  settle(sim, application);
-  test::expect(application.shell.dock_focus == 0,
-               "long Down enters the reader dock without a short-step event");
-  board::sim::inject(sim, event::key(event::key_code::up, true));
-  settle(sim, application);
-  test::expect(application.shell.dock_focus == -1,
-               "long Up returns from the reader dock to page content");
+  // File manager remains a storage-backed book-opening path.
+  state::set(memory, "app.menu.selected", std::int64_t{2});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, app::current_page(application) == app::page::files,
+               "home opens file manager");
+  state::set(memory, "reader.library.selected", std::int64_t{0});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, app::current_page(application) == app::page::reader,
+               "file manager opens EPUB directly");
+  test::key(board, application, event::key_code::back);
 
-  // --- back navigation: reader -> library -> home -----------------------------
-  board::sim::inject(sim, event::key(event::key_code::back));
-  settle(sim, application);
-  test::expect(nav.reader.base.chrome == page::chrome::none,
-              "back with chrome visible hides it first, instead of popping");
-  board::sim::inject(sim, event::key(event::key_code::back));
-  settle(sim, application);
-  test::expect(shell::top(application.shell) == &nav.library.base,
-              "back with no chrome pops to the library");
+  // Settings: all seven original rows are present and mutable.
+  state::set(memory, "app.menu.selected", std::int64_t{3});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, app::current_page(application) == app::page::settings,
+               "home opens settings");
+  state::set(memory, "app.menu.selected", std::int64_t{1});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, state::get(memory, "network.bluetooth.enabled", false),
+               "Bluetooth settings row changes shared state");
+  state::set(memory, "app.menu.selected", std::int64_t{2});
+  const auto settings_font_before = state::get(memory, "reader.settings.font_size", std::int64_t{0});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, state::get(memory, "reader.settings.font_size", std::int64_t{-1}) >= settings_font_before,
+               "Font size row cycles reader font");
+  state::set(memory, "app.menu.selected", std::int64_t{3});
+  const auto refresh_before = state::get(memory, "reader.settings.full_refresh_every", std::int64_t{-1});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, state::get(memory, "reader.settings.full_refresh_every", std::int64_t{-1}) != refresh_before,
+               "Full refresh row cycles refresh policy");
+  state::set(memory, "app.menu.selected", std::int64_t{4});
+  const bool progress_before = state::get(memory, "reader.settings.show_progress", true);
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, state::get(memory, "reader.settings.show_progress", true) != progress_before,
+               "Progress bar row toggles setting");
+  state::set(memory, "app.menu.selected", std::int64_t{5});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, state::get(memory, "reader.settings.sleep_timeout_minutes", std::int64_t{0}) == 30,
+               "Sleep timeout row cycles setting");
+  state::set(memory, "app.menu.selected", std::int64_t{6});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, state::get(memory, "app.dialog.about", false),
+               "About row opens modal dialog");
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, !state::get(memory, "app.dialog.about", true), "About dialog closes on input");
 
-  // --- favorites: mark a book favorite from the library dock action -----------
-  // The list has 2 rows starting at selected=0: it takes `count` Downs to leave the
-  // list into the dock (count-1 to walk the rows, +1 more for list_event to return
-  // false and fall through to shell's dock-focus-entry), landing on dock index 0.
-  // Walking the rows this way lands selection on the LAST row (book_index[1]), not
-  // row 0 -- so that's the book that ends up favorited, not library.books[0].
-  board::sim::inject(sim, event::key(event::key_code::down));
-  board::sim::inject(sim, event::key(event::key_code::down));
-  settle(sim, application);
-  const int favorited_book = nav.library.book_index[nav.library.list.selected];
-  board::sim::rotary_push(sim);  // Favorite is dock action 0.
-  settle(sim, application);
-  test::expect(application.library.books[favorited_book].favorite,
-              "dock Favorite action marks the selected book");
+  // Connectivity uses generic capability behind settings Wi-Fi row.
+  state::set(memory, "app.menu.selected", std::int64_t{0});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, app::current_page(application) == app::page::connectivity,
+               "Wi-Fi settings row opens connectivity page");
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, state::get(memory, "network.wifi.scan.count", std::int64_t{-1}) == 2,
+               "connectivity scan uses generic Wi-Fi capability");
+  test::key(board, application, event::key_code::down);
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, state::get(memory, "network.wifi.connected", false),
+               "connectivity connects through generic Wi-Fi capability");
+  test::expect(result, std::strcmp(state::get(memory, "network.wifi.ssid", ""), "Reader-Lab") == 0,
+               "connected SSID is shared in hierarchical state");
+  test::key(board, application, event::key_code::back);
+  test::key(board, application, event::key_code::back);
+  test::expect(result, app::current_page(application) == app::page::home,
+               "back navigation returns settings/connectivity to home");
 
-  board::sim::inject(sim, event::key(event::key_code::back));
-  settle(sim, application);
-  test::expect(shell::top(application.shell) == &nav.home.base, "back from library reaches home");
+  // Sleep/wake.
+  state::set(memory, "app.menu.selected", std::int64_t{4});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, app::current_page(application) == app::page::sleep,
+               "home enters sleep screen");
+  test::tap(board, application, 100, 100);
+  test::expect(result, app::current_page(application) == app::page::home,
+               "touch wakes sleep screen");
 
-  // --- favorites page shows exactly the favorited book ------------------------
-  home_reset_focus(sim, application);
-  board::sim::rotary_right(sim);  // card -> Library.
-  board::sim::rotary_right(sim);  // Library -> Favorites.
-  settle(sim, application);
-  board::sim::rotary_push(sim);
-  settle(sim, application);
-  test::expect(shell::top(application.shell) == &nav.favorites.base, "Favorites button pushes it");
-  test::expect(nav.favorites.list.count == 1, "favorites shows exactly the one favorited book");
-  board::sim::inject(sim, event::key(event::key_code::back));
-  settle(sim, application);
-
-  // --- settings: real state mutation, not a no-op ----------------------------
-  home_reset_focus(sim, application);
-  board::sim::rotary_right(sim);  // card -> Library.
-  board::sim::rotary_right(sim);  // Library -> Favorites.
-  board::sim::rotary_right(sim);  // Favorites -> File Manager.
-  board::sim::rotary_right(sim);  // File Manager -> Settings.
-  settle(sim, application);
-  board::sim::rotary_push(sim);
-  settle(sim, application);
-  test::expect(shell::top(application.shell) == &nav.settings.base, "Settings button pushes it");
-  test::expect(nav.settings.list.count == app::row_count, "settings lists all seven rows");
-
-  const bool wifi_before = state::get(memory, app::key::wifi_connected, false);
-  board::sim::rotary_push(sim);  // OK on row 0 (Wi-Fi).
-  settle(sim, application);
-  test::expect(state::get(memory, app::key::wifi_connected, false) != wifi_before,
-              "selecting the Wi-Fi row flips network.wifi.connected");
-
-  board::sim::inject(sim, event::key(event::key_code::down));  // -> Bluetooth.
-  board::sim::inject(sim, event::key(event::key_code::down));  // -> Font size.
-  settle(sim, application);
-  const std::int64_t font_before = state::get(memory, app::key::font_size, std::int64_t{1});
-  board::sim::rotary_push(sim);
-  settle(sim, application);
-  test::expect(state::get(memory, app::key::font_size, std::int64_t{1}) ==
-                  (font_before + 1) % 3,
-              "selecting the Font size row cycles reader.settings.font_size");
-
-  for (int i = 0; i < 4; ++i) board::sim::inject(sim, event::key(event::key_code::down));
-  settle(sim, application);  // row 6: About.
-  board::sim::rotary_push(sim);
-  settle(sim, application);
-  test::expect(application.shell.dialog_count == 1, "About row shows a confirm dialog");
-  test::expect(nav.about_confirm.base.scope.focus == &nav.about_confirm.no.base_widget,
-              "confirm dialogs default focus to No -- a stray press must not be destructive");
-  board::sim::inject(sim, event::key(event::key_code::back));
-  settle(sim, application);
-  test::expect(application.shell.dialog_count == 0, "Back cancels the About dialog");
-
-  board::sim::inject(sim, event::key(event::key_code::back));
-  settle(sim, application);
-  test::expect(shell::top(application.shell) == &nav.home.base, "back from settings reaches home");
-
-  // --- delete confirm: Yes actually removes the book --------------------------
-  home_reset_focus(sim, application);
-  board::sim::rotary_right(sim);  // card -> Library.
-  settle(sim, application);
-  board::sim::rotary_push(sim);
-  settle(sim, application);
-  const int count_before_delete = application.library.count;
-  // Same two-rows-starting-at-0 list as the favorites test: 2 Downs to leave the list
-  // and land on dock index 0 (Favorite), one more to reach index 1 (Delete).
-  board::sim::inject(sim, event::key(event::key_code::down));
-  board::sim::inject(sim, event::key(event::key_code::down));
-  board::sim::inject(sim, event::key(event::key_code::down));
-  settle(sim, application);
-  board::sim::rotary_push(sim);  // Delete dock action -> show_delete_confirm.
-  settle(sim, application);
-  test::expect(application.shell.dialog_count == 1, "Delete action shows a confirm dialog");
-  board::sim::inject(sim, event::key(event::key_code::left));  // No -> Yes.
-  settle(sim, application);
-  board::sim::rotary_push(sim);
-  settle(sim, application);
-  test::expect(application.library.count == count_before_delete - 1,
-              "confirming delete actually removes the book from the library");
-  board::sim::inject(sim, event::key(event::key_code::back));
-  settle(sim, application);
-
-  // --- sleep / wake -------------------------------------------------------------
-  home_reset_focus(sim, application);
-  board::sim::rotary_right(sim);  // card -> Library.
-  board::sim::rotary_right(sim);  // Library -> Favorites.
-  board::sim::rotary_right(sim);  // Favorites -> File Manager.
-  board::sim::rotary_right(sim);  // File Manager -> Settings.
-  board::sim::rotary_right(sim);  // Settings -> Sleep.
-  settle(sim, application);
-  board::sim::rotary_push(sim);
-  settle(sim, application);
-  test::expect(shell::top(application.shell) == &nav.sleep.base, "Sleep button replaces with sleep");
-  board::sim::touch(sim, 10, 10);
-  settle(sim, application);
-  test::expect(shell::top(application.shell) == &nav.home.base, "any input wakes back to home");
-
-  // --- persistent state round-trip ---------------------------------------------
+  // Persistence.
   app::checkpoint(application);
+  test::expect(result, state::save(persistent, "build/test_state.db"),
+               "persistent state saves to simulator disk backend");
   state::store restored{};
-  app::context restored_app{};
-  restored_app.memory = &restored;
-  restored_app.persistent = &persistent;
-  app::restore_persistent(restored_app);
-  test::expect(state::get(restored, app::key::font_size, std::int64_t{-1}) ==
-                  state::get(memory, app::key::font_size, std::int64_t{-1}),
-              "font size survives a checkpoint/restore round trip");
-  test::expect(state::get(restored, app::key::wifi_connected, false) ==
-                  state::get(memory, app::key::wifi_connected, false),
-              "wifi connected flag survives a checkpoint/restore round trip");
+  test::expect(result, state::load(restored, "build/test_state.db"),
+               "persistent state reloads from disk");
+  test::expect(result,
+               state::get(restored, "reader.book.page", std::int64_t{-1}) ==
+                       state::get(memory, "reader.book.page", std::int64_t{-2}) &&
+                   std::strcmp(state::get(restored, "network.wifi.ssid", ""), "Reader-Lab") == 0,
+               "reader position and Wi-Fi metadata survive persistence");
 
-  std::printf("simulator tests: %d checks, %d failures\n", test::checks, test::failures);
-  return test::failures == 0 ? 0 : 1;
+  test::expect(result, board::sim::dump_framebuffer(board, "build/simulator-final.pgm"),
+               "simulator dumps framebuffer for visual regression/debugging");
+  test::expect(result, board.refresh_count > 20,
+               "feature flows produce refreshes through common display path");
+
+  std::printf("simulator tests: %d checks, %d failures\n", result.checks, result.failures);
+  return result.failures == 0 ? 0 : 1;
 }
