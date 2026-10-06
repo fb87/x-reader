@@ -1,0 +1,5 @@
+mainmenu "Reader configuration"
+
+menu "Plugins"
+source "build/generated/plugins.Kconfig"
+endmenu

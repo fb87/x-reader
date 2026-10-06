@@ -1,0 +1,3 @@
+config PLUGIN_WIFI
+    bool "Wi-Fi"
+    default y
