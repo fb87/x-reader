@@ -45,7 +45,15 @@ function M.replace(uri)
     if router.replace(uri) then state.set("app.page.current", page_for_uri(uri)); return true end
     return false
 end
-function M.set_page(value) return M.push(M.route[value] or "/") end
+function M.set_page(value)
+    local previous = M.current_page()
+    local ok = M.push(M.route[value] or "/")
+    if ok and value == M.page.home then
+        state.set("app.menu.selected", 0)
+        state.set("app.home.card.focused", previous == M.page.splash)
+    end
+    return ok
+end
 function M.back()
     if router.back() then
         local cur = router.current()

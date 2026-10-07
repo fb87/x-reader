@@ -17,6 +17,7 @@ function M.init(reload)
         shell.state.set("app.page.current", model.page.splash)
         shell.state.set("app.route.current", "/splash")
         shell.state.set("app.menu.selected", 0)
+        shell.state.set("app.home.card.focused", true)
         shell.state.set("app.focus.area", 0)
         shell.state.set("app.dock.selected", 0)
         shell.state.set("app.reader.chrome", false)
@@ -24,6 +25,7 @@ function M.init(reload)
         shell.state.set("app.dialog.about", false)
     end
     shell.router.restore(reload and (shell.state.get("app.route.current") or "/") or "/splash")
+    if model.current_page() == model.page.home then shell.state.set("app.menu.selected", -1) end
     return true
 end
 

@@ -33,9 +33,10 @@ inline bool activate_book_info(context& self) {
 }
 
 inline int list_offset(const context& self, int count) {
-  if (count <= 10) return 0;
+  const int visible = list_visible_rows(self);
+  if (count <= visible) return 0;
   const int selected = static_cast<int>(state::get(*self.memory, "reader.library.selected", std::int64_t{0}));
-  return (selected / 10) * 10;
+  return (selected / visible) * visible;
 }
 
 inline void draw_cover(display::device& d, geometry::rect rect, const book::item& book, int index) {
@@ -55,7 +56,8 @@ inline void render(context& self) {
   draw_status(self, favorites ? "Favorites" : "Library");
   const int count = visible_book_count(self);
   const int offset = list_offset(self, count);
-  const int visible = std::min(10, count - offset);
+  const int visible_rows = list_visible_rows(self);
+  const int visible = std::min(visible_rows, count - offset);
   const bool focused = static_cast<focus_area>(state::get(
       *self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content))) == focus_area::content;
   const int row_width = self.shell.display->width - 24 - (count > 10 ? 10 : 0);
@@ -69,7 +71,8 @@ inline void render(context& self) {
     const bool inverted = selected && focused;
     const auto fg = inverted ? canvas::gray::white : canvas::gray::black;
     canvas::fill(d, rr, inverted ? canvas::gray::black : canvas::gray::white);
-    if (selected && !focused) canvas::fill(d, {rr.x, rr.y + 6, 5, rr.h - 12}, canvas::gray::black);
+    if (selected && !focused)
+      canvas::fill(d, {rr.x + 31, rr.y + 6, 3, rr.h - 12}, canvas::gray::black);
     if (!inverted) canvas::hline(d, rr.x, rr.y + rr.h - 1, rr.w, canvas::gray::light);
     char number[12]{};
     std::snprintf(number, sizeof(number), "%d", visible_index + 1);
@@ -83,17 +86,21 @@ inline void render(context& self) {
     text::draw_in(d, text_x, rr.y + 42, rr.x + rr.w - text_x - 8, meta, 1,
                   inverted ? canvas::gray::white : canvas::gray::dark);
   }
-  if (count > 10) {
-    const geometry::rect track{self.shell.display->width - 18, 58, 6, 10 * 72};
+  if (count > visible_rows) {
+    const geometry::rect track{self.shell.display->width - 18, 58, 6, visible_rows * 76};
     canvas::fill(d, track, canvas::gray::white);
     canvas::vline(d, track.x + 3, track.y, track.h, canvas::gray::light);
-    const int thumb_h = std::max(track.h * 10 / count, 16);
-    const int thumb_y = track.y + (track.h - thumb_h) * offset / std::max(count - 10, 1);
+    const int thumb_h = std::max(track.h * visible_rows / count, 16);
+    const int thumb_y = track.y + (track.h - thumb_h) * offset /
+                        std::max(count - visible_rows, 1);
     canvas::fill(d, {track.x, thumb_y, 6, thumb_h}, canvas::gray::black);
   }
   if (count == 0) text::center(d, {0, 300, d.width, 80}, "No books", 3, canvas::gray::dark);
   const char* actions[] = {favorites ? "Remove" : "Favorite", "Delete", "Back"};
-  draw_dock(self, actions, 3);
+  if (static_cast<focus_area>(state::get(*self.memory, "app.focus.area",
+                                         static_cast<std::int64_t>(focus_area::content))) ==
+      focus_area::dock)
+    draw_dock(self, actions, 3);
 
   if (!book_info_visible(self)) return;
   const int index = selected_book_index(self);
@@ -124,7 +131,7 @@ inline bool activate_dock(context& self) {
   const int action = static_cast<int>(
       state::get(*self.memory, "app.dock.selected", std::int64_t{0}));
   if (action == 2) {
-    routes::set_page(self, page::home);
+    if (!routes::back(self)) routes::set_page(self, page::home);
     return true;
   }
   const int index = selected_book_index(self);
@@ -173,7 +180,7 @@ inline bool event(context& self, const event::value& value) {
   }
   if (value.event_type != event::type::key) return false;
   if (value.key == event::key_code::back) {
-    routes::set_page(self, page::home);
+    if (!routes::back(self)) routes::set_page(self, page::home);
     return true;
   }
 

@@ -51,7 +51,9 @@ function M.render()
         widget.center { x = 0, y = 300, w = shell.api.width(), h = 80, text = i18n.t("no_books"),
                         scale = 3, gray = widget.gray.dark }
     end
-    widget.dock { favorites and i18n.t("remove") or i18n.t("favorite"), i18n.t("delete"), i18n.t("back") }
+    if (state.get("app.focus.area") or 0) == 1 then
+        widget.dock { favorites and i18n.t("remove") or i18n.t("favorite"), i18n.t("delete"), i18n.t("back") }
+    end
     render_info(books)
 end
 
@@ -59,7 +61,7 @@ local function activate_dock()
     local selected = state.get("app.dock.selected") or 0
     if selected == 0 then shell.library.favorite()
     elseif selected == 1 then shell.library.delete()
-    else model.set_page(model.page.home) end
+    else model.back() end
 end
 
 function M.event(ev)
@@ -91,7 +93,7 @@ function M.event(ev)
         return true
     end
     if ev.type ~= "key" then return false end
-    if ev.key == "back" then model.set_page(model.page.home); return true end
+    if ev.key == "back" then model.back(); return true end
 
     if (state.get("app.focus.area") or 0) == 1 then
         local dock = state.get("app.dock.selected") or 0

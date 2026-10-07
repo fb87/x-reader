@@ -160,8 +160,11 @@ int main() {
   test::expect(result, state::get(memory, "reader.settings.font_size", std::int64_t{-1}) >= font_before,
                "reader A+ dock action adjusts font setting");
   test::key(board, application, event::key_code::back);
+  test::expect(result, app::current_page(application) == app::page::library,
+               "reader BACK returns library");
+  test::key(board, application, event::key_code::back);
   test::expect(result, app::current_page(application) == app::page::home,
-               "reader BACK returns home");
+               "library BACK returns home");
 
   // Favorites action from library dock.
   state::set(memory, "app.menu.selected", std::int64_t{0});
@@ -195,6 +198,27 @@ int main() {
   test::key(board, application, event::key_code::ok);
   test::expect(result, app::current_page(application) == app::page::reader,
                "file manager opens EPUB directly");
+  const auto file_reader_page = application.reader.current.page;
+  test::key(board, application, event::key_code::down);
+  test::expect(result, application.reader.current.page != file_reader_page,
+               "File Manager reader responds to Down page turn");
+  test::key(board, application, event::key_code::back);
+  test::expect(result, app::current_page(application) == app::page::files,
+               "reader BACK returns file manager");
+  state::set(memory, "app.files.selected", std::int64_t{1});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, app::current_page(application) == app::page::files,
+               "file manager enters nested folder after reader close");
+  test::key(board, application, event::key_code::back);
+  test::expect(result, app::current_page(application) == app::page::files,
+               "file manager BACK returns parent folder");
+  state::set(memory, "app.files.selected", std::int64_t{0});
+  test::key(board, application, event::key_code::ok);
+  test::expect(result, app::current_page(application) == app::page::reader,
+               "file manager reopens EPUB after reader close");
+  test::key(board, application, event::key_code::back);
+  test::expect(result, app::current_page(application) == app::page::files,
+               "reopened reader BACK returns file manager");
   test::key(board, application, event::key_code::back);
 
   // Settings: all seven original rows are present and mutable.

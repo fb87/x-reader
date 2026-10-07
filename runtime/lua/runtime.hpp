@@ -162,6 +162,14 @@ inline int l_api_hline(api::state* vm) {
   return 0;
 }
 
+inline int l_api_icon(api::state* vm) {
+  auto& h = bound(vm);
+  if (display_of(h) != nullptr)
+    icon::draw(*display_of(h), {integer_arg(vm, *h.lib, 1), integer_arg(vm, *h.lib, 2), 24, 24},
+               integer_arg(vm, *h.lib, 3), gray_arg(vm, *h.lib, 4));
+  return 0;
+}
+
 inline int l_api_text(api::state* vm) {
   auto& h = bound(vm);
   auto* display = display_of(h);
@@ -170,6 +178,15 @@ inline int l_api_text(api::state* vm) {
     text::draw(*display, integer_arg(vm, *h.lib, 1), integer_arg(vm, *h.lib, 2), value,
                integer_arg(vm, *h.lib, 4, 2), gray_arg(vm, *h.lib, 5));
   }
+  return 0;
+}
+
+inline int l_api_title(api::state* vm) {
+  auto& h = bound(vm);
+  const char* value = h.lib->to_string(vm, 3, nullptr);
+  if (display_of(h) != nullptr && value != nullptr)
+    text::draw_title(*display_of(h), integer_arg(vm, *h.lib, 1), integer_arg(vm, *h.lib, 2), value,
+                     gray_arg(vm, *h.lib, 4));
   return 0;
 }
 
@@ -525,14 +542,14 @@ inline void register_shell(runtime& self) {
   self.api.create_table(self.vm, 0, 8);
 
   {
-    const char* names[] = {"width", "height", "clear", "fill", "border", "hline",
-                           "text", "center", "status", "row", "button", "progress",
+    const char* names[] = {"width", "height", "clear", "fill", "border", "hline", "icon",
+                           "text", "title", "center", "status", "row", "button", "progress",
                            "book_card", "dialog", "present", "battery", "reload"};
     const api::c_function callbacks[] = {l_api_width, l_api_height, l_api_clear, l_api_fill,
-                                         l_api_border, l_api_hline, l_api_text, l_api_center,
+                                         l_api_border, l_api_hline, l_api_icon, l_api_text, l_api_title, l_api_center,
                                          l_api_status, l_api_row, l_api_button, l_api_progress,
                                          l_api_book_card, l_api_dialog, l_api_present, l_api_battery, l_api_reload};
-    set_module(self, "api", 17, names, callbacks);
+    set_module(self, "api", 19, names, callbacks);
   }
   {
     const char* names[] = {"get", "set"};

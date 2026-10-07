@@ -45,7 +45,14 @@ std::size_t source_fingerprint(const char* root, const char* extension) {
 int main() {
   board::sim::runtime sim{};
   board::sim::init(sim);
-  if (const char* root = std::getenv("XREADER_SDCARD")) board::sim::mount(sim, root);
+  const char* root = std::getenv("XREADER_SDCARD");
+  char default_root[storage::path_max]{};
+  if (root == nullptr) {
+    const char* home = std::getenv("HOME");
+    std::snprintf(default_root, sizeof(default_root), "%s/data/sdcard", home != nullptr ? home : ".");
+    root = default_root;
+  }
+  board::sim::mount(sim, root);
 
   board::sim::wayland::backend window{};
   if (!board::sim::wayland::open(window, sim, "Ebook Reader - Lua / M5Paper Simulator")) {

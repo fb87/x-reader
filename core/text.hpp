@@ -13,13 +13,16 @@ namespace text {
 extern "C" {
 extern const xr_font_t xr_font_alegreya_14;
 extern const xr_font_t xr_font_alegreya_17;
+extern const xr_font_t xr_font_alegreya_18;
 extern const xr_font_t xr_font_alegreya_20;
 extern const xr_font_t xr_font_alegreya_24;
+extern const xr_font_t xr_font_alegreya_bold_18;
+extern const xr_font_t xr_font_alegreya_bold_26;
 }
 
 inline const xr_font_t& rich_font(int scale) {
   if (scale <= 1) return xr_font_alegreya_14;
-  if (scale == 2) return xr_font_alegreya_17;
+  if (scale == 2) return xr_font_alegreya_18;
   if (scale == 3) return xr_font_alegreya_20;
   return xr_font_alegreya_24;
 }
@@ -36,42 +39,53 @@ inline const xr_glyph_t* rich_glyph(const xr_font_t& font, std::uint32_t codepoi
   return &font.glyphs[codepoint - font.first];
 }
 
-inline int rich_width(const char* value, int scale) {
+inline int font_width(const xr_font_t& font, const char* value) {
   if (value == nullptr) return 0;
-  const auto& font = rich_font(scale);
   int result = 0;
   const char* cursor = value;
   while (*cursor != '\0') {
-    const auto codepoint = next_codepoint(cursor);
-    const auto* glyph = rich_glyph(font, codepoint);
+    const auto* glyph = rich_glyph(font, next_codepoint(cursor));
     result += glyph != nullptr ? glyph->advance : font.ascent / 2;
   }
   return result;
 }
 
-inline void draw_rich(display::device& display, int x, int y, const char* value, int scale,
-                      canvas::gray color) {
+inline void draw_font(display::device& display, int x, int y, const char* value,
+                      const xr_font_t& font, canvas::gray color) {
   if (value == nullptr) return;
-  const auto& font = rich_font(scale);
   const int baseline = y + font.ascent;
   const char* cursor = value;
   while (*cursor != '\0') {
-    const auto codepoint = next_codepoint(cursor);
-    const auto* glyph = rich_glyph(font, codepoint);
+    const auto* glyph = rich_glyph(font, next_codepoint(cursor));
     if (glyph == nullptr) {
       x += font.ascent / 2;
       continue;
     }
-    const auto* bitmap = font.bitmap + glyph->offset;
-    for (int row = 0; row < glyph->h; ++row) {
-      for (int column = 0; column < glyph->w; ++column) {
-        if (bitmap[row * glyph->w + column] >= 128)
-          canvas::fill(display, {x + glyph->x_off + column, baseline + glyph->y_off + row, 1, 1},
-                       color);
-      }
-    }
+    canvas::draw_mask(display, x + glyph->x_off, baseline + glyph->y_off, glyph->w, glyph->h,
+                      font.bitmap + glyph->offset, glyph->w, color);
     x += glyph->advance;
   }
+}
+
+inline void draw_bold(display::device& display, int x, int y, const char* value,
+                      canvas::gray color = canvas::gray::black) {
+  draw_font(display, x, y, value, xr_font_alegreya_bold_18, color);
+}
+
+inline int bold_width(const char* value) { return font_width(xr_font_alegreya_bold_18, value); }
+
+inline void draw_title(display::device& display, int x, int y, const char* value,
+                       canvas::gray color = canvas::gray::black) {
+  draw_font(display, x, y, value, xr_font_alegreya_bold_26, color);
+}
+
+inline int rich_width(const char* value, int scale) {
+  return font_width(rich_font(scale), value);
+}
+
+inline void draw_rich(display::device& display, int x, int y, const char* value, int scale,
+                      canvas::gray color) {
+  draw_font(display, x, y, value, rich_font(scale), color);
 }
 
 /** @brief Compact 5x7 bitmap glyph for printable ASCII characters. */
@@ -261,6 +275,14 @@ inline void draw_in(display::device& display, int x, int y, int max_width, const
   char fitted[256] = {0};
   fit(value, max_width, scale, fitted, sizeof(fitted));
   draw(display, x, y, fitted, scale, color);
+}
+
+inline void draw_bold_in(display::device& display, int x, int y, int max_width, const char* value,
+                         canvas::gray color = canvas::gray::black) {
+  if (bold_width(value) <= max_width)
+    draw_bold(display, x, y, value, color);
+  else
+    draw_in(display, x, y, max_width, value, 2, color);
 }
 
 /** @brief Returns the common bitmap height used by every UTF-8 glyph. */

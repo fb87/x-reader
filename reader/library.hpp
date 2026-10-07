@@ -11,12 +11,12 @@
 
 namespace library {
 
-inline constexpr std::size_t max_books = 32;
+inline constexpr std::size_t max_books = 16;
 inline constexpr std::size_t scan_queue_size = 32;
 
 /** @brief Fixed-capacity ebook library cache reconstructed from storage. */
 struct index {
-    std::array<book::item, max_books> books{};
+    std::array<book::item, max_books + 1> books{};
     std::size_t count = 0;
 };
 
@@ -42,9 +42,19 @@ inline bool supported(const char* name)
 /** @brief Adds a document to the in-memory library cache. */
 inline bool add(index& self, const char* path)
 {
-    if (path == nullptr || self.count >= self.books.size()) {
+    if (path == nullptr || self.count >= max_books) {
         return false;
     }
+    auto& out = self.books[self.count++];
+    std::snprintf(out.path.data(), out.path.size(), "%s", path);
+    book::make_title(out.title.data(), out.title.size(), path);
+    std::snprintf(out.author.data(), out.author.size(), "%s", "EPUB");
+    return true;
+}
+
+/** @brief Adds a File Manager EPUB in the reserved transient slot. */
+inline bool add_transient(index& self, const char* path) {
+    if (path == nullptr || self.count >= self.books.size()) return false;
     auto& out = self.books[self.count++];
     std::snprintf(out.path.data(), out.path.size(), "%s", path);
     book::make_title(out.title.data(), out.title.size(), path);

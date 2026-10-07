@@ -45,18 +45,19 @@ inline void render(context& self) {
   }
 
   const int bottom = chrome ? 88 : 36;
+  const int footer_y = d.height - bottom - 20;
   if (state::get(*self.memory, "reader.settings.show_progress", true)) {
     const int progress = std::max(0, static_cast<int>(::reader::progress_percent(self.reader.current)));
-    canvas::hline(d, 28, d.height - bottom, d.width - 56, canvas::gray::light);
-    canvas::fill(d, {28, d.height - bottom - 1, (d.width - 56) * progress / 100, 3},
+    canvas::hline(d, 28, footer_y, d.width - 56, canvas::gray::light);
+    canvas::fill(d, {28, footer_y - 1, (d.width - 56) * progress / 100, 3},
                  canvas::gray::dark);
   }
   char pages[32]{};
   std::snprintf(pages, sizeof(pages), "%d / %d", self.reader.current.page + 1,
                 self.reader.current.page_count);
-  text::draw(d, 28, d.height - bottom + 16,
+  text::draw(d, 28, footer_y + 16,
              ::reader::current_chapter_title(self.reader.current), 1, canvas::gray::dark);
-  text::draw(d, d.width - text::width(pages, 1) - 28, d.height - bottom + 16, pages, 1,
+  text::draw(d, d.width - text::width(pages, 1) - 28, footer_y + 16, pages, 1,
              canvas::gray::dark);
   if (chrome) {
     const char* actions[] = {"Close", "A-", "A+"};
@@ -99,7 +100,7 @@ inline bool event(context& self, const event::value& value) {
     if (value.key == event::key_code::down) return true;
     if (value.key == event::key_code::ok) {
       if (selected == 0) {
-        routes::set_page(self, page::home);
+        if (!routes::back(self)) routes::set_page(self, page::home);
       } else {
         ::reader::adjust_font(*self.memory, selected == 1 ? -1 : 1);
         ++self.invalidations;
@@ -108,7 +109,7 @@ inline bool event(context& self, const event::value& value) {
     }
   }
   if (value.key == event::key_code::back) {
-    routes::set_page(self, page::home);
+    if (!routes::back(self)) routes::set_page(self, page::home);
     ++self.invalidations;
     return true;
   }

@@ -12,6 +12,7 @@ function M.render()
 
     local top = chrome and 60 or 28
     local bottom = chrome and 88 or 36
+    local footer_y = shell.api.height() - bottom - 20
     local scale = math.min(4, 2 + (state.get("reader.settings.font_size") or 1))
     local y = top
     for i = 0, shell.reader.line_count() - 1 do
@@ -21,20 +22,20 @@ function M.render()
 
     local progress = shell.reader.progress()
     if state.get("reader.settings.show_progress") ~= false then
-        shell.api.hline(28, shell.api.height() - bottom, shell.api.width() - 56, widget.gray.light)
-        shell.api.fill(28, shell.api.height() - bottom - 1,
+        shell.api.hline(28, footer_y, shell.api.width() - 56, widget.gray.light)
+        shell.api.fill(28, footer_y - 1,
                        (shell.api.width() - 56) * progress / 100, 3, widget.gray.dark)
     end
-    shell.api.text(28, shell.api.height() - bottom + 16, shell.reader.chapter(), 1, widget.gray.dark)
+    shell.api.text(28, footer_y + 16, shell.reader.chapter(), 1, widget.gray.dark)
     local pages = string.format("%d / %d", shell.reader.page() + 1, shell.reader.page_count())
-    shell.api.text(shell.api.width() - 28 - string.len(pages) * 6, shell.api.height() - bottom + 16,
+    shell.api.text(shell.api.width() - 28 - string.len(pages) * 6, footer_y + 16,
                    pages, 1, widget.gray.dark)
     if chrome then widget.dock { i18n.t("close"), "A-", "A+" } end
 end
 
 local function dock_action()
     local selected = state.get("app.dock.selected") or 0
-    if selected == 0 then model.set_page(model.page.home)
+    if selected == 0 then model.back()
     elseif selected == 1 then shell.reader.adjust_font(-1)
     else shell.reader.adjust_font(1) end
 end
@@ -58,7 +59,7 @@ function M.event(ev)
     end
     if ev.key == "back" then
         if state.get("app.reader.chrome") then state.set("app.reader.chrome", false)
-        else model.set_page(model.page.home) end
+        else model.back() end
         return true
     end
     if ev.key == "right" or ev.key == "down" then

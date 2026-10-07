@@ -43,7 +43,7 @@ function M.render()
         widget.row { y = y, primary = label, secondary = values[i], selected = selected == index }
         y = y + 76; index = index + 1
     end
-    widget.dock { i18n.t("back") }
+    if (state.get("app.focus.area") or 0) == 1 then widget.dock { i18n.t("back") } end
     if state.get("app.dialog.about") then
         dialog.render { title = i18n.t("about"), body = i18n.t("software_reader"),
                         buttons = { i18n.t("close") }, selected = 0 }
@@ -84,7 +84,7 @@ function M.event(ev)
         state.set("app.menu.selected", selected); return activate(selected)
     end
     if ev.type ~= "key" then return false end
-    if ev.key == "back" then return model.set_page(model.page.home) end
+    if ev.key == "back" then return model.back() end
     if ev.key == "up" then model.move("app.menu.selected", -1, count); return true end
     if ev.key == "down" then model.move("app.menu.selected", 1, count); return true end
     if ev.key == "ok" then return activate(state.get("app.menu.selected") or 0) end

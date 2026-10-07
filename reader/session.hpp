@@ -171,21 +171,26 @@ inline int progress_percent(const session& s) {
   return static_cast<int>(std::min<std::uint32_t>(100U, progress));
 }
 
-inline bool open_selected(context& self, state::store& shared) {
-  const auto selected = state::get(shared, "reader.library.selected", std::int64_t{0});
-  if (selected < 0 || selected >= static_cast<std::int64_t>(self.library.count) ||
-      self.storage == nullptr) return false;
-  auto& book = self.library.books[static_cast<int>(selected)];
+inline bool open_path(context& self, state::store& shared, const char* path, const char* title,
+                      std::int64_t current = -1) {
+  if (path == nullptr || self.storage == nullptr) return false;
   std::uint32_t size = 0;
-  epub::file_view view{self.storage, book.path.data(), 0};
+  epub::file_view view{self.storage, path, 0};
   if (!storage::size(*self.storage, view.path, size)) return false;
   view.size = size;
-  if (!open(self.current, view, book.title.data())) return false;
-  state::set(shared, "reader.book.current", selected);
+  if (!open(self.current, view, title != nullptr ? title : path)) return false;
+  state::set(shared, "reader.book.current", current);
   state::set(shared, "reader.book.page", std::int64_t{0});
   state::set(shared, "reader.book.progress", std::int64_t{0});
   state::set(shared, "reader.book.title", self.current.document.title);
   return true;
+}
+
+inline bool open_selected(context& self, state::store& shared) {
+  const auto selected = state::get(shared, "reader.library.selected", std::int64_t{0});
+  if (selected < 0 || selected >= static_cast<std::int64_t>(self.library.count)) return false;
+  auto& book = self.library.books[static_cast<int>(selected)];
+  return open_path(self, shared, book.path.data(), book.title.data(), selected);
 }
 
 inline void next_page(context& self, state::store& shared, geometry::rect text_rect, int scale) {

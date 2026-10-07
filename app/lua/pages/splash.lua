@@ -7,11 +7,16 @@ local M = { id = model.page.splash, entered = nil }
 
 function M.render()
     shell.api.clear(widget.gray.white)
-    widget.center { x = 0, y = 320, w = shell.api.width(), h = 80,
-                    text = i18n.t("reader_name"), scale = 5 }
-    widget.center { x = 0, y = 410, w = shell.api.width(), h = 40,
-                    text = i18n.t("reader_tagline"), scale = 2, gray = widget.gray.dark }
-    widget.center { x = 0, y = shell.api.height() - 90, w = shell.api.width(), h = 30,
+    shell.api.fill(202, 370, 64, 96, widget.gray.black)
+    shell.api.fill(273, 370, 64, 96, widget.gray.black)
+    for _, y in ipairs({387, 407, 429, 449}) do
+        shell.api.hline(214, y, 40, widget.gray.white)
+        shell.api.hline(285, y, 40, widget.gray.white)
+    end
+    shell.api.title(212, 500, "X-Reader", widget.gray.black)
+    widget.center { x = 0, y = 544, w = shell.api.width(), h = 30,
+                    text = "the ebook reader for e-ink", scale = 2, gray = widget.gray.dark }
+    widget.center { x = 0, y = shell.api.height() - 70, w = shell.api.width(), h = 30,
                     text = i18n.t("loading_library"), scale = 2, gray = widget.gray.dark }
 end
 

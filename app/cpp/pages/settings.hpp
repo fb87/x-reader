@@ -50,7 +50,10 @@ inline void render(context& self) {
   for (int i = 0; i < base_count; ++i) base_row(self, i, plugin_count + i);
 
   const char* actions[] = {"Back"};
-  draw_dock(self, actions, 1);
+  if (static_cast<focus_area>(state::get(*self.memory, "app.focus.area",
+                                         static_cast<std::int64_t>(focus_area::content))) ==
+      focus_area::dock)
+    draw_dock(self, actions, 1);
   if (state::get(*self.memory, "app.dialog.about", false))
     draw_dialog(self, "About Reader", "Software Reader 0.1");
 }
@@ -119,9 +122,28 @@ inline bool event(context& self, const event::value& value) {
     return activate(selected);
   }
   if (value.event_type != event::type::key) return false;
+  if (static_cast<focus_area>(state::get(*self.memory, "app.focus.area",
+                                         static_cast<std::int64_t>(focus_area::content))) ==
+      focus_area::dock) {
+    if (value.key == event::key_code::up) {
+      state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content));
+      ++self.invalidations;
+      return true;
+    }
+    if (value.key == event::key_code::ok || value.key == event::key_code::back) {
+      return routes::push(self, "/");
+    }
+    if (value.key == event::key_code::down) return true;
+  }
   if (value.key == event::key_code::back) return routes::push(self, "/");
   if (value.key == event::key_code::up) { move_selection(self, -1, count); return true; }
-  if (value.key == event::key_code::down) { move_selection(self, 1, count); return true; }
+  if (value.key == event::key_code::down) {
+    const auto before = selection(self);
+    move_selection(self, 1, count);
+    if (before == selection(self))
+      state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::dock));
+    return true;
+  }
   if (value.key == event::key_code::ok) return activate(static_cast<int>(selection(self)));
   return false;
 }

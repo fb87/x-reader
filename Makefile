@@ -17,7 +17,7 @@ PLUGIN_STAMP := $(GENERATED)/.plugins.$(PLUGIN_KEY).stamp
 HEADERS := $(shell find core reader app runtime boards plugins -type f -name '*.hpp' 2>/dev/null)
 LUA_SOURCES := $(shell find app/lua runtime/lua plugins -type f -name '*.lua' 2>/dev/null)
 LANG_SOURCES := $(shell find lang -type f -name '*.txt')
-FONT_SOURCES := $(wildcard fonts/xr_font_alegreya_14.c fonts/xr_font_alegreya_17.c fonts/xr_font_alegreya_20.c fonts/xr_font_alegreya_24.c fonts/xr_icons.c)
+FONT_SOURCES := $(wildcard fonts/xr_font_alegreya_14.c fonts/xr_font_alegreya_17.c fonts/xr_font_alegreya_18.c fonts/xr_font_alegreya_20.c fonts/xr_font_alegreya_24.c fonts/xr_font_alegreya_bold_18.c fonts/xr_font_alegreya_bold_26.c fonts/xr_icons.c)
 FONT_OBJECTS := $(patsubst fonts/%.c,$(BUILD)/fonts/%.o,$(FONT_SOURCES))
 LUA_LIBS := -ldl
 WAYLAND_LIBS ?= $(shell pkg-config --libs wayland-client 2>/dev/null || echo -Wl,-l:libwayland-client.so.0)
@@ -25,7 +25,7 @@ CPPFLAGS += -I$(PROJECT_ROOT) -I$(PROJECT_ROOT)/$(BUILD) -I$(PROJECT_ROOT)/$(GEN
             -I$(PROJECT_ROOT)/include -I$(PROJECT_ROOT)/fonts \
             -include $(PROJECT_ROOT)/$(GENERATED)/plugin_config.hpp
 
-.PHONY: all gui cpp-gui lua-gui test checkpoints test-cpp test-lua test-structure test-plugins test-wifi-plugin clean format format-check bundle plugins plugin-kconfig
+.PHONY: all gui cpp-gui lua-gui test checkpoints test-cpp test-lua test-monkey test-structure test-plugins test-wifi-plugin clean format format-check bundle plugins plugin-kconfig
 
 ifeq ($(APP),lua)
 APP_MAIN := lua_main.cpp
@@ -98,6 +98,9 @@ $(BUILD)/architecture_test: tests/architecture_test.cpp $(HEADERS) $(PLUGIN_STAM
 $(BUILD)/router_test: tests/router_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/router_test.cpp $(FONT_OBJECTS) -o $@
 
+$(BUILD)/monkey_test: tests/monkey_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/monkey_test.cpp $(FONT_OBJECTS) -o $@ -lz
+
 $(BUILD)/lua_parity_test: tests/lua_parity_test.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/lua_parity_test.cpp $(FONT_OBJECTS) -o $@ -lz $(LUA_LIBS)
 
@@ -120,6 +123,9 @@ test-lua: $(BUILD)/reader-lua $(BUILD)/simulator_lua_gui $(BUILD)/lua_app_test $
 	./$(BUILD)/lua_parity_test
 	./$(BUILD)/lua_hot_reload_test
 
+test-monkey: $(BUILD)/monkey_test
+	./$(BUILD)/monkey_test
+
 test-structure:
 	./tests/app_structure_test.sh
 
@@ -129,7 +135,7 @@ test-plugins:
 test-wifi-plugin:
 	./tests/wifi_plugin_test.sh
 
-test: test-structure test-plugins test-wifi-plugin test-cpp test-lua
+test: test-structure test-plugins test-wifi-plugin test-cpp test-lua test-monkey
 
 format:
 	clang-format -i $$(find core reader app runtime boards plugins tests -type f \( -name '*.hpp' -o -name '*.cpp' \)) app_main.cpp lua_main.cpp

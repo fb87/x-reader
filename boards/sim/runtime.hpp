@@ -40,7 +40,7 @@ struct runtime {
     fixed_queue::queue<event::value, input_queue_size> events{};
     int refresh_count = 0;
     refresh::mode last_refresh = refresh::mode::full;
-    int battery = 75;
+    int battery = 87;
     std::uint32_t simulated_ms = 0;
     bool wifi_connected = false;
     const char* wifi_ssid = nullptr;

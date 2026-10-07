@@ -30,6 +30,14 @@ inline void draw_dock(context& self, const char* const* labels, int count) {
   widget::dock(*self.shell.display, labels, count, selected, focused);
 }
 
+inline void draw_file_dock(context& self, const char* const* labels) {
+  const bool focused = static_cast<focus_area>(state::get(*self.memory, "app.focus.area",
+      static_cast<std::int64_t>(focus_area::content))) == focus_area::dock;
+  const int selected = static_cast<int>(state::get(*self.memory, "app.dock.selected", std::int64_t{0}));
+  const int icons[] = {XR_ICON_ARROW_BACK};
+  widget::dock(*self.shell.display, labels, 1, selected, focused, {}, icons);
+}
+
 inline void draw_dialog(context& self, const char* title, const char* body) {
   widget::dialog(*self.shell.display, title, body);
 }

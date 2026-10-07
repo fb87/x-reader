@@ -17,9 +17,25 @@ namespace app {
 inline bool on_shell_event(const event::value& value, void* user) {
   if (value.event_type != event::type::key || !value.long_press) return false;
   auto& self = *static_cast<context*>(user);
+  if (current_page(self) == page::home)
+    state::set(*self.memory, "app.home.card.focused", false);
   state::set(*self.memory, "app.input.long_press", static_cast<std::int64_t>(value.key));
   state::set(*self.memory, "app.input.long_press_duration_ms",
              static_cast<std::int64_t>(value.duration_ms));
+  const auto page = current_page(self);
+  const bool has_dock = page == page::library || page == page::favorites || page == page::files ||
+                        page == page::settings ||
+                        (page == page::reader && state::get(*self.memory, "app.reader.chrome", false));
+  if (value.key == event::key_code::down && has_dock) {
+    state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::dock));
+    ++self.invalidations;
+  } else if (value.key == event::key_code::up &&
+             static_cast<focus_area>(state::get(*self.memory, "app.focus.area",
+                                                static_cast<std::int64_t>(focus_area::content))) ==
+                 focus_area::dock) {
+    state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content));
+    ++self.invalidations;
+  }
   if (value.key == event::key_code::back) {
     (void)routes::replace(self, "/");
   }

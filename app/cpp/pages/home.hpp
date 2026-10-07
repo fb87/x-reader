@@ -5,6 +5,7 @@
 #include "app/cpp/routes.hpp"
 
 #include <cstdio>
+#include <cstring>
 
 namespace app::pages::home {
 
@@ -13,9 +14,10 @@ inline void render(context& self) {
   canvas::fill(d, {0, 0, d.width, d.height}, canvas::gray::white);
   draw_status(self, "Home");
   const auto current_book = state::get(*self.memory, "reader.book.current", std::int64_t{-1});
-  const geometry::rect card{18, 62, d.width - 36, 190};
-  canvas::border(d, card, 3, canvas::gray::black);
-  text::draw_in(d, card.x + 16, card.y + 20, card.w - 32, "Continue Reading", 1,
+  const geometry::rect card{16, 68, d.width - 32, 190};
+  const bool card_focused = state::get(*self.memory, "app.home.card.focused", false);
+  canvas::border(d, card, card_focused ? 4 : 2, canvas::gray::black);
+  text::draw_in(d, card.x + 20, card.y + 20, card.w - 40, "Continue Reading", 1,
                 canvas::gray::dark);
   if (current_book >= 0 && current_book < static_cast<std::int64_t>(self.reader.library.count)) {
     const auto& book = self.reader.library.books[static_cast<std::size_t>(current_book)];
@@ -41,14 +43,25 @@ inline void render(context& self) {
     text::draw_in(d, text_x + progress_w + 10, cover.y + 84, percent_w, percent, 2,
                   canvas::gray::black);
   } else {
-    text::draw_in(d, card.x + 20, card.y + 78, card.w - 40, "No book open", 3,
+    text::draw_in(d, card.x + 20, card.y + 59, card.w - 40, "No book open", 2,
                   canvas::gray::black);
   }
   const int count = routes::menu_count(self, "home");
+  int rendered = 0;
   for (int i = 0; i < count; ++i) {
     const auto* route = routes::menu_route(self, "home", i);
-    if (route != nullptr) draw_row(self, i, 265 + i * 76, routes::menu_label(*route));
+    if (route != nullptr) {
+      const char* label = routes::menu_label(*route);
+      if (std::strcmp(route->title_key, "sleep") == 0) continue;
+      const bool selected = !card_focused && selection(self) == i;
+      const geometry::rect row{16, 290 + rendered++ * 72, d.width - 32, 63};
+      widget::row(d, row, label, nullptr, selected, {}, icon::for_label(label));
+      canvas::border(d, row, 2, canvas::gray::black);
+    }
   }
+  canvas::border(d, {412, d.height - 58, 112, 34}, 2, canvas::gray::black);
+  icon::draw(d, {422, d.height - 51, 24, 24}, XR_ICON_CLOSE);
+  text::draw(d, 454, d.height - 49, "Sleep", 1, canvas::gray::black);
   int in_progress = 0;
   for (std::size_t i = 0; i < self.reader.library.count; ++i) {
     if (self.reader.library.books[i].progress > 0 && self.reader.library.books[i].progress < 100)
@@ -57,7 +70,7 @@ inline void render(context& self) {
   char stats[64]{};
   std::snprintf(stats, sizeof(stats), "%zu books  |  %d in progress", self.reader.library.count,
                 in_progress);
-  text::draw(d, 24, d.height - 50, stats, 2, canvas::gray::dark);
+  text::center(d, {0, d.height - 58, d.width, 34}, stats, 1, canvas::gray::dark);
 }
 
 inline bool open_current_book(context& self) {
@@ -73,23 +86,36 @@ inline bool open_current_book(context& self) {
 inline bool event(context& self, const event::value& value) {
   const int count = routes::menu_count(self, "home");
   if (value.event_type == event::type::tap) {
-    if (value.y >= 62 && value.y < 252) return open_current_book(self);
-    if (value.y < 265 || value.y >= 265 + count * 76) return false;
-    const int selected = (value.y - 265) / 76;
+    if (value.y >= 68 && value.y < 258) return open_current_book(self);
+    if (value.y >= self.shell.display->height - 58 && value.x >= 400)
+      return routes::push(self, "/sleep");
+    if (value.y < 290 || value.y >= 290 + count * 72) return false;
+    const int selected = (value.y - 290) / 72;
     state::set(*self.memory, "app.menu.selected", static_cast<std::int64_t>(selected));
     const auto* route = routes::menu_route(self, "home", selected);
     return route != nullptr && routes::push(self, route->path);
   }
   if (value.event_type != event::type::key) return false;
   if (value.key == event::key_code::down) {
+    if (state::get(*self.memory, "app.home.card.focused", false)) {
+      state::set(*self.memory, "app.home.card.focused", false);
+      ++self.invalidations;
+      return true;
+    }
     move_selection(self, 1, count);
     return true;
   }
   if (value.key == event::key_code::up) {
+    if (selection(self) == 0) {
+      state::set(*self.memory, "app.home.card.focused", true);
+      ++self.invalidations;
+      return true;
+    }
     move_selection(self, -1, count);
     return true;
   }
   if (value.key == event::key_code::ok) {
+    if (state::get(*self.memory, "app.home.card.focused", false)) return open_current_book(self);
     const auto* route = routes::menu_route(self, "home", static_cast<int>(selection(self)));
     return route != nullptr && routes::push(self, route->path);
   }

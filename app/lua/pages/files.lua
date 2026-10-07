@@ -18,7 +18,7 @@ function M.render()
         widget.center { x = 0, y = 300, w = shell.api.width(), h = 80,
                         text = "NO FILES", scale = 3, gray = widget.gray.dark }
     end
-    widget.dock { i18n.t("up_back") }
+    if (state.get("app.focus.area") or 0) == 1 then widget.dock { i18n.t("up_back") } end
 end
 
 function M.event(ev)
@@ -29,7 +29,12 @@ function M.event(ev)
         return true
     end
     if ev.type ~= "key" then return false end
-    if ev.key == "back" then model.set_page(model.page.home); return true end
+    if ev.key == "back" then
+        model.back()
+        state.set("app.menu.selected", 2)
+        state.set("app.home.card.focused", false)
+        return true
+    end
     if ev.key == "down" then model.move("reader.library.selected", 1, count); return true end
     if ev.key == "up" then model.move("reader.library.selected", -1, count); return true end
     if ev.key == "ok" and shell.reader.open_selected() then model.set_page(model.page.reader); return true end

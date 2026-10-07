@@ -36,6 +36,36 @@ inline void pixel(display::device& display, int x, int y, gray value)
     }
 }
 
+inline std::uint8_t get_pixel(display::device& display, int x, int y) {
+    if (x < 0 || y < 0 || x >= display.width || y >= display.height || display.framebuffer == nullptr)
+        return 0x0f;
+    if (display.format == display::pixel_format::gray4) {
+        const auto byte = display.framebuffer[static_cast<std::size_t>(y) * display.stride + x / 2];
+        return (x & 1) == 0 ? static_cast<std::uint8_t>(byte >> 4U)
+                            : static_cast<std::uint8_t>(byte & 0x0fU);
+    }
+    return static_cast<std::uint8_t>(display.framebuffer[static_cast<std::size_t>(y) * display.stride + x] / 17U);
+}
+
+inline void draw_mask(display::device& display, int x, int y, int width, int height,
+                      const std::uint8_t* alpha, int alpha_stride, gray value) {
+    const auto area = geometry::clamp({x, y, width, height}, display.width, display.height);
+    const auto color = static_cast<std::uint8_t>(value);
+    for (int py = area.y; py < area.y + area.h; ++py) {
+        for (int px = area.x; px < area.x + area.w; ++px) {
+            const auto coverage = alpha[(py - y) * alpha_stride + (px - x)];
+            if (coverage == 0) continue;
+            if (coverage == 255) {
+                pixel(display, px, py, value);
+            } else {
+                const auto background = get_pixel(display, px, py);
+                pixel(display, px, py, static_cast<gray>(
+                    static_cast<std::uint8_t>((background * (255 - coverage) + color * coverage) / 255)));
+            }
+        }
+    }
+}
+
 /** @brief Fills a rectangle with a grayscale value. */
 inline void fill(display::device& display, geometry::rect area, gray value)
 {
