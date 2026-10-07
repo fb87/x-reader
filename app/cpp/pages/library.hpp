@@ -52,7 +52,7 @@ inline void render(context& self) {
   auto& d = *self.shell.display;
   canvas::fill(d, {0, 0, d.width, d.height}, canvas::gray::white);
   const bool favorites = current_page(self) == page::favorites;
-  draw_status(self, favorites ? "FAVORITES" : "LIBRARY");
+  draw_status(self, favorites ? "Favorites" : "Library");
   const int count = visible_book_count(self);
   const int offset = list_offset(self, count);
   const int visible = std::min(10, count - offset);
@@ -91,8 +91,8 @@ inline void render(context& self) {
     const int thumb_y = track.y + (track.h - thumb_h) * offset / std::max(count - 10, 1);
     canvas::fill(d, {track.x, thumb_y, 6, thumb_h}, canvas::gray::black);
   }
-  if (count == 0) text::center(d, {0, 300, d.width, 80}, "NO BOOKS", 3, canvas::gray::dark);
-  const char* actions[] = {favorites ? "REMOVE" : "FAVORITE", "DELETE", "BACK"};
+  if (count == 0) text::center(d, {0, 300, d.width, 80}, "No books", 3, canvas::gray::dark);
+  const char* actions[] = {favorites ? "Remove" : "Favorite", "Delete", "Back"};
   draw_dock(self, actions, 3);
 
   if (!book_info_visible(self)) return;

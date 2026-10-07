@@ -12,25 +12,25 @@ inline constexpr int base_count = 6;
 
 inline void base_row(context& self, int index, int visual_index) {
   char font[16]{};
-  const char* fonts[] = {"SMALL", "MEDIUM", "LARGE"};
+  const char* fonts[] = {"Small", "Medium", "Large"};
   auto font_index = state::get(*self.memory, "reader.settings.font_size", std::int64_t{1});
   if (font_index < 0) font_index = 0;
   if (font_index > 2) font_index = 2;
   std::snprintf(font, sizeof(font), "%s", fonts[font_index]);
   char refresh[24]{};
   const auto full = state::get(*self.memory, "reader.settings.full_refresh_every", std::int64_t{6});
-  if (full == 0) std::snprintf(refresh, sizeof(refresh), "NEVER");
-  else std::snprintf(refresh, sizeof(refresh), "EVERY %lld", static_cast<long long>(full));
+  if (full == 0) std::snprintf(refresh, sizeof(refresh), "Never");
+  else std::snprintf(refresh, sizeof(refresh), "Every %lld", static_cast<long long>(full));
   char sleep[24]{};
   std::snprintf(sleep, sizeof(sleep), "%lld MIN",
                 static_cast<long long>(state::get(*self.memory, "reader.settings.sleep_timeout_minutes",
                                                   std::int64_t{10})));
-  const char* labels[] = {"BLUETOOTH", "FONT SIZE", "FULL REFRESH", "PROGRESS BAR",
-                          "SLEEP TIMEOUT", "ABOUT"};
+  const char* labels[] = {"Bluetooth", "Font size", "Full refresh", "Progress bar",
+                          "Sleep timeout", "About"};
   const char* values[] = {
-      state::get(*self.memory, "network.bluetooth.enabled", false) ? "ON" : "OFF",
+      state::get(*self.memory, "network.bluetooth.enabled", false) ? "On" : "Off",
       font, refresh,
-      state::get(*self.memory, "reader.settings.show_progress", true) ? "ON" : "OFF",
+      state::get(*self.memory, "reader.settings.show_progress", true) ? "On" : "Off",
       sleep, "READER 0.1",
   };
   draw_row(self, visual_index, 58 + visual_index * 76, labels[index], values[index]);
@@ -39,7 +39,7 @@ inline void base_row(context& self, int index, int visual_index) {
 inline void render(context& self) {
   auto& d = *self.shell.display;
   canvas::fill(d, {0, 0, d.width, d.height}, canvas::gray::white);
-  draw_status(self, "SETTINGS");
+  draw_status(self, "Settings");
 
   const int plugin_count = routes::menu_count(self, "settings");
   for (int i = 0; i < plugin_count; ++i) {
@@ -49,10 +49,10 @@ inline void render(context& self) {
   }
   for (int i = 0; i < base_count; ++i) base_row(self, i, plugin_count + i);
 
-  const char* actions[] = {"BACK"};
+  const char* actions[] = {"Back"};
   draw_dock(self, actions, 1);
   if (state::get(*self.memory, "app.dialog.about", false))
-    draw_dialog(self, "ABOUT READER", "SOFTWARE READER 0.1");
+    draw_dialog(self, "About Reader", "Software Reader 0.1");
 }
 
 inline bool activate_base(context& self, int selected) {

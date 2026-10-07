@@ -49,15 +49,15 @@ inline void render(context& self) {
   auto& d = *self.shell.display;
   canvas::fill(d, {0, 0, d.width, d.height}, canvas::gray::white);
   char title[64]{};
-  std::snprintf(title, sizeof(title), "FILES: %.48s", path_name(self.file_path));
+  std::snprintf(title, sizeof(title), "Files: %.48s", path_name(self.file_path));
   draw_status(self, title);
   for (int row = 0; row < self.file_count && row < 10; ++row) {
     const auto& entry = self.files[static_cast<std::size_t>(row)];
-    draw_row(self, row, 58 + row * 76, entry.display, entry.directory ? "FOLDER" : "EPUB");
+    draw_row(self, row, 58 + row * 76, entry.display, entry.directory ? "Folder" : "EPUB");
   }
   if (self.file_count == 0)
-    text::center(d, {0, 300, d.width, 80}, "NO FILES", 3, canvas::gray::dark);
-  const char* actions[] = {"UP / BACK"};
+    text::center(d, {0, 300, d.width, 80}, "No files", 3, canvas::gray::dark);
+  const char* actions[] = {"Up / Back"};
   draw_dock(self, actions, 1);
 }
 

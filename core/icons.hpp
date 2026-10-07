@@ -26,12 +26,12 @@ inline void draw(display::device& display, geometry::rect rect, int value,
 
 inline int for_label(const char* value) {
   if (value == nullptr) return XR_ICON_NONE;
-  if (std::strcmp(value, "LIBRARY") == 0 || std::strcmp(value, "FAVORITES") == 0)
+  if (std::strcmp(value, "Library") == 0 || std::strcmp(value, "Favorites") == 0)
     return XR_ICON_BOOK;
-  if (std::strcmp(value, "FILE MANAGER") == 0) return XR_ICON_FOLDER;
-  if (std::strcmp(value, "SETTINGS") == 0) return XR_ICON_SETTINGS;
-  if (std::strcmp(value, "SLEEP") == 0) return XR_ICON_CLOSE;
-  if (std::strcmp(value, "WIFI") == 0) return XR_ICON_SD_CARD;
+  if (std::strcmp(value, "File Manager") == 0) return XR_ICON_FOLDER;
+  if (std::strcmp(value, "Settings") == 0) return XR_ICON_SETTINGS;
+  if (std::strcmp(value, "Sleep") == 0) return XR_ICON_CLOSE;
+  if (std::strcmp(value, "Wi-Fi") == 0) return XR_ICON_SD_CARD;
   return XR_ICON_NONE;
 }
 

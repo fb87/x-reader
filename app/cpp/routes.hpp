@@ -86,12 +86,12 @@ inline const char* menu_value(const router::descriptor& route) {
 }
 
 inline const char* menu_label(const router::descriptor& route) {
-  if (std::strcmp(route.title_key, "library") == 0) return "LIBRARY";
-  if (std::strcmp(route.title_key, "favorites") == 0) return "FAVORITES";
-  if (std::strcmp(route.title_key, "file_manager") == 0) return "FILE MANAGER";
-  if (std::strcmp(route.title_key, "wifi") == 0) return "WIFI";
-  if (std::strcmp(route.title_key, "settings") == 0) return "SETTINGS";
-  if (std::strcmp(route.title_key, "sleep") == 0) return "SLEEP";
+  if (std::strcmp(route.title_key, "library") == 0) return "Library";
+  if (std::strcmp(route.title_key, "favorites") == 0) return "Favorites";
+  if (std::strcmp(route.title_key, "file_manager") == 0) return "File Manager";
+  if (std::strcmp(route.title_key, "wifi") == 0) return "Wi-Fi";
+  if (std::strcmp(route.title_key, "settings") == 0) return "Settings";
+  if (std::strcmp(route.title_key, "sleep") == 0) return "Sleep";
   return route.title_key;
 }
 

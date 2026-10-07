@@ -25,7 +25,7 @@ inline void render(context& self) {
   auto& d = *self.shell.display;
   canvas::fill(d, {0, 0, d.width, d.height}, canvas::gray::white);
   const bool chrome = state::get(*self.memory, "app.reader.chrome", false);
-  if (chrome) draw_status(self, state::get(*self.memory, "reader.book.title", "READING"));
+  if (chrome) draw_status(self, state::get(*self.memory, "reader.book.title", "Reading"));
 
   const int font_scale = std::min(scale(self), 4);
   const auto area = text_rect(self);
@@ -59,7 +59,7 @@ inline void render(context& self) {
   text::draw(d, d.width - text::width(pages, 1) - 28, d.height - bottom + 16, pages, 1,
              canvas::gray::dark);
   if (chrome) {
-    const char* actions[] = {"CLOSE", "A-", "A+"};
+    const char* actions[] = {"Close", "A-", "A+"};
     draw_dock(self, actions, 3);
   }
 }

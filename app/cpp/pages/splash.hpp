@@ -8,9 +8,9 @@ namespace app::pages::splash {
 inline void render(context& self) {
   auto& d = *self.shell.display;
   canvas::fill(d, {0, 0, d.width, d.height}, canvas::gray::white);
-  text::center(d, {0, 320, d.width, 80}, "READER", 5);
-  text::center(d, {0, 410, d.width, 40}, "THE EBOOK READER FOR E-INK", 2, canvas::gray::dark);
-  text::center(d, {0, d.height - 90, d.width, 30}, "LOADING LIBRARY...", 2, canvas::gray::dark);
+  text::center(d, {0, 320, d.width, 80}, "Reader", 5);
+  text::center(d, {0, 410, d.width, 40}, "The ebook reader for e-ink", 2, canvas::gray::dark);
+  text::center(d, {0, d.height - 90, d.width, 30}, "Loading library...", 2, canvas::gray::dark);
 }
 
 inline bool event(context& self, const event::value&) {

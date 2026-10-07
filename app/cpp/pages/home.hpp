@@ -11,11 +11,11 @@ namespace app::pages::home {
 inline void render(context& self) {
   auto& d = *self.shell.display;
   canvas::fill(d, {0, 0, d.width, d.height}, canvas::gray::white);
-  draw_status(self, "HOME");
+  draw_status(self, "Home");
   const auto current_book = state::get(*self.memory, "reader.book.current", std::int64_t{-1});
   const geometry::rect card{18, 62, d.width - 36, 190};
   canvas::border(d, card, 3, canvas::gray::black);
-  text::draw_in(d, card.x + 16, card.y + 20, card.w - 32, "CONTINUE READING", 1,
+  text::draw_in(d, card.x + 16, card.y + 20, card.w - 32, "Continue Reading", 1,
                 canvas::gray::dark);
   if (current_book >= 0 && current_book < static_cast<std::int64_t>(self.reader.library.count)) {
     const auto& book = self.reader.library.books[static_cast<std::size_t>(current_book)];
@@ -41,7 +41,7 @@ inline void render(context& self) {
     text::draw_in(d, text_x + progress_w + 10, cover.y + 84, percent_w, percent, 2,
                   canvas::gray::black);
   } else {
-    text::draw_in(d, card.x + 20, card.y + 78, card.w - 40, "NO BOOK OPEN", 3,
+    text::draw_in(d, card.x + 20, card.y + 78, card.w - 40, "No book open", 3,
                   canvas::gray::black);
   }
   const int count = routes::menu_count(self, "home");
@@ -55,7 +55,7 @@ inline void render(context& self) {
       ++in_progress;
   }
   char stats[64]{};
-  std::snprintf(stats, sizeof(stats), "%zu BOOKS  |  %d IN PROGRESS", self.reader.library.count,
+  std::snprintf(stats, sizeof(stats), "%zu books  |  %d in progress", self.reader.library.count,
                 in_progress);
   text::draw(d, 24, d.height - 50, stats, 2, canvas::gray::dark);
 }

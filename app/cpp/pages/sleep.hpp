@@ -8,7 +8,7 @@ namespace app::pages::sleep {
 inline void render(context& self) {
   auto& d = *self.shell.display;
   canvas::fill(d, {0, 0, d.width, d.height}, canvas::gray::black);
-  text::center(d, {0, 400, d.width, 100}, "SLEEPING", 4, canvas::gray::white);
+  text::center(d, {0, 400, d.width, 100}, "Sleeping", 4, canvas::gray::white);
 }
 
 inline bool event(context& self, const event::value& value) {

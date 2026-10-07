@@ -49,7 +49,7 @@ function M.render()
         end
     end
     widget.label { x = 24, y = shell.api.height() - 50,
-                   text = string.format("%d BOOKS  |  %d IN PROGRESS", shell.library.count(), in_progress),
+                   text = string.format("%d books  |  %d in progress", shell.library.count(), in_progress),
                    gray = widget.gray.dark }
 end
 
