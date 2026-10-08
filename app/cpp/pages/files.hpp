@@ -15,6 +15,25 @@ inline bool return_home(context& self) {
   return true;
 }
 
+inline void load_directory(context& self, const char* path);
+
+inline bool go_parent(context& self) {
+  auto* device = capability::get<storage::device>(*self.capabilities, capability::id::storage);
+  const char* root = device != nullptr && device->root != nullptr ? device->root : "";
+  if (std::strcmp(self.file_path, root) == 0 || self.file_path[0] == '\0') return_home(self);
+  else {
+    char parent[storage::path_max]{};
+    std::snprintf(parent, sizeof(parent), "%s", self.file_path);
+    char* slash = std::strrchr(parent, '/');
+    if (slash == nullptr || slash <= parent + std::strlen(root))
+      std::snprintf(parent, sizeof(parent), "%s", root);
+    else
+      *slash = '\0';
+    load_directory(self, parent);
+  }
+  return true;
+}
+
 inline bool collect_entry(const storage::entry& value, void* user) {
   auto& self = *static_cast<context*>(user);
   if (value.name == nullptr || value.name[0] == '\0' ||
@@ -111,7 +130,7 @@ inline bool event(context& self, const event::value& value) {
   if (const int dock = dock_tap(self, value, 1); dock == 0) {
     state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::dock));
     state::set(*self.memory, "app.dock.selected", std::int64_t{0});
-    return_home(self);
+    go_parent(self);
   }
   if (value.event_type == event::type::tap) {
     if (value.y < 58 || value.y >= 58 + self.file_count * 76) return false;
@@ -129,27 +148,13 @@ inline bool event(context& self, const event::value& value) {
       return true;
     }
     if (value.key == event::key_code::ok || value.key == event::key_code::back) {
-      return_home(self);
+      go_parent(self);
       return true;
     }
     if (value.key == event::key_code::down) return true;
   }
   if (value.key == event::key_code::back) {
-    auto* device = capability::get<storage::device>(*self.capabilities, capability::id::storage);
-    const char* root = device != nullptr && device->root != nullptr ? device->root : "";
-    if (std::strcmp(self.file_path, root) == 0 || self.file_path[0] == '\0') {
-      return_home(self);
-    } else {
-      char parent[storage::path_max]{};
-      std::snprintf(parent, sizeof(parent), "%s", self.file_path);
-      char* slash = std::strrchr(parent, '/');
-      if (slash == nullptr || slash <= parent + std::strlen(root))
-        std::snprintf(parent, sizeof(parent), "%s", root);
-      else
-        *slash = '\0';
-      load_directory(self, parent);
-    }
-    return true;
+    return go_parent(self);
   }
   if (value.key == event::key_code::down) {
     const auto before = selection(self);
