@@ -6,6 +6,14 @@ local i18n = shell.i18n
 local model = require("model")
 local M = { id = model.page.settings }
 
+local function return_home()
+    model.back()
+    if model.current_page() ~= model.page.home then model.replace("/") end
+    state.set("app.menu.selected", 3)
+    state.set("app.home.card.focused", false)
+    return true
+end
+
 local function base_labels()
     return { i18n.t("bluetooth"), i18n.t("font_size"), i18n.t("full_refresh"),
              i18n.t("progress_bar"), i18n.t("sleep_timeout"), i18n.t("language"), i18n.t("about") }
@@ -84,7 +92,7 @@ function M.event(ev)
         state.set("app.menu.selected", selected); return activate(selected)
     end
     if ev.type ~= "key" then return false end
-    if ev.key == "back" then return model.back() end
+    if ev.key == "back" then return return_home() end
     if ev.key == "up" then model.move("app.menu.selected", -1, count); return true end
     if ev.key == "down" then model.move("app.menu.selected", 1, count); return true end
     if ev.key == "ok" then return activate(state.get("app.menu.selected") or 0) end

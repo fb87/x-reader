@@ -374,6 +374,7 @@ inline int l_reader_next(api::state* vm) {
   const int scale = std::min(4, 2 + static_cast<int>(state::get(
                                   *h.app->memory, "reader.settings.font_size", std::int64_t{1})));
   reader::next_page(h.app->reader, *h.app->memory, area, scale);
+  h.app->next_refresh = refresh::mode::quality;
   ++h.app->invalidations;
   return 0;
 }
@@ -388,6 +389,7 @@ inline int l_reader_previous(api::state* vm) {
   const int scale = std::min(4, 2 + static_cast<int>(state::get(
                                   *h.app->memory, "reader.settings.font_size", std::int64_t{1})));
   reader::previous_page(h.app->reader, *h.app->memory, area, scale);
+  h.app->next_refresh = refresh::mode::quality;
   ++h.app->invalidations;
   return 0;
 }
@@ -395,6 +397,7 @@ inline int l_reader_previous(api::state* vm) {
 inline int l_reader_adjust_font(api::state* vm) {
   auto& h = bound(vm);
   reader::adjust_font(*h.app->memory, integer_arg(vm, *h.lib, 1));
+  h.app->next_refresh = refresh::mode::quality;
   ++h.app->invalidations;
   return 0;
 }

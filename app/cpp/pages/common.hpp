@@ -30,6 +30,14 @@ inline void draw_dock(context& self, const char* const* labels, int count) {
   widget::dock(*self.shell.display, labels, count, selected, focused);
 }
 
+inline int dock_tap(const context& self, const event::value& value, int count) {
+  if (value.event_type != event::type::tap || count <= 0 ||
+      value.y < self.shell.display->height - 64)
+    return -1;
+  const int index = value.x / std::max(1, self.shell.display->width / count);
+  return index >= 0 && index < count ? index : -1;
+}
+
 inline void draw_file_dock(context& self, const char* const* labels) {
   const bool focused = static_cast<focus_area>(state::get(*self.memory, "app.focus.area",
       static_cast<std::int64_t>(focus_area::content))) == focus_area::dock;

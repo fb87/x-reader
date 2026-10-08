@@ -98,6 +98,12 @@ $(BUILD)/architecture_test: tests/architecture_test.cpp $(HEADERS) $(PLUGIN_STAM
 $(BUILD)/router_test: tests/router_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/router_test.cpp $(FONT_OBJECTS) -o $@
 
+$(BUILD)/book_title_test: tests/book_title_test.cpp $(HEADERS) $(PLUGIN_STAMP) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/book_title_test.cpp -o $@
+
+$(BUILD)/persistence_test: tests/persistence_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/persistence_test.cpp $(FONT_OBJECTS) -o $@ -lz
+
 $(BUILD)/monkey_test: tests/monkey_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/monkey_test.cpp $(FONT_OBJECTS) -o $@ -lz
 
@@ -110,12 +116,14 @@ $(BUILD)/lua_app_test: tests/lua_app_test.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(H
 $(BUILD)/lua_hot_reload_test: tests/lua_hot_reload_test.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/lua_hot_reload_test.cpp $(FONT_OBJECTS) -o $@ -lz $(LUA_LIBS)
 
-test-cpp: $(BUILD)/reader $(BUILD)/simulator_gui $(BUILD)/simulator_test $(BUILD)/epub_test $(BUILD)/architecture_test $(BUILD)/router_test
+test-cpp: $(BUILD)/reader $(BUILD)/simulator_gui $(BUILD)/simulator_test $(BUILD)/epub_test $(BUILD)/architecture_test $(BUILD)/router_test $(BUILD)/book_title_test $(BUILD)/persistence_test
 	./$(BUILD)/reader
 	./$(BUILD)/simulator_test
 	./$(BUILD)/epub_test
 	./$(BUILD)/architecture_test
 	./$(BUILD)/router_test
+	./$(BUILD)/book_title_test
+	./$(BUILD)/persistence_test
 
 test-lua: $(BUILD)/reader-lua $(BUILD)/simulator_lua_gui $(BUILD)/lua_app_test $(BUILD)/lua_parity_test $(BUILD)/lua_hot_reload_test
 	./$(BUILD)/reader-lua

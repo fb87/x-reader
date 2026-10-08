@@ -14,6 +14,10 @@ namespace app {
 
 inline bool init(context& self, capability::registry& capabilities, state::store& memory,
                  state::store& persistent, bool native_ui = true) {
+  const char* restored_route = state::get(persistent, "app.route.current", "");
+  const auto restored_menu = state::get(persistent, "app.menu.selected", std::int64_t{0});
+  const auto restored_focus = state::get(persistent, "app.focus.area", std::int64_t{0});
+  const auto restored_dock = state::get(persistent, "app.dock.selected", std::int64_t{0});
   self.capabilities = &capabilities;
   self.memory = &memory;
   self.persistent = &persistent;
@@ -43,6 +47,13 @@ inline bool init(context& self, capability::registry& capabilities, state::store
               static_cast<void*>(&self));
   self.splash_entered_ms = platform::now_ms(*platform_device);
   (void)scan_library(self);
+  if (restored_route[0] != '\0' && std::strcmp(restored_route, "/splash") != 0) {
+    const char* route = std::strcmp(restored_route, "/book/0/reader") == 0 ? "/library" : restored_route;
+    routes::replace(self, route);
+    state::set(*self.memory, "app.menu.selected", restored_menu);
+    state::set(*self.memory, "app.focus.area", restored_focus);
+    state::set(*self.memory, "app.dock.selected", restored_dock);
+  }
   if (native_ui) render(self);
   return true;
 }

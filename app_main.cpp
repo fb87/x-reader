@@ -12,6 +12,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 /** @brief Composition root wiring the build-selected board to the board-independent application. */
 static int run_application() {
@@ -21,6 +22,15 @@ static int run_application() {
 #else
     selected_board::init(board);
     if (const char* root = std::getenv("XREADER_SDCARD")) selected_board::mount(board, root);
+#endif
+
+    char state_path[storage::path_max * 2]{};
+#ifdef ESP_PLATFORM
+    std::snprintf(state_path, sizeof(state_path), "/sdcard/.xreader_state.db");
+#else
+    const char* state_root = std::getenv("XREADER_SDCARD");
+    std::snprintf(state_path, sizeof(state_path), "%s/.xreader_state.db",
+                  state_root != nullptr ? state_root : "build");
 #endif
 
 #ifdef ESP_PLATFORM
@@ -43,7 +53,7 @@ static int run_application() {
     static state::store persistent{};
     static app::context application{};
 #endif
-    (void)state::load(persistent, "build/state.db");
+    (void)state::load(persistent, state_path);
 
     if (!app::init(application, board.capabilities, memory, persistent)) {
         std::fprintf(stderr, "application initialization failed\n");
@@ -58,14 +68,21 @@ static int run_application() {
     // Keep the board-owned application alive after the initial frame. The
     // simulator has its own event loop, while ESP-IDF invokes app_main only
     // once and otherwise leaves the splash frame on the panel forever.
+    std::uint32_t last_save = 0;
     for (;;) {
         app::pump(application);
+        const auto now = platform::now_ms(*application.shell.platform);
+        if (now - last_save >= 5000U) {
+            app::checkpoint(application);
+            (void)state::save(persistent, state_path);
+            last_save = now;
+        }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 #else
     app::pump(application);
     app::checkpoint(application);
-    (void)state::save(persistent, "build/state.db");
+    (void)state::save(persistent, state_path);
 #endif
     return 0;
 }

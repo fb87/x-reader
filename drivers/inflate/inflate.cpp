@@ -2,6 +2,11 @@
 
 #include <string.h>
 
+#ifdef ESP_PLATFORM
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#endif
+
 namespace drivers::inflate {
 namespace {
 
@@ -205,6 +210,9 @@ static esp_err_t decode_block(reader_t* reader, const tree_t* literals,
         while (length--) {
             output[*output_size] = output[*output_size - distance];
             ++(*output_size);
+#ifdef ESP_PLATFORM
+            if (((*output_size) & 0x1FFFU) == 0U) vTaskDelay(1);
+#endif
         }
     }
 }

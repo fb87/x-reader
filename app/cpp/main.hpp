@@ -28,12 +28,14 @@ inline bool on_shell_event(const event::value& value, void* user) {
                         (page == page::reader && state::get(*self.memory, "app.reader.chrome", false));
   if (value.key == event::key_code::down && has_dock) {
     state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::dock));
+    self.next_refresh = refresh::mode::quality;
     ++self.invalidations;
   } else if (value.key == event::key_code::up &&
              static_cast<focus_area>(state::get(*self.memory, "app.focus.area",
                                                 static_cast<std::int64_t>(focus_area::content))) ==
                  focus_area::dock) {
     state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content));
+    self.next_refresh = refresh::mode::quality;
     ++self.invalidations;
   }
   if (value.key == event::key_code::back) {

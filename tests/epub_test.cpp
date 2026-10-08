@@ -1,5 +1,6 @@
 #include "core/storage.hpp"
 #include "reader/epub.hpp"
+#include "reader/session.hpp"
 
 #include <array>
 #include <cstdint>
@@ -71,6 +72,24 @@ int main() {
                  epub::status_string(text_status), document.manifest_count, document.spine_count,
                  static_cast<unsigned>(static_cast<std::uint8_t>(text[0])));
     return 3;
+  }
+  static reader::session pagination{};
+  std::snprintf(pagination.text.data(), pagination.text.size(),
+                "A deliberately long paragraph used to verify cached pagination across page turns. "
+                "The same layout must reuse the page map while a changed layout invalidates it.");
+  pagination.current_chapter = 3;
+  const geometry::rect area{28, 28, 484, 840};
+  reader::paginate(pagination, area, 3);
+  pagination.page_start[0] = 17;
+  reader::paginate(pagination, area, 3);
+  if (pagination.page_start[0] != 17) {
+    std::fprintf(stderr, "pagination cache was recomputed for an unchanged layout\n");
+    return 4;
+  }
+  reader::paginate(pagination, {28, 28, 480, 840}, 3);
+  if (pagination.page_start[0] != 0) {
+    std::fprintf(stderr, "pagination cache was not invalidated by a layout change\n");
+    return 5;
   }
   std::printf("epub tests: passed (manifest=%u spine=%u)\n", document.manifest_count,
               document.spine_count);

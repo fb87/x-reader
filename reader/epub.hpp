@@ -5,9 +5,13 @@
 #include <cstdint>
 #include <array>
 #include <cstring>
+#include <new>
 
 #ifdef ESP_PLATFORM
 #include "esp_attr.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #define EPUB_WORK_BSS EXT_RAM_BSS_ATTR
 #else
 #define EPUB_WORK_BSS
@@ -36,10 +40,20 @@
  */
 namespace epub {
 
+inline void cooperative_yield(std::size_t offset) {
+#ifdef ESP_PLATFORM
+  if ((offset & 0x1FFFU) == 0U) vTaskDelay(1);
+#else
+  (void)offset;
+#endif
+}
+
 inline constexpr std::uint32_t path_max = 256;
 inline constexpr std::uint32_t id_max = 64;
 inline constexpr std::uint32_t title_max = 128;
 inline constexpr std::uint16_t no_item = 0xFFFFu;
+inline constexpr std::uint32_t zip_tail_capacity = 65557u;
+inline constexpr std::size_t manifest_hash_capacity = 1024;
 
 /** @brief Outcome of an EPUB operation; never silently succeeds on a short read. */
 enum class status {
@@ -113,6 +127,11 @@ struct context {
   std::uint16_t spine_count = 0;
   void* scratch = nullptr;
   std::uint32_t scratch_size = 0;
+  mutable std::array<unsigned char, zip_tail_capacity> zip_tail{};
+  mutable std::uint32_t zip_tail_start = 0;
+  mutable std::uint32_t zip_tail_size = 0;
+  mutable bool zip_tail_valid = false;
+  std::array<std::uint16_t, manifest_hash_capacity> manifest_hash{};
 };
 
 namespace detail {
@@ -161,23 +180,28 @@ inline constexpr std::uint32_t zip_end_signature = 0x06054b50UL;
 inline constexpr std::uint32_t zip_central_header_size = 46u;
 
 /** @brief Finds a central-directory entry's 46-byte header and its file offset. */
-inline status zip_find(const file_view& view, const char* path, unsigned char header[46],
+inline status zip_find(const context& doc, const char* path, unsigned char header[46],
                        std::uint32_t& header_at) {
-  constexpr std::uint32_t tail_capacity = 65557u;
-  static EPUB_WORK_BSS std::array<unsigned char, tail_capacity> tail{};
+  const file_view& view = *doc.storage;
   if (view.device == nullptr || path == nullptr || view.size < 22U) return status::format;
-  const std::uint32_t tail_size = view.size > tail_capacity ? tail_capacity : view.size;
+  const std::uint32_t tail_size = view.size > zip_tail_capacity ? zip_tail_capacity : view.size;
   const std::uint32_t tail_start = view.size - tail_size;
-  if (read_at(view, tail_start, tail.data(), tail_size) != status::ok) return status::io;
+  if (!doc.zip_tail_valid || doc.zip_tail_start != tail_start || doc.zip_tail_size != tail_size) {
+    if (read_at(view, tail_start, doc.zip_tail.data(), tail_size) != status::ok) return status::io;
+    doc.zip_tail_start = tail_start;
+    doc.zip_tail_size = tail_size;
+    doc.zip_tail_valid = true;
+  }
+  const auto* tail = doc.zip_tail.data();
   int end_offset = -1;
   for (std::int64_t offset = static_cast<std::int64_t>(tail_size) - 22; offset >= 0; --offset) {
-    if (le32(tail.data() + offset) == zip_end_signature) {
+     if (le32(tail + offset) == zip_end_signature) {
       end_offset = static_cast<int>(offset);
       break;
     }
   }
   if (end_offset < 0) return status::format;
-  const unsigned char* end = tail.data() + end_offset;
+   const unsigned char* end = tail + end_offset;
   if (le16(end + 4) != 0 || le16(end + 6) != 0 || le16(end + 8) != le16(end + 10) ||
       le16(end + 8) == 0xFFFFu || le32(end + 12) == 0xFFFFFFFFu ||
       le32(end + 16) == 0xFFFFFFFFu) {
@@ -190,8 +214,12 @@ inline status zip_find(const file_view& view, const char* path, unsigned char he
   const std::uint32_t directory_end = directory_at + directory_size;
   std::uint32_t pos = directory_at;
   for (std::uint16_t i = 0; i < entries; ++i) {
+    cooperative_yield(static_cast<std::size_t>(i) * 256U);
     if (!range_ok(pos, zip_central_header_size, directory_end) ||
-        read_at(view, pos, header, zip_central_header_size) != status::ok) {
+       (pos < tail_start || pos + zip_central_header_size > view.size
+            ? read_at(view, pos, header, zip_central_header_size)
+            : (std::memcpy(header, tail + (pos - tail_start), zip_central_header_size), status::ok)) !=
+          status::ok) {
       return status::format;
     }
     if (le32(header) != zip_central_signature) return status::format;
@@ -203,7 +231,14 @@ inline status zip_find(const file_view& view, const char* path, unsigned char he
                   directory_end)) {
       return status::format;
     }
-    if (string_equal_at(view, next, name_size, path)) {
+     bool same = false;
+     if (next >= tail_start && next + name_size <= view.size && next + name_size <= tail_start + tail_size) {
+       same = std::strncmp(reinterpret_cast<const char*>(tail + (next - tail_start)), path,
+                           name_size) == 0 && path[name_size] == '\0';
+     } else {
+       same = string_equal_at(view, next, name_size, path);
+     }
+     if (same) {
       header_at = pos;
       return status::ok;
     }
@@ -221,7 +256,7 @@ inline status extract(const context& doc, const char* path, void* destination,
   unsigned char local[30];
   std::uint32_t central_at = 0;
   if (doc.storage == nullptr || path == nullptr || destination == nullptr) return status::argument;
-  status result = detail::zip_find(*doc.storage, path, central, central_at);
+   status result = detail::zip_find(doc, path, central, central_at);
   if (result != status::ok) return result;
   const std::uint16_t flags = detail::le16(central + 8);
   const std::uint16_t method = detail::le16(central + 10);
@@ -348,7 +383,31 @@ inline status parse_container(context& doc, const char* xml, std::uint32_t size)
   return status::format;
 }
 
+inline std::uint32_t manifest_hash_value(const char* id) {
+  std::uint32_t hash = 2166136261U;
+  while (id != nullptr && *id != '\0') hash = (hash ^ static_cast<unsigned char>(*id++)) * 16777619U;
+  return hash;
+}
+
+inline void manifest_hash_insert(context& doc, const char* id, std::uint16_t index) {
+  std::size_t slot = manifest_hash_value(id) % manifest_hash_capacity;
+  for (std::size_t probe = 0; probe < manifest_hash_capacity; ++probe) {
+    if (doc.manifest_hash[slot] == no_item) {
+      doc.manifest_hash[slot] = index;
+      return;
+    }
+    slot = (slot + 1) % manifest_hash_capacity;
+  }
+}
+
 inline std::uint16_t manifest_index(const context& doc, const char* id) {
+  std::size_t slot = manifest_hash_value(id) % manifest_hash_capacity;
+  for (std::size_t probe = 0; probe < manifest_hash_capacity; ++probe) {
+    const auto index = doc.manifest_hash[slot];
+    if (index == no_item) return no_item;
+    if (std::strcmp(doc.manifest[index].id, id) == 0) return index;
+    slot = (slot + 1) % manifest_hash_capacity;
+  }
   for (std::uint16_t i = 0; i < doc.manifest_count; ++i) {
     if (std::strcmp(doc.manifest[i].id, id) == 0) return i;
   }
@@ -356,11 +415,14 @@ inline std::uint16_t manifest_index(const context& doc, const char* id) {
 }
 
 inline status parse_opf(context& doc, const char* xml, std::uint32_t size) {
+  doc.manifest_hash.fill(no_item);
   const char* p = xml;
   const char* limit = xml + size;
   const char *name = nullptr, *name_end = nullptr, *tag_end = nullptr;
   char id[id_max] = {0};
+  std::size_t tag_count = 0;
   while ((p = tag_next(p, limit, name, name_end, tag_end)) != nullptr) {
+    cooperative_yield(tag_count++ * 256U);
     if (name_is(name, name_end, "item")) {
       if (doc.manifest_count == doc.manifest_capacity) return status::capacity;
       manifest_item& item = doc.manifest[doc.manifest_count];
@@ -368,6 +430,7 @@ inline status parse_opf(context& doc, const char* xml, std::uint32_t size) {
           !attribute(name_end, tag_end, "href", item.href, sizeof(item.href))) {
         return status::format;
       }
+      manifest_hash_insert(doc, item.id, doc.manifest_count);
       ++doc.manifest_count;
     } else if (name_is(name, name_end, "itemref")) {
       if (!attribute(name_end, tag_end, "idref", id, sizeof(id))) return status::format;
@@ -406,7 +469,8 @@ inline status open(context& doc, const file_view& storage, void* scratch,
       manifest_capacity == 0 || spine == nullptr || spine_capacity == 0) {
     return status::argument;
   }
-  doc = context{};
+  doc.~context();
+  new (&doc) context{};
   doc.storage = &storage;
   doc.scratch = scratch;
   doc.scratch_size = scratch_size;
@@ -416,16 +480,28 @@ inline status open(context& doc, const file_view& storage, void* scratch,
   doc.spine_capacity = spine_capacity;
 
   std::uint32_t size = 0;
+#ifdef ESP_PLATFORM
+  ESP_LOGI("epub", "extract container");
+#endif
   status result = extract(doc, "META-INF/container.xml", scratch, scratch_size - 1, size);
   if (result != status::ok) return result;
   static_cast<char*>(scratch)[size] = '\0';
   result = detail::parse_container(doc, static_cast<const char*>(scratch), size);
   if (result != status::ok) return result;
 
+#ifdef ESP_PLATFORM
+  ESP_LOGI("epub", "extract package %s", doc.package_path);
+#endif
   result = extract(doc, doc.package_path, scratch, scratch_size - 1, size);
   if (result != status::ok) return result;
   static_cast<char*>(scratch)[size] = '\0';
-  return detail::parse_opf(doc, static_cast<const char*>(scratch), size);
+  result = detail::parse_opf(doc, static_cast<const char*>(scratch), size);
+#ifdef ESP_PLATFORM
+  ESP_LOGI("epub", "package parsed: manifest=%u spine=%u status=%s",
+           static_cast<unsigned>(doc.manifest_count), static_cast<unsigned>(doc.spine_count),
+           status_string(result));
+#endif
+  return result;
 }
 
 /** @brief Resolves a spine item's href relative to the OPF path. */
@@ -529,6 +605,7 @@ inline status xhtml_text(const char* source, std::uint32_t source_size, char* te
   const char* ignored = nullptr;
   if (text == nullptr || text_size == 0) return status::argument;
   while (p < limit) {
+    cooperative_yield(static_cast<std::size_t>(p - source));
     if (ignored != nullptr && *p != '<') {
       ++p;
       continue;

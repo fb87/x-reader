@@ -30,6 +30,11 @@ inline void render(context& self) {
   const int font_scale = std::min(scale(self), 4);
   const auto area = text_rect(self);
   ::reader::paginate(self.reader.current, area, font_scale);
+  state::set(*self.memory, "reader.book.page", static_cast<std::int64_t>(self.reader.current.page));
+  state::set(*self.memory, "reader.book.chapter",
+             static_cast<std::int64_t>(self.reader.current.current_chapter));
+  state::set(*self.memory, "reader.book.progress",
+             static_cast<std::int64_t>(::reader::progress_percent(self.reader.current)));
   const char* body = ::reader::current_text(self.reader.current);
   std::size_t offset = self.reader.current.page_start[self.reader.current.page];
   int y = area.y;
@@ -68,6 +73,19 @@ inline void render(context& self) {
 inline bool event(context& self, const event::value& value) {
   const auto area = text_rect(self);
   const int font_scale = std::min(scale(self), 4);
+  if (const int dock = dock_tap(self, value, 3); dock >= 0 &&
+      state::get(*self.memory, "app.reader.chrome", false)) {
+    state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::dock));
+    state::set(*self.memory, "app.dock.selected", static_cast<std::int64_t>(dock));
+    if (dock == 0) {
+      if (!routes::back(self)) routes::set_page(self, page::home);
+    } else {
+      ::reader::adjust_font(*self.memory, dock == 1 ? -1 : 1);
+      self.next_refresh = refresh::mode::quality;
+      ++self.invalidations;
+    }
+    return true;
+  }
   if (value.event_type == event::type::tap) {
     const int third = self.shell.display->width / 3;
     if (value.x < third)
@@ -77,6 +95,7 @@ inline bool event(context& self, const event::value& value) {
     else
       state::set(*self.memory, "app.reader.chrome",
                  !state::get(*self.memory, "app.reader.chrome", false));
+    self.next_refresh = refresh::mode::quality;
     ++self.invalidations;
     return true;
   }
@@ -86,8 +105,12 @@ inline bool event(context& self, const event::value& value) {
       focus_area::dock) {
     const auto selected = state::get(*self.memory, "app.dock.selected", std::int64_t{0});
     if (value.key == event::key_code::up) {
-      state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content));
+      if (selected > 0)
+        state::set(*self.memory, "app.dock.selected", selected - 1);
+      else
+        state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content));
       ++self.invalidations;
+      self.next_refresh = refresh::mode::quality;
       return true;
     }
     if (value.key == event::key_code::left || value.key == event::key_code::right) {
@@ -95,14 +118,23 @@ inline bool event(context& self, const event::value& value) {
       next = std::max<std::int64_t>(0, std::min<std::int64_t>(2, next));
       state::set(*self.memory, "app.dock.selected", next);
       ++self.invalidations;
+      self.next_refresh = refresh::mode::quality;
       return true;
     }
-    if (value.key == event::key_code::down) return true;
+    if (value.key == event::key_code::down) {
+      if (selected < 2) {
+        state::set(*self.memory, "app.dock.selected", selected + 1);
+        ++self.invalidations;
+      }
+      self.next_refresh = refresh::mode::quality;
+      return true;
+    }
     if (value.key == event::key_code::ok) {
       if (selected == 0) {
         if (!routes::back(self)) routes::set_page(self, page::home);
       } else {
         ::reader::adjust_font(*self.memory, selected == 1 ? -1 : 1);
+        self.next_refresh = refresh::mode::quality;
         ++self.invalidations;
       }
       return true;
@@ -120,17 +152,20 @@ inline bool event(context& self, const event::value& value) {
     } else {
       ::reader::next_page(self.reader, *self.memory, area, font_scale);
     }
+    self.next_refresh = refresh::mode::quality;
     ++self.invalidations;
     return true;
   }
   if (value.key == event::key_code::left || value.key == event::key_code::up) {
     ::reader::previous_page(self.reader, *self.memory, area, font_scale);
+    self.next_refresh = refresh::mode::quality;
     ++self.invalidations;
     return true;
   }
   if (value.key == event::key_code::menu || value.key == event::key_code::ok) {
     state::set(*self.memory, "app.reader.chrome",
                !state::get(*self.memory, "app.reader.chrome", false));
+    self.next_refresh = refresh::mode::quality;
     ++self.invalidations;
     return true;
   }

@@ -150,12 +150,18 @@ int main() {
   test::key(board, application, event::key_code::menu);
   test::key(board, application, event::key_code::down);
   test::expect(result,
-               static_cast<app::focus_area>(state::get(memory, "app.focus.area", std::int64_t{0})) ==
-                   app::focus_area::dock,
-               "reader Down enters dock when chrome is visible");
+                static_cast<app::focus_area>(state::get(memory, "app.focus.area", std::int64_t{0})) ==
+                    app::focus_area::dock,
+                "reader Down enters dock when chrome is visible");
+  test::key(board, application, event::key_code::down);
+  test::key(board, application, event::key_code::down);
+  test::expect(result, state::get(memory, "app.dock.selected", std::int64_t{-1}) == 2,
+               "reader dock Down traverses all actions");
+  test::key(board, application, event::key_code::up);
+  test::expect(result, state::get(memory, "app.dock.selected", std::int64_t{-1}) == 1,
+               "reader dock Up moves to previous action");
   const auto font_before = state::get(memory, "reader.settings.font_size", std::int64_t{-1});
-  test::key(board, application, event::key_code::right);
-  test::key(board, application, event::key_code::right);
+  test::key(board, application, event::key_code::down);
   test::key(board, application, event::key_code::ok);
   test::expect(result, state::get(memory, "reader.settings.font_size", std::int64_t{-1}) >= font_before,
                "reader A+ dock action adjusts font setting");
@@ -166,6 +172,13 @@ int main() {
   test::expect(result, app::current_page(application) == app::page::home,
                "library BACK returns home");
 
+  // Dock touch hit testing.
+  state::set(memory, "app.menu.selected", std::int64_t{0});
+  test::key(board, application, event::key_code::ok);
+  test::tap(board, application, 450, board::sim::height - 20);
+  test::expect(result, app::current_page(application) == app::page::home,
+               "library dock touch activates Back");
+
   // Favorites action from library dock.
   state::set(memory, "app.menu.selected", std::int64_t{0});
   test::key(board, application, event::key_code::ok);
@@ -173,9 +186,15 @@ int main() {
   test::key(board, application, event::key_code::down);
   test::key(board, application, event::key_code::down);  // bottom boundary -> dock
   test::expect(result,
-               static_cast<app::focus_area>(state::get(memory, "app.focus.area", std::int64_t{0})) ==
-                   app::focus_area::dock,
-               "library rotary reaches bottom action bar");
+                static_cast<app::focus_area>(state::get(memory, "app.focus.area", std::int64_t{0})) ==
+                    app::focus_area::dock,
+                "library rotary reaches bottom action bar");
+  test::key(board, application, event::key_code::down);
+  test::expect(result, state::get(memory, "app.dock.selected", std::int64_t{-1}) == 1,
+               "library dock Down advances action selection");
+  test::key(board, application, event::key_code::up);
+  test::expect(result, state::get(memory, "app.dock.selected", std::int64_t{-1}) == 0,
+               "library dock Up returns to first action");
   test::key(board, application, event::key_code::ok);
   test::expect(result, application.reader.library.books[1].favorite,
                "Favorite dock action updates cached book state");
@@ -199,8 +218,11 @@ int main() {
   test::expect(result, app::current_page(application) == app::page::reader,
                "file manager opens EPUB directly");
   const auto file_reader_page = application.reader.current.page;
+  const auto file_reader_chapter = application.reader.current.current_chapter;
   test::key(board, application, event::key_code::down);
-  test::expect(result, application.reader.current.page != file_reader_page,
+  test::key(board, application, event::key_code::down);
+  test::expect(result, application.reader.current.page != file_reader_page ||
+                           application.reader.current.current_chapter != file_reader_chapter,
                "File Manager reader responds to Down page turn");
   test::key(board, application, event::key_code::back);
   test::expect(result, app::current_page(application) == app::page::files,
@@ -274,6 +296,8 @@ int main() {
   test::key(board, application, event::key_code::back);
   test::expect(result, app::current_page(application) == app::page::home,
                "back navigation returns settings/connectivity to home");
+  test::expect(result, state::get(memory, "app.menu.selected", std::int64_t{-1}) == 3,
+               "settings back restores Settings focus on Home");
 
   // Sleep/wake.
   state::set(memory, "app.menu.selected", std::int64_t{4});

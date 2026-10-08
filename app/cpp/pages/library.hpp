@@ -21,6 +21,7 @@ inline bool show_book_info(context& self) {
   if (selected_book_index(self) < 0) return false;
   state::set(*self.memory, "app.dialog.book_info", true);
   state::set(*self.memory, "app.dialog.selected", std::int64_t{0});
+  self.next_refresh = refresh::mode::quality;
   ++self.invalidations;
   return true;
 }
@@ -28,6 +29,7 @@ inline bool show_book_info(context& self) {
 inline bool activate_book_info(context& self) {
   const auto selected = state::get(*self.memory, "app.dialog.selected", std::int64_t{0});
   state::set(*self.memory, "app.dialog.book_info", false);
+  self.next_refresh = refresh::mode::quality;
   ++self.invalidations;
   return selected == 0 ? open_selected_book(self) : true;
 }
@@ -160,6 +162,7 @@ inline bool event(context& self, const event::value& value) {
         return activate_book_info(self);
       else if (value.key == event::key_code::back)
         state::set(*self.memory, "app.dialog.book_info", false);
+      self.next_refresh = refresh::mode::quality;
       ++self.invalidations;
       return true;
     }
@@ -169,6 +172,12 @@ inline bool event(context& self, const event::value& value) {
       return activate_book_info(self);
     }
     return true;
+  }
+
+  if (const int dock = dock_tap(self, value, 3); dock >= 0) {
+    state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::dock));
+    state::set(*self.memory, "app.dock.selected", static_cast<std::int64_t>(dock));
+    return activate_dock(self);
   }
 
   const int count = visible_book_count(self);
@@ -189,7 +198,10 @@ inline bool event(context& self, const event::value& value) {
   if (area == focus_area::dock) {
     auto selected = state::get(*self.memory, "app.dock.selected", std::int64_t{0});
     if (value.key == event::key_code::up) {
-      state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content));
+      if (selected > 0)
+        state::set(*self.memory, "app.dock.selected", selected - 1);
+      else
+        state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content));
       ++self.invalidations;
       return true;
     }
@@ -203,7 +215,13 @@ inline bool event(context& self, const event::value& value) {
       ++self.invalidations;
       return true;
     }
-    if (value.key == event::key_code::down) return true;
+    if (value.key == event::key_code::down) {
+      if (selected < 2) {
+        state::set(*self.memory, "app.dock.selected", selected + 1);
+        ++self.invalidations;
+      }
+      return true;
+    }
     if (value.key == event::key_code::ok) return activate_dock(self);
   }
 

@@ -8,6 +8,15 @@
 
 namespace app::pages::settings {
 
+inline bool return_home(context& self) {
+  routes::back(self);
+  if (current_page(self) != page::home) routes::replace(self, "/");
+  state::set(*self.memory, "app.menu.selected", std::int64_t{3});
+  state::set(*self.memory, "app.home.card.focused", false);
+  ++self.invalidations;
+  return true;
+}
+
 inline constexpr int base_count = 6;
 
 inline void base_row(context& self, int index, int visual_index) {
@@ -105,6 +114,12 @@ inline bool event(context& self, const event::value& value) {
     }
   }
 
+  if (const int dock = dock_tap(self, value, 1); dock == 0) {
+    state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::dock));
+    state::set(*self.memory, "app.dock.selected", std::int64_t{0});
+    return return_home(self);
+  }
+
   const int plugin_count = routes::menu_count(self, "settings");
   const int count = plugin_count + base_count;
   auto activate = [&](int selected) {
@@ -131,11 +146,11 @@ inline bool event(context& self, const event::value& value) {
       return true;
     }
     if (value.key == event::key_code::ok || value.key == event::key_code::back) {
-      return routes::push(self, "/");
+      return return_home(self);
     }
     if (value.key == event::key_code::down) return true;
   }
-  if (value.key == event::key_code::back) return routes::push(self, "/");
+  if (value.key == event::key_code::back) return return_home(self);
   if (value.key == event::key_code::up) { move_selection(self, -1, count); return true; }
   if (value.key == event::key_code::down) {
     const auto before = selection(self);

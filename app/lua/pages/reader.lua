@@ -51,10 +51,17 @@ function M.event(ev)
     if ev.type ~= "key" then return false end
     if (state.get("app.focus.area") or 0) == 1 then
         local selected = state.get("app.dock.selected") or 0
-        if ev.key == "up" then state.set("app.focus.area", 0); return true end
+        if ev.key == "up" then
+            if selected > 0 then state.set("app.dock.selected", selected - 1)
+            else state.set("app.focus.area", 0) end
+            return true
+        end
         if ev.key == "left" and selected > 0 then state.set("app.dock.selected", selected - 1); return true end
         if ev.key == "right" and selected < 2 then state.set("app.dock.selected", selected + 1); return true end
-        if ev.key == "down" then return true end
+        if ev.key == "down" then
+            if selected < 2 then state.set("app.dock.selected", selected + 1) end
+            return true
+        end
         if ev.key == "ok" then dock_action(); return true end
     end
     if ev.key == "back" then

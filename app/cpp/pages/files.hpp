@@ -25,6 +25,7 @@ inline bool collect_entry(const storage::entry& value, void* user) {
   std::snprintf(entry.name, sizeof(entry.name), "%s", value.name);
   entry.directory = value.directory;
   std::snprintf(entry.display, sizeof(entry.display), "%s", value.name);
+  book::repair_mojibake(entry.display, sizeof(entry.display), value.name);
   return true;
 }
 
@@ -107,6 +108,11 @@ inline bool open_entry(context& self, int index) {
 }
 
 inline bool event(context& self, const event::value& value) {
+  if (const int dock = dock_tap(self, value, 1); dock == 0) {
+    state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::dock));
+    state::set(*self.memory, "app.dock.selected", std::int64_t{0});
+    return_home(self);
+  }
   if (value.event_type == event::type::tap) {
     if (value.y < 58 || value.y >= 58 + self.file_count * 76) return false;
     state::set(*self.memory, "app.files.selected",

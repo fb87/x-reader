@@ -39,6 +39,12 @@ inline const xr_glyph_t* rich_glyph(const xr_font_t& font, std::uint32_t codepoi
   return &font.glyphs[codepoint - font.first];
 }
 
+inline int advance(std::uint32_t codepoint, int scale) {
+  const auto& font = rich_font(scale);
+  const auto* glyph = rich_glyph(font, codepoint);
+  return glyph != nullptr ? glyph->advance : font.ascent / 2;
+}
+
 inline int font_width(const xr_font_t& font, const char* value) {
   if (value == nullptr) return 0;
   int result = 0;
@@ -48,6 +54,37 @@ inline int font_width(const xr_font_t& font, const char* value) {
     result += glyph != nullptr ? glyph->advance : font.ascent / 2;
   }
   return result;
+}
+
+inline void fit_font(const xr_font_t& font, const char* value, int max_width, char* output,
+                     std::size_t capacity) {
+  if (output == nullptr || capacity == 0) return;
+  if (value == nullptr) {
+    output[0] = '\0';
+    return;
+  }
+  if (font_width(font, value) <= max_width) {
+    std::snprintf(output, capacity, "%s", value);
+    return;
+  }
+  const int ellipsis_width = font_width(font, "...");
+  const char* cursor = value;
+  std::size_t used = 0;
+  while (*cursor != '\0') {
+    const char* next = cursor;
+    (void)next_codepoint(next);
+    const std::size_t bytes = static_cast<std::size_t>(next - cursor);
+    if (used + bytes + 4 >= capacity) break;
+    char candidate[256]{};
+    std::memcpy(candidate, value, used + bytes);
+    candidate[used + bytes] = '\0';
+    if (font_width(font, candidate) + ellipsis_width > max_width) break;
+    std::memcpy(output + used, cursor, bytes);
+    used += bytes;
+    cursor = next;
+  }
+  if (used + 4 < capacity) std::memcpy(output + used, "...", 4);
+  else output[capacity - 1] = '\0';
 }
 
 inline void draw_font(display::device& display, int x, int y, const char* value,
@@ -279,10 +316,9 @@ inline void draw_in(display::device& display, int x, int y, int max_width, const
 
 inline void draw_bold_in(display::device& display, int x, int y, int max_width, const char* value,
                          canvas::gray color = canvas::gray::black) {
-  if (bold_width(value) <= max_width)
-    draw_bold(display, x, y, value, color);
-  else
-    draw_in(display, x, y, max_width, value, 2, color);
+  char fitted[256]{};
+  fit_font(xr_font_alegreya_bold_18, value, max_width, fitted, sizeof(fitted));
+  draw_bold(display, x, y, fitted, color);
 }
 
 /** @brief Returns the common bitmap height used by every UTF-8 glyph. */

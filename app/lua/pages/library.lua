@@ -97,10 +97,17 @@ function M.event(ev)
 
     if (state.get("app.focus.area") or 0) == 1 then
         local dock = state.get("app.dock.selected") or 0
-        if ev.key == "up" then state.set("app.focus.area", 0); return true end
+        if ev.key == "up" then
+            if dock > 0 then state.set("app.dock.selected", dock - 1)
+            else state.set("app.focus.area", 0) end
+            return true
+        end
         if ev.key == "left" and dock > 0 then state.set("app.dock.selected", dock - 1); return true end
         if ev.key == "right" and dock < 2 then state.set("app.dock.selected", dock + 1); return true end
-        if ev.key == "down" then return true end
+        if ev.key == "down" then
+            if dock < 2 then state.set("app.dock.selected", dock + 1) end
+            return true
+        end
         if ev.key == "ok" then activate_dock(); return true end
     end
 
