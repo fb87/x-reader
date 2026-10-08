@@ -16,7 +16,7 @@ int main() {
   state::set(persistent, "reader.book.progress", std::int64_t{42});
   app::context application{};
   if (!app::init(application, board.capabilities, memory, persistent)) return 1;
-  if (app::current_page(application) != app::page::library) return 2;
+  if (app::current_page(application) != app::page::splash) return 2;
   if (state::get(memory, "reader.library.selected", std::int64_t{-1}) != 1) return 3;
   if (!state::save(persistent, "build/persistence_test.db")) return 4;
   state::store restored{};

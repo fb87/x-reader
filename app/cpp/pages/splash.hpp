@@ -19,8 +19,8 @@ inline void render(context& self) {
   text::center(d, {0, d.height - 70, d.width, 30}, "Loading library...", 2, canvas::gray::dark);
 }
 
-inline bool event(context& self, const event::value&) {
-  routes::set_page(self, page::home);
+inline bool event(context&, const event::value&) {
+  // Ignore input while the board settles; the timer performs the Home transition.
   return true;
 }
 
