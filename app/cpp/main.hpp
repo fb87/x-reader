@@ -17,6 +17,7 @@ namespace app {
 inline bool on_shell_event(const event::value& value, void* user) {
   if (value.event_type != event::type::key || !value.long_press) return false;
   auto& self = *static_cast<context*>(user);
+  self.last_input_ms = platform::now_ms(*self.shell.platform);
   if (current_page(self) == page::home)
     state::set(*self.memory, "app.home.card.focused", false);
   state::set(*self.memory, "app.input.long_press", static_cast<std::int64_t>(value.key));
@@ -70,6 +71,7 @@ inline void render(context& self) {
 
 inline bool on_event(const event::value& value, void* user) {
   auto& self = *static_cast<context*>(user);
+  self.last_input_ms = platform::now_ms(*self.shell.platform);
   if (self.bound_page.event != nullptr) return self.bound_page.event(self, value);
   switch (current_page(self)) {
     case page::splash: return pages::splash::event(self, value);
@@ -87,6 +89,16 @@ inline bool on_event(const event::value& value, void* user) {
 
 inline void tick(context& self) {
   const auto now = self.shell.platform != nullptr ? platform::now_ms(*self.shell.platform) : 0;
+  if (current_page(self) == page::sleep) {
+    if (self.sleep_armed) {
+      self.sleep_armed = false;
+      platform::enter_deep_sleep(*self.shell.platform);
+    }
+    return;
+  }
+  const auto timeout = state::get(*self.memory, "reader.settings.sleep_timeout_minutes", std::int64_t{10});
+  if (timeout > 0 && now - self.last_input_ms >= static_cast<std::uint32_t>(timeout) * 60000U)
+    routes::set_page(self, page::sleep);
   if (self.bound_page.tick != nullptr) self.bound_page.tick(self, now);
   if (self.bound_page.render == nullptr && current_page(self) == page::splash && self.shell.platform != nullptr)
     pages::splash::tick(self, platform::now_ms(*self.shell.platform));

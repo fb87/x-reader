@@ -96,6 +96,8 @@ inline int battery_percent(platform::device& self)
     return static_cast<runtime*>(self.context)->battery;
 }
 
+inline void enter_deep_sleep(platform::device&, std::uint32_t) {}
+
 /** @brief Enumerates immediate children of one simulated SD-card directory. */
 inline bool storage_list(storage::device& self, const char* path, storage::entry_fn callback,
                          void* user) {
@@ -296,7 +298,7 @@ inline void init(runtime& self)
                     .update = display_update};
     self.input = {.context = &self, .poll = input_poll};
     self.platform = {.context = &self, .now_ms = now_ms, .wall_time = wall_time,
-                     .battery_percent = battery_percent};
+                     .battery_percent = battery_percent, .enter_deep_sleep = enter_deep_sleep};
     self.storage = {.context = &self,
                     .root = "/",
                     .list = storage_list,

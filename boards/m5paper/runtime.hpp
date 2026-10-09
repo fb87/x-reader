@@ -405,6 +405,7 @@ inline bool init(runtime& self) {
   self.platform.now_ms = detail::platform_now_ms;
   self.platform.wall_time = detail::platform_wall_time;
   self.platform.battery_percent = detail::platform_battery_percent;
+  self.platform.enter_deep_sleep = detail::platform_enter_deep_sleep;
 
   self.input.context = &self;
   self.input.poll = detail::input_poll;

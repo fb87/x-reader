@@ -10,6 +10,7 @@ struct device {
     std::uint32_t (*now_ms)(device& self);
     bool (*wall_time)(device& self, int& hour, int& minute);
     int (*battery_percent)(device& self);
+    void (*enter_deep_sleep)(device& self, std::uint32_t wake_after_ms);
 };
 
 /** @brief Returns monotonic platform time in milliseconds. */
@@ -28,6 +29,12 @@ inline bool wall_time(device& self, int& hour, int& minute)
 inline int battery_percent(device& self)
 {
     return self.battery_percent == nullptr ? -1 : self.battery_percent(self);
+}
+
+/** @brief Enters board deep sleep, or does nothing when unsupported. */
+inline void enter_deep_sleep(device& self, std::uint32_t wake_after_ms = 0)
+{
+    if (self.enter_deep_sleep != nullptr) self.enter_deep_sleep(self, wake_after_ms);
 }
 
 } // namespace platform

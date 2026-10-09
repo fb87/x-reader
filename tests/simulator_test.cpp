@@ -308,6 +308,15 @@ int main() {
   test::expect(result, app::current_page(application) == app::page::home,
                "touch wakes sleep screen");
 
+  state::set(memory, "reader.settings.sleep_timeout_minutes", std::int64_t{1});
+  board.simulated_ms += 60000U;
+  app::pump(application);
+  test::expect(result, app::current_page(application) == app::page::sleep,
+               "inactivity enters sleep screen after configured timeout");
+  test::tap(board, application, 100, 100);
+  test::expect(result, app::current_page(application) == app::page::home,
+               "input wakes automatic sleep");
+
   // Persistence.
   app::checkpoint(application);
   test::expect(result, state::save(persistent, "build/test_state.db"),
