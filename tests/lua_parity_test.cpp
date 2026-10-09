@@ -1,9 +1,9 @@
+#include <algorithm>
+#include <cstdio>
+
 #include "app/cpp/init.hpp"
 #include "boards/sim/runtime.hpp"
 #include "runtime/lua/frontend.hpp"
-
-#include <algorithm>
-#include <cstdio>
 
 namespace test {
 int checks = 0;
@@ -34,7 +34,7 @@ int main() {
   test::expect(app::init(cpp_app, cpp_sim.capabilities, cpp_memory, cpp_persistent),
                "native frontend initializes");
   test::expect(lua_app::init(lua_app_context, lua_sim.capabilities, lua_memory, lua_persistent,
-                            "app/lua/init.lua"),
+                             "app/lua/init.lua"),
                "Lua frontend initializes");
   test::expect(same_frame(cpp_sim, lua_sim), "default Lua splash matches C++ framebuffer");
 
@@ -53,7 +53,7 @@ int main() {
   state::store styled_memory{}, styled_persistent{};
   lua_app::context styled{};
   test::expect(lua_app::init(styled, styled_sim.capabilities, styled_memory, styled_persistent,
-                            "tests/lua_styled_app.lua"),
+                             "tests/lua_styled_app.lua"),
                "styled Lua frontend initializes");
   board::sim::advance(styled_sim, 1600);
   lua_app::pump(styled);

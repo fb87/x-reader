@@ -1,8 +1,9 @@
 #pragma once
 
+#include <dlfcn.h>
+
 #include <cstddef>
 #include <cstdint>
-#include <dlfcn.h>
 
 /**
  * @brief Minimal Lua 5.4 ABI surface loaded dynamically on host builds.
@@ -70,12 +71,15 @@ inline bool load(library& self) {
   return symbol(self.handle, "luaL_newstate", self.new_state) &&
          symbol(self.handle, "luaL_openlibs", self.open_libs) &&
          symbol(self.handle, "luaL_loadfilex", self.load_file) &&
-         symbol(self.handle, "lua_pcallk", self.pcall) && symbol(self.handle, "lua_close", self.close) &&
-         symbol(self.handle, "lua_gettop", self.get_top) && symbol(self.handle, "lua_settop", self.set_top) &&
+         symbol(self.handle, "lua_pcallk", self.pcall) &&
+         symbol(self.handle, "lua_close", self.close) &&
+         symbol(self.handle, "lua_gettop", self.get_top) &&
+         symbol(self.handle, "lua_settop", self.set_top) &&
          symbol(self.handle, "lua_getglobal", self.get_global) &&
          symbol(self.handle, "lua_setglobal", self.set_global) &&
          symbol(self.handle, "lua_createtable", self.create_table) &&
-         symbol(self.handle, "lua_setfield", self.set_field) && symbol(self.handle, "lua_getfield", self.get_field) &&
+         symbol(self.handle, "lua_setfield", self.set_field) &&
+         symbol(self.handle, "lua_getfield", self.get_field) &&
          symbol(self.handle, "lua_pushcclosure", self.push_cclosure) &&
          symbol(self.handle, "lua_pushlightuserdata", self.push_lightuserdata) &&
          symbol(self.handle, "lua_touserdata", self.to_userdata) &&
@@ -84,7 +88,8 @@ inline bool load(library& self) {
          symbol(self.handle, "lua_pushboolean", self.push_boolean) &&
          symbol(self.handle, "lua_toboolean", self.to_boolean) &&
          symbol(self.handle, "lua_pushstring", self.push_string) &&
-         symbol(self.handle, "lua_tolstring", self.to_string) && symbol(self.handle, "lua_type", self.type);
+         symbol(self.handle, "lua_tolstring", self.to_string) &&
+         symbol(self.handle, "lua_type", self.type);
 }
 
 inline void unload(library& self) {

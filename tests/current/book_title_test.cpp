@@ -1,7 +1,7 @@
-#include "reader/book.hpp"
-
 #include <cstdio>
 #include <cstring>
+
+#include "reader/book.hpp"
 
 /**
  * @brief Permanent regression test for reader::book::make_title's Vietnamese
@@ -24,14 +24,16 @@ int check(const char* input, const char* expected) {
 }  // namespace
 
 int main() {
-  failed |= check("K\xc3\xa1\xc2\xbb\xe2\x80\xb9"
-                  "ch.epub",
-                  "K\xe1\xbb\x8b"
-                  "ch");
-  failed |= check("K\xc3\xa1\xc2\xbb\xc2\x8b"
-                  "ch.epub",
-                  "K\xe1\xbb\x8b"
-                  "ch");
+  failed |= check(
+      "K\xc3\xa1\xc2\xbb\xe2\x80\xb9"
+      "ch.epub",
+      "K\xe1\xbb\x8b"
+      "ch");
+  failed |= check(
+      "K\xc3\xa1\xc2\xbb\xc2\x8b"
+      "ch.epub",
+      "K\xe1\xbb\x8b"
+      "ch");
   failed |= check("Ti\xe1\xba\xbfng Vi\xe1\xbb\x87t.epub", "Ti\xe1\xba\xbfng Vi\xe1\xbb\x87t");
   failed |= check("Cafe\xcc\x81.epu", "Cafe\xcc\x81");
   if (failed == 0) std::printf("book title tests: passed\n");

@@ -44,8 +44,7 @@ inline bool event(app::context& self, const event::value& value) {
     app::move_selection(self, 1, 3);
     return true;
   }
-  if (value.key == event::key_code::ok)
-    return activate(static_cast<int>(app::selection(self)));
+  if (value.key == event::key_code::ok) return activate(static_cast<int>(app::selection(self)));
   return false;
 }
 

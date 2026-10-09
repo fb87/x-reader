@@ -1,6 +1,6 @@
-#include "app/assets.hpp"
-
 #include <cstdio>
+
+#include "app/assets.hpp"
 
 /**
  * @brief Guards against a font-coverage regression, the specific mistake
@@ -48,7 +48,7 @@ int main() {
     if (has_codepoint(body, cp)) ++vietnamese_covered;
   }
   expect(vietnamese_covered == (0x1EF9 - 0x1EA0 + 1),
-        "full Vietnamese precomposed Latin Extended Additional block (U+1EA0-U+1EF9) covered");
+         "full Vietnamese precomposed Latin Extended Additional block (U+1EA0-U+1EF9) covered");
 
   // Spot-check a few actual letters used by real Vietnamese text (matching the
   // mojibake fixtures in reader/book.hpp's differential test): "Việt" needs U+1EC7 (ệ),
@@ -64,7 +64,7 @@ int main() {
   // The bold/title fonts used for headings must carry the same coverage, not a
   // reduced ASCII-only variant.
   expect(has_codepoint(xr_font_alegreya_bold_26, 0x1EC7),
-        "bold heading font also covers Vietnamese, not just the body font");
+         "bold heading font also covers Vietnamese, not just the body font");
 
   std::printf("font coverage tests: %d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;

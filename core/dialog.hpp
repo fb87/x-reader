@@ -1,12 +1,12 @@
 #pragma once
 
+#include <algorithm>
+#include <cstdint>
+
 #include "canvas.hpp"
 #include "event.hpp"
 #include "geometry.hpp"
 #include "widget.hpp"
-
-#include <algorithm>
-#include <cstdint>
 
 /**
  * @brief Modal popups on the dialog layer, ported from `xr_dialog_t`

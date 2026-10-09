@@ -1,9 +1,9 @@
+#include <cstdio>
+#include <cstring>
+
 #include "app/cpp/init.hpp"
 #include "boards/sim/runtime.hpp"
 #include "core/state.hpp"
-
-#include <cstdio>
-#include <cstring>
 
 namespace test {
 
@@ -39,7 +39,8 @@ inline void tap(board::sim::runtime& board, app::context& application, int x, in
 
 /** @brief Returns to Home through the public input path. */
 inline void back_home(board::sim::runtime& board, app::context& application) {
-  while (app::current_page(application) != app::page::home) key(board, application, event::key_code::back);
+  while (app::current_page(application) != app::page::home)
+    key(board, application, event::key_code::back);
 }
 
 }  // namespace test
@@ -88,9 +89,11 @@ int main() {
   const auto home_selection_before = state::get(memory, "app.menu.selected", std::int64_t{0});
   board::sim::inject(board, event::key(event::key_code::down, 900, true));
   app::pump(application);
-  test::expect(result, state::get(memory, "app.menu.selected", std::int64_t{-1}) == home_selection_before,
+  test::expect(result,
+               state::get(memory, "app.menu.selected", std::int64_t{-1}) == home_selection_before,
                "shell consumes long-press before active page navigation");
-  test::expect(result, state::get(memory, "app.input.long_press_duration_ms", std::int64_t{0}) == 900,
+  test::expect(result,
+               state::get(memory, "app.input.long_press_duration_ms", std::int64_t{0}) == 900,
                "shell records classified long-press duration");
 
   // Home -> Library.
@@ -126,20 +129,23 @@ int main() {
   const auto chapter_before_reader = application.reader.current.current_chapter;
   test::key(board, application, event::key_code::down);
   test::key(board, application, event::key_code::down);
-  test::expect(result, application.reader.current.page != page_before_reader ||
-                           application.reader.current.current_chapter != chapter_before_reader,
+  test::expect(result,
+               application.reader.current.page != page_before_reader ||
+                   application.reader.current.current_chapter != chapter_before_reader,
                "rotary page input advances reading position");
   const auto page_before_left = application.reader.current.page;
   const auto chapter_before_left = application.reader.current.current_chapter;
   test::tap(board, application, 10, 400);
-  test::expect(result, application.reader.current.page != page_before_left ||
-                           application.reader.current.current_chapter != chapter_before_left,
+  test::expect(result,
+               application.reader.current.page != page_before_left ||
+                   application.reader.current.current_chapter != chapter_before_left,
                "left-side touch moves to previous page");
   const auto page_before_right = application.reader.current.page;
   const auto chapter_before_right = application.reader.current.current_chapter;
   test::tap(board, application, 530, 400);
-  test::expect(result, application.reader.current.page != page_before_right ||
-                           application.reader.current.current_chapter != chapter_before_right,
+  test::expect(result,
+               application.reader.current.page != page_before_right ||
+                   application.reader.current.current_chapter != chapter_before_right,
                "right-side touch moves to next page");
   test::tap(board, application, 270, 400);
   test::expect(result, state::get(memory, "app.reader.chrome", false),
@@ -150,9 +156,9 @@ int main() {
   test::key(board, application, event::key_code::menu);
   test::key(board, application, event::key_code::down);
   test::expect(result,
-                static_cast<app::focus_area>(state::get(memory, "app.focus.area", std::int64_t{0})) ==
-                    app::focus_area::dock,
-                "reader Down enters dock when chrome is visible");
+               static_cast<app::focus_area>(
+                   state::get(memory, "app.focus.area", std::int64_t{0})) == app::focus_area::dock,
+               "reader Down enters dock when chrome is visible");
   test::key(board, application, event::key_code::down);
   test::key(board, application, event::key_code::down);
   test::expect(result, state::get(memory, "app.dock.selected", std::int64_t{-1}) == 2,
@@ -163,7 +169,8 @@ int main() {
   const auto font_before = state::get(memory, "reader.settings.font_size", std::int64_t{-1});
   test::key(board, application, event::key_code::down);
   test::key(board, application, event::key_code::ok);
-  test::expect(result, state::get(memory, "reader.settings.font_size", std::int64_t{-1}) >= font_before,
+  test::expect(result,
+               state::get(memory, "reader.settings.font_size", std::int64_t{-1}) >= font_before,
                "reader A+ dock action adjusts font setting");
   test::key(board, application, event::key_code::back);
   test::expect(result, app::current_page(application) == app::page::library,
@@ -186,9 +193,9 @@ int main() {
   test::key(board, application, event::key_code::down);
   test::key(board, application, event::key_code::down);  // bottom boundary -> dock
   test::expect(result,
-                static_cast<app::focus_area>(state::get(memory, "app.focus.area", std::int64_t{0})) ==
-                    app::focus_area::dock,
-                "library rotary reaches bottom action bar");
+               static_cast<app::focus_area>(
+                   state::get(memory, "app.focus.area", std::int64_t{0})) == app::focus_area::dock,
+               "library rotary reaches bottom action bar");
   test::key(board, application, event::key_code::down);
   test::expect(result, state::get(memory, "app.dock.selected", std::int64_t{-1}) == 1,
                "library dock Down advances action selection");
@@ -221,8 +228,9 @@ int main() {
   const auto file_reader_chapter = application.reader.current.current_chapter;
   test::key(board, application, event::key_code::down);
   test::key(board, application, event::key_code::down);
-  test::expect(result, application.reader.current.page != file_reader_page ||
-                           application.reader.current.current_chapter != file_reader_chapter,
+  test::expect(result,
+               application.reader.current.page != file_reader_page ||
+                   application.reader.current.current_chapter != file_reader_chapter,
                "File Manager reader responds to Down page turn");
   test::key(board, application, event::key_code::back);
   test::expect(result, app::current_page(application) == app::page::files,
@@ -253,15 +261,21 @@ int main() {
   test::expect(result, state::get(memory, "network.bluetooth.enabled", false),
                "Bluetooth settings row changes shared state");
   state::set(memory, "app.menu.selected", std::int64_t{2});
-  const auto settings_font_before = state::get(memory, "reader.settings.font_size", std::int64_t{0});
+  const auto settings_font_before =
+      state::get(memory, "reader.settings.font_size", std::int64_t{0});
   test::key(board, application, event::key_code::ok);
-  test::expect(result, state::get(memory, "reader.settings.font_size", std::int64_t{-1}) >= settings_font_before,
-               "Font size row cycles reader font");
+  test::expect(
+      result,
+      state::get(memory, "reader.settings.font_size", std::int64_t{-1}) >= settings_font_before,
+      "Font size row cycles reader font");
   state::set(memory, "app.menu.selected", std::int64_t{3});
-  const auto refresh_before = state::get(memory, "reader.settings.full_refresh_every", std::int64_t{-1});
+  const auto refresh_before =
+      state::get(memory, "reader.settings.full_refresh_every", std::int64_t{-1});
   test::key(board, application, event::key_code::ok);
-  test::expect(result, state::get(memory, "reader.settings.full_refresh_every", std::int64_t{-1}) != refresh_before,
-               "Full refresh row cycles refresh policy");
+  test::expect(
+      result,
+      state::get(memory, "reader.settings.full_refresh_every", std::int64_t{-1}) != refresh_before,
+      "Full refresh row cycles refresh policy");
   state::set(memory, "app.menu.selected", std::int64_t{4});
   const bool progress_before = state::get(memory, "reader.settings.show_progress", true);
   test::key(board, application, event::key_code::ok);
@@ -269,14 +283,16 @@ int main() {
                "Progress bar row toggles setting");
   state::set(memory, "app.menu.selected", std::int64_t{5});
   test::key(board, application, event::key_code::ok);
-  test::expect(result, state::get(memory, "reader.settings.sleep_timeout_minutes", std::int64_t{0}) == 30,
+  test::expect(result,
+               state::get(memory, "reader.settings.sleep_timeout_minutes", std::int64_t{0}) == 30,
                "Sleep timeout row cycles setting");
   state::set(memory, "app.menu.selected", std::int64_t{6});
   test::key(board, application, event::key_code::ok);
   test::expect(result, state::get(memory, "app.dialog.about", false),
                "About row opens modal dialog");
   test::key(board, application, event::key_code::ok);
-  test::expect(result, !state::get(memory, "app.dialog.about", true), "About dialog closes on input");
+  test::expect(result, !state::get(memory, "app.dialog.about", true),
+               "About dialog closes on input");
 
   // Connectivity uses generic capability behind settings Wi-Fi row.
   state::set(memory, "app.menu.selected", std::int64_t{0});

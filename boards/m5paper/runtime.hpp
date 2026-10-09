@@ -1,5 +1,19 @@
 #pragma once
 
+#include <dirent.h>
+#include <driver/gpio.h>
+#include <driver/sdspi_host.h>
+#include <esp_heap_caps.h>
+#include <esp_log.h>
+#include <esp_system.h>
+#include <esp_timer.h>
+#include <esp_vfs_fat.h>
+#include <sys/stat.h>
+
+#include <climits>
+#include <cstdio>
+#include <cstring>
+
 #include "../../core/canvas.hpp"
 #include "../../core/capability.hpp"
 #include "../../core/display.hpp"
@@ -14,19 +28,6 @@
 #include "../../drivers/it8951/it8951.hpp"
 #include "board.hpp"
 #include "pins.hpp"
-
-#include <climits>
-#include <cstdio>
-#include <cstring>
-#include <dirent.h>
-#include <driver/gpio.h>
-#include <esp_heap_caps.h>
-#include <esp_log.h>
-#include <esp_system.h>
-#include <esp_timer.h>
-#include <esp_vfs_fat.h>
-#include <driver/sdspi_host.h>
-#include <sys/stat.h>
 
 /**
  * @brief M5Paper hardware board: composes the IT8951/GT911/inflate drivers
@@ -129,7 +130,8 @@ inline void display_update(display::device& self, geometry::rect area, refresh::
   const std::size_t transfer_bytes = static_cast<std::size_t>(transfer_width / 2) * transfer_height;
   auto* transfer = static_cast<std::uint8_t*>(
       heap_caps_malloc(transfer_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-  if (transfer == nullptr) transfer = static_cast<std::uint8_t*>(heap_caps_malloc(transfer_bytes, MALLOC_CAP_8BIT));
+  if (transfer == nullptr)
+    transfer = static_cast<std::uint8_t*>(heap_caps_malloc(transfer_bytes, MALLOC_CAP_8BIT));
   if (transfer == nullptr) return;
 
   for (std::uint16_t row = 0; row < transfer_height; ++row) {
@@ -152,16 +154,16 @@ inline void display_update(display::device& self, geometry::rect area, refresh::
     right = width;
     bottom = height;
   }
-  const auto panel_mode = force_full || mode == refresh::mode::full
-                              ? drivers::it8951::refresh_gc16
-                              : mode == refresh::mode::quality ? drivers::it8951::refresh_gl16
-                                  : drivers::it8951::refresh_du;
+  const auto panel_mode = force_full || mode == refresh::mode::full ? drivers::it8951::refresh_gc16
+                          : mode == refresh::mode::quality          ? drivers::it8951::refresh_gl16
+                                                                    : drivers::it8951::refresh_du;
   if (force_full) {
     heap_caps_free(transfer);
     const std::size_t full_bytes = static_cast<std::size_t>(width / 2) * height;
     transfer = static_cast<std::uint8_t*>(
         heap_caps_malloc(full_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    if (transfer == nullptr) transfer = static_cast<std::uint8_t*>(heap_caps_malloc(full_bytes, MALLOC_CAP_8BIT));
+    if (transfer == nullptr)
+      transfer = static_cast<std::uint8_t*>(heap_caps_malloc(full_bytes, MALLOC_CAP_8BIT));
     if (transfer == nullptr) return;
     for (int row = 0; row < height; ++row) {
       std::memcpy(transfer + static_cast<std::size_t>(row) * width / 2,
@@ -169,14 +171,13 @@ inline void display_update(display::device& self, geometry::rect area, refresh::
     }
   }
   bool refreshed = false;
-  if (drivers::it8951::write_image_4bpp(&rt.epd, transfer, static_cast<std::uint16_t>(x),
-                                        static_cast<std::uint16_t>(y),
-                                        force_full ? width : transfer_width,
-                                        force_full ? height : transfer_height) == ESP_OK) {
-    refreshed = drivers::it8951::refresh(&rt.epd, static_cast<std::uint16_t>(x),
-                                         static_cast<std::uint16_t>(y),
-                                         force_full ? width : transfer_width,
-                                         force_full ? height : transfer_height, panel_mode) == ESP_OK;
+  if (drivers::it8951::write_image_4bpp(
+          &rt.epd, transfer, static_cast<std::uint16_t>(x), static_cast<std::uint16_t>(y),
+          force_full ? width : transfer_width, force_full ? height : transfer_height) == ESP_OK) {
+    refreshed =
+        drivers::it8951::refresh(&rt.epd, static_cast<std::uint16_t>(x),
+                                 static_cast<std::uint16_t>(y), force_full ? width : transfer_width,
+                                 force_full ? height : transfer_height, panel_mode) == ESP_OK;
   }
   heap_caps_free(transfer);
   if (refreshed && (force_full || mode == refresh::mode::full)) {
@@ -189,8 +190,8 @@ inline std::uint32_t platform_now_ms(platform::device&) {
 }
 
 inline bool platform_wall_time(platform::device&, int& hour, int& minute) {
-  const std::uint32_t total = 9U * 60U + 41U +
-                              static_cast<std::uint32_t>(esp_timer_get_time() / 60000000ULL);
+  const std::uint32_t total =
+      9U * 60U + 41U + static_cast<std::uint32_t>(esp_timer_get_time() / 60000000ULL);
   hour = static_cast<int>((total / 60U) % 24U);
   minute = static_cast<int>(total % 60U);
   return true;
@@ -286,8 +287,10 @@ inline bool input_poll(input::device& self, event::value& out) {
 }
 
 inline void resolve(const runtime& self, const char* path, char* out, std::size_t out_size) {
-  if (path[0] == '/') std::snprintf(out, out_size, "%s", path);
-  else std::snprintf(out, out_size, "%s/%s", self.storage_root, path);
+  if (path[0] == '/')
+    std::snprintf(out, out_size, "%s", path);
+  else
+    std::snprintf(out, out_size, "%s/%s", self.storage_root, path);
 }
 
 inline bool storage_list(storage::device&, const char* path, storage::entry_fn callback,
@@ -300,9 +303,9 @@ inline bool storage_list(storage::device&, const char* path, storage::entry_fn c
     char child[512];
     const int written = std::snprintf(child, sizeof(child), "%s/%s", path, entry->d_name);
     if (written < 0 || static_cast<std::size_t>(written) >= sizeof(child)) continue;
-    struct stat file_stat {};
-    bool is_directory = entry->d_type == DT_DIR ||
-                        (stat(child, &file_stat) == 0 && S_ISDIR(file_stat.st_mode));
+    struct stat file_stat{};
+    bool is_directory =
+        entry->d_type == DT_DIR || (stat(child, &file_stat) == 0 && S_ISDIR(file_stat.st_mode));
     if (!is_directory && entry->d_type == DT_UNKNOWN) {
       DIR* probe = opendir(child);
       if (probe != nullptr) {
@@ -335,7 +338,7 @@ inline bool storage_file_size(storage::device& self, const char* path, std::uint
   auto& rt = *static_cast<runtime*>(self.context);
   char full[512];
   resolve(rt, path, full, sizeof(full));
-  struct stat st {};
+  struct stat st{};
   if (stat(full, &st) != 0) return false;
   out = static_cast<std::uint32_t>(st.st_size);
   return true;
@@ -359,9 +362,8 @@ inline bool storage_inflate(storage::device&, const void* source, std::uint32_t 
 inline bool init(runtime& self) {
   self = runtime{};
   ESP_LOGI(log_tag, "initializing M5Paper runtime");
-  self.framebuffer = static_cast<std::uint8_t*>(
-      heap_caps_calloc(static_cast<std::size_t>(width / 2) * height, 1,
-                       MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  self.framebuffer = static_cast<std::uint8_t*>(heap_caps_calloc(
+      static_cast<std::size_t>(width / 2) * height, 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
   if (self.framebuffer == nullptr) {
     ESP_LOGE(log_tag, "framebuffer allocation failed");
     return false;
@@ -373,7 +375,7 @@ inline bool init(runtime& self) {
 
   const gpio_config_t rotary_config = {
       .pin_bit_mask = (1ULL << pins::rotary_right_pin) | (1ULL << pins::rotary_left_pin) |
-                     (1ULL << pins::rotary_press_pin),
+                      (1ULL << pins::rotary_press_pin),
       .mode = GPIO_MODE_INPUT,
       // GPIO37-39 are input-only on ESP32 and have no internal pull-ups; the M5Paper
       // board provides the required external bias.
@@ -387,8 +389,8 @@ inline bool init(runtime& self) {
   }
 
   const drivers::it8951::config_t epd_config{
-      pins::epd_spi_host, pins::epd_sck_pin, pins::epd_mosi_pin, pins::epd_miso_pin,
-      pins::epd_cs_pin,   pins::epd_busy_pin, pins::panel_width,  pins::panel_height,
+      pins::epd_spi_host,   pins::epd_sck_pin,  pins::epd_mosi_pin, pins::epd_miso_pin,
+      pins::epd_cs_pin,     pins::epd_busy_pin, pins::panel_width,  pins::panel_height,
       pins::panel_rotation, 10000000,
   };
   ESP_LOGI(log_tag, "initializing IT8951");
@@ -408,7 +410,7 @@ inline bool init(runtime& self) {
   self.display.width = width;
   self.display.height = height;
   self.display.format = pixel_format;
-   self.display.framebuffer = self.framebuffer;
+  self.display.framebuffer = self.framebuffer;
   self.display.stride = width / 2;
   self.display.context = &self;
   self.display.update = detail::display_update;

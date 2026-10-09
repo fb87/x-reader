@@ -6,7 +6,6 @@
 #include "esp_sleep.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
 #include "pins.hpp"
 
 namespace board::m5paper {
@@ -20,7 +19,7 @@ constexpr adc_channel_t battery_channel = ADC_CHANNEL_7;  // GPIO35 / ADC1_CH7
 esp_err_t power_on() {
   const gpio_config_t power_config = {
       .pin_bit_mask = (1ULL << pins::main_power_pin) | (1ULL << pins::external_power_pin) |
-                     (1ULL << pins::epd_power_pin),
+                      (1ULL << pins::epd_power_pin),
       .mode = GPIO_MODE_OUTPUT,
       .pull_up_en = GPIO_PULLUP_DISABLE,
       .pull_down_en = GPIO_PULLDOWN_DISABLE,

@@ -1,13 +1,13 @@
 #pragma once
 
+#include "app/cpp/main.hpp"
+#include "app/cpp/routes.hpp"
+#include "app/cpp/services.hpp"
 #include "core/capability.hpp"
 #include "core/display.hpp"
 #include "core/input.hpp"
 #include "core/platform.hpp"
 #include "core/shell.hpp"
-#include "app/cpp/main.hpp"
-#include "app/cpp/routes.hpp"
-#include "app/cpp/services.hpp"
 #include "enabled_plugins.hpp"
 
 namespace app {
@@ -41,7 +41,7 @@ inline bool init(context& self, capability::registry& capabilities, state::store
   state::set(memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content));
   shell::init(self.shell, *display, *input, *platform_device, native_ui ? on_event : nullptr,
               native_ui ? static_cast<void*>(&self) : nullptr, on_shell_event,
-               static_cast<void*>(&self));
+              static_cast<void*>(&self));
   self.last_input_ms = platform::now_ms(*platform_device);
   self.splash_entered_ms = platform::now_ms(*platform_device);
   (void)scan_library(self);

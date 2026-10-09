@@ -1,10 +1,10 @@
 #pragma once
 
-#include "app/cpp/pages/common.hpp"
-#include "app/cpp/routes.hpp"
-
 #include <algorithm>
 #include <cstdio>
+
+#include "app/cpp/pages/common.hpp"
+#include "app/cpp/routes.hpp"
 
 namespace app::pages::library {
 
@@ -37,7 +37,8 @@ inline bool activate_book_info(context& self) {
 inline int list_offset(const context& self, int count) {
   const int visible = list_visible_rows(self);
   if (count <= visible) return 0;
-  const int selected = static_cast<int>(state::get(*self.memory, "reader.library.selected", std::int64_t{0}));
+  const int selected =
+      static_cast<int>(state::get(*self.memory, "reader.library.selected", std::int64_t{0}));
   return (selected / visible) * visible;
 }
 
@@ -61,15 +62,17 @@ inline void render(context& self) {
   const int visible_rows = list_visible_rows(self);
   const int visible = std::min(visible_rows, count - offset);
   const bool focused = static_cast<focus_area>(state::get(
-      *self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content))) == focus_area::content;
+                           *self.memory, "app.focus.area",
+                           static_cast<std::int64_t>(focus_area::content))) == focus_area::content;
   const int row_width = self.shell.display->width - 24 - (count > 10 ? 10 : 0);
   for (int row = 0; row < visible; ++row) {
     const int visible_index = offset + row;
     const int index = visible_book_index(self, visible_index);
     auto& book = self.reader.library.books[static_cast<std::size_t>(index)];
     const geometry::rect rr{4, 58 + row * 76, row_width, 72};
-    const bool selected = visible_index == static_cast<int>(state::get(
-        *self.memory, "reader.library.selected", std::int64_t{0}));
+    const bool selected =
+        visible_index ==
+        static_cast<int>(state::get(*self.memory, "reader.library.selected", std::int64_t{0}));
     const bool inverted = selected && focused;
     const auto fg = inverted ? canvas::gray::white : canvas::gray::black;
     canvas::fill(d, rr, inverted ? canvas::gray::black : canvas::gray::white);
@@ -93,8 +96,7 @@ inline void render(context& self) {
     canvas::fill(d, track, canvas::gray::white);
     canvas::vline(d, track.x + 3, track.y, track.h, canvas::gray::light);
     const int thumb_h = std::max(track.h * visible_rows / count, 16);
-    const int thumb_y = track.y + (track.h - thumb_h) * offset /
-                        std::max(count - visible_rows, 1);
+    const int thumb_y = track.y + (track.h - thumb_h) * offset / std::max(count - visible_rows, 1);
     canvas::fill(d, {track.x, thumb_y, 6, thumb_h}, canvas::gray::black);
   }
   if (count == 0) text::center(d, {0, 300, d.width, 80}, "No books", 3, canvas::gray::dark);
@@ -115,8 +117,8 @@ inline void render(context& self) {
   text::draw_in(d, 60, 414, d.width - 120, meta, 1, canvas::gray::dark);
   canvas::border(d, {60, 452, d.width - 120, 14}, 1, canvas::gray::light);
   canvas::fill(d, {61, 453, (d.width - 122) * book.progress / 100, 12}, canvas::gray::dark);
-  const int selected = static_cast<int>(
-      state::get(*self.memory, "app.dialog.selected", std::int64_t{0}));
+  const int selected =
+      static_cast<int>(state::get(*self.memory, "app.dialog.selected", std::int64_t{0}));
   geometry::rect left{70, 500, 180, 54};
   geometry::rect right{290, 500, 180, 54};
   canvas::fill(d, left, selected == 0 ? canvas::gray::black : canvas::gray::white);
@@ -125,13 +127,12 @@ inline void render(context& self) {
   canvas::border(d, right, 2, canvas::gray::black);
   text::center(d, left, book.progress ? "CONTINUE" : "READ", 2,
                selected == 0 ? canvas::gray::white : canvas::gray::black);
-  text::center(d, right, "CLOSE", 2,
-               selected == 1 ? canvas::gray::white : canvas::gray::black);
+  text::center(d, right, "CLOSE", 2, selected == 1 ? canvas::gray::white : canvas::gray::black);
 }
 
 inline bool activate_dock(context& self) {
-  const int action = static_cast<int>(
-      state::get(*self.memory, "app.dock.selected", std::int64_t{0}));
+  const int action =
+      static_cast<int>(state::get(*self.memory, "app.dock.selected", std::int64_t{0}));
   if (action == 2) {
     if (!routes::back(self)) routes::set_page(self, page::home);
     return true;
@@ -145,7 +146,8 @@ inline bool activate_dock(context& self) {
     return true;
   }
   ::library::remove(self.reader.library, static_cast<std::size_t>(index));
-  state::set(*self.memory, "reader.library.count", static_cast<std::int64_t>(self.reader.library.count));
+  state::set(*self.memory, "reader.library.count",
+             static_cast<std::int64_t>(self.reader.library.count));
   state::set(*self.memory, "reader.library.selected", std::int64_t{0});
   ++self.invalidations;
   return true;
@@ -193,8 +195,8 @@ inline bool event(context& self, const event::value& value) {
     return true;
   }
 
-  const auto area = static_cast<focus_area>(state::get(
-      *self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content)));
+  const auto area = static_cast<focus_area>(
+      state::get(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content)));
   if (area == focus_area::dock) {
     auto selected = state::get(*self.memory, "app.dock.selected", std::int64_t{0});
     if (value.key == event::key_code::up) {

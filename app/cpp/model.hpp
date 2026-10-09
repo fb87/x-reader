@@ -1,18 +1,18 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+
 #include "core/capability.hpp"
-#include "core/router.hpp"
 #include "core/event.hpp"
+#include "core/refresh.hpp"
+#include "core/router.hpp"
 #include "core/shell.hpp"
 #include "core/state.hpp"
 #include "core/storage.hpp"
-#include "core/refresh.hpp"
 #include "reader/session.hpp"
-
-#include <array>
-#include <algorithm>
-#include <cstdint>
-#include <cstddef>
 
 namespace app {
 
@@ -152,8 +152,8 @@ inline void move_selection(context& self, int delta, int count) {
   auto value = selection(self) + delta;
   if (value < 0) value = 0;
   if (value >= count) value = count - 1;
-  state::set(*self.memory, current_page(self) == page::files ? "app.files.selected"
-                                                             : "app.menu.selected", value);
+  state::set(*self.memory,
+             current_page(self) == page::files ? "app.files.selected" : "app.menu.selected", value);
   if (current_page(self) == page::home) {
     const int old_y = 265 + static_cast<int>(old) * 76;
     const int new_y = 265 + static_cast<int>(value) * 76;
@@ -200,8 +200,8 @@ inline void move_library(context& self, int delta) {
   if (value < 0) value = 0;
   if (count > 0 && value >= count) value = count - 1;
   state::set(*self.memory, "reader.library.selected", value);
-  schedule_rect(self, {0, 58 + static_cast<int>(std::min(old, value)) * 76,
-                       540, 152}, refresh::mode::fast);
+  schedule_rect(self, {0, 58 + static_cast<int>(std::min(old, value)) * 76, 540, 152},
+                refresh::mode::fast);
   ++self.invalidations;
 }
 

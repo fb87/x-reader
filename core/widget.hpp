@@ -1,15 +1,15 @@
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+
 #include "canvas.hpp"
 #include "event.hpp"
 #include "geometry.hpp"
 #include "refresh.hpp"
 #include "text.hpp"
-
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 
 /**
  * @brief Widget base, focus scope, and the stock widgets (label/button/
@@ -122,8 +122,10 @@ inline void invalidate(base& w) { invalidate_rect(w, w.rect, w.refresh_hint); }
 inline void set_visible(base& w, bool visible) {
   const bool was = (w.flags & flag::visible) != 0;
   if (was == visible) return;
-  if (visible) w.flags |= flag::visible;
-  else w.flags &= static_cast<std::uint8_t>(~flag::visible);
+  if (visible)
+    w.flags |= flag::visible;
+  else
+    w.flags &= static_cast<std::uint8_t>(~flag::visible);
   invalidate_rect(w, w.rect, refresh::mode::quality);
 }
 
@@ -263,8 +265,10 @@ namespace detail {
 inline void label_render(base& w, canvas::surface& c) {
   label& l = container_of<label>(w);
   if (l.text == nullptr || l.font == nullptr) return;
-  if (l.wrap) canvas::draw_text_wrapped(c, *l.font, w.rect, l.text, l.align, l.gray);
-  else canvas::draw_text_in(c, *l.font, w.rect, l.text, l.align, l.gray);
+  if (l.wrap)
+    canvas::draw_text_wrapped(c, *l.font, w.rect, l.text, l.align, l.gray);
+  else
+    canvas::draw_text_in(c, *l.font, w.rect, l.text, l.align, l.gray);
 }
 inline constexpr vtbl label_vtbl{"label", label_render, nullptr, nullptr};
 }  // namespace detail
@@ -362,8 +366,7 @@ inline void set_icon(button& b, icon_fn icon) {
 enum class list_style { two_line, value };
 
 /** @brief Supplies the primary/secondary text for row `index`. */
-using row_fn = void (*)(struct list& self, int index, const char** primary,
-                        const char** secondary);
+using row_fn = void (*)(struct list& self, int index, const char** primary, const char** secondary);
 /** @brief Fired when a row is activated by tap or the OK key. */
 using select_fn = void (*)(struct list& self, int index);
 

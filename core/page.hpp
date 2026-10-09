@@ -1,12 +1,12 @@
 #pragma once
 
+#include <cstdint>
+
 #include "canvas.hpp"
 #include "event.hpp"
 #include "geometry.hpp"
 #include "refresh.hpp"
 #include "widget.hpp"
-
-#include <cstdint>
 
 /**
  * @brief A full screen of UI (Home, Library, Reader, ...), ported from

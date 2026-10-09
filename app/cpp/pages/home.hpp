@@ -1,11 +1,11 @@
 #pragma once
 
+#include <cstdio>
+#include <cstring>
+
 #include "app/cpp/pages/common.hpp"
 #include "app/cpp/pages/library.hpp"
 #include "app/cpp/routes.hpp"
-
-#include <cstdio>
-#include <cstring>
 
 namespace app::pages::home {
 
@@ -35,18 +35,19 @@ inline void render(context& self) {
     text::draw_in(d, text_x, cover.y + 48, text_w, book.author.data(), 2, canvas::gray::dark);
     char percent[8]{};
     const auto progress = std::max<std::int64_t>(
-        0, std::min<std::int64_t>(100, state::get(*self.memory, "reader.book.progress", std::int64_t{0})));
+        0, std::min<std::int64_t>(
+               100, state::get(*self.memory, "reader.book.progress", std::int64_t{0})));
     std::snprintf(percent, sizeof(percent), "%lld%%", static_cast<long long>(progress));
     const int percent_w = text::width(percent, 2);
     const int progress_w = text_w - percent_w - 10;
     canvas::border(d, {text_x, cover.y + 88, progress_w, 10}, 1, canvas::gray::light);
-    canvas::fill(d, {text_x + 1, cover.y + 89, (progress_w - 2) * static_cast<int>(progress) / 100, 8},
+    canvas::fill(d,
+                 {text_x + 1, cover.y + 89, (progress_w - 2) * static_cast<int>(progress) / 100, 8},
                  canvas::gray::dark);
     text::draw_in(d, text_x + progress_w + 10, cover.y + 84, percent_w, percent, 2,
                   canvas::gray::black);
   } else {
-    text::draw_in(d, card.x + 20, card.y + 59, card.w - 40, "No book open", 2,
-                  canvas::gray::black);
+    text::draw_in(d, card.x + 20, card.y + 59, card.w - 40, "No book open", 2, canvas::gray::black);
   }
   const int count = routes::menu_count(self, "home");
   int rendered = 0;

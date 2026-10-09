@@ -84,15 +84,15 @@ inline bool register_route(context& self, descriptor value) {
   return true;
 }
 
-inline bool add_pair(std::array<pair, max_params>& out, std::size_t& count,
-                     std::string_view name, std::string_view value) {
+inline bool add_pair(std::array<pair, max_params>& out, std::size_t& count, std::string_view name,
+                     std::string_view value) {
   if (count >= out.size()) return false;
   return copy(out[count].name, sizeof(out[count].name), name) &&
          copy(out[count++].value, sizeof(out[0].value), value);
 }
 
-inline bool add_query(std::array<pair, max_query>& out, std::size_t& count,
-                      std::string_view name, std::string_view value) {
+inline bool add_query(std::array<pair, max_query>& out, std::size_t& count, std::string_view name,
+                      std::string_view value) {
   if (count >= out.size()) return false;
   return copy(out[count].name, sizeof(out[count].name), name) &&
          copy(out[count++].value, sizeof(out[0].value), value);
@@ -112,7 +112,8 @@ inline void parse_query(std::string_view query, request& out) {
 }
 
 inline bool match_path(std::string_view pattern, std::string_view path, request& out) {
-  if (pattern.empty() || path.empty() || pattern.front() != '/' || path.front() != '/') return false;
+  if (pattern.empty() || path.empty() || pattern.front() != '/' || path.front() != '/')
+    return false;
   if (pattern == "/") return path == "/";
   pattern.remove_prefix(1);
   path.remove_prefix(1);
@@ -142,7 +143,8 @@ inline match resolve(const context& self, std::string_view uri) {
   for (std::size_t i = 0; i < self.route_count; ++i) {
     request candidate{};
     if (!copy(candidate.uri, sizeof(candidate.uri), uri) ||
-        !copy(candidate.path, sizeof(candidate.path), path)) return {};
+        !copy(candidate.path, sizeof(candidate.path), path))
+      return {};
     if (!match_path(self.routes[i].path, path, candidate)) continue;
     if (q != std::string_view::npos) parse_query(uri.substr(q + 1), candidate);
     result.route = &self.routes[i];

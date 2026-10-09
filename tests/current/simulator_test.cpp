@@ -1,8 +1,8 @@
-#include "app/app.hpp"
-#include "boards/sim/runtime.hpp"
-
 #include <cstdio>
 #include <cstring>
+
+#include "app/app.hpp"
+#include "boards/sim/runtime.hpp"
 
 /**
  * @brief Autonomous input-injection test suite, following docs/DESIGN.md s17/s18:
@@ -54,31 +54,36 @@ int main() {
   state::store memory{};
   state::store persistent{};
   static constexpr shell::theme theme{
-      &xr_font_alegreya_14, &xr_font_alegreya_18,      &xr_font_alegreya_bold_18,
-      &xr_font_alegreya_bold_26, &xr_font_alegreya_20, 44,
-      64,                   16,                        72,
+      &xr_font_alegreya_14,
+      &xr_font_alegreya_18,
+      &xr_font_alegreya_bold_18,
+      &xr_font_alegreya_bold_26,
+      &xr_font_alegreya_20,
+      44,
+      64,
+      16,
+      72,
   };
 
-  const bool initialized =
-      app::init(application, nav, sim.capabilities, memory, persistent, theme,
-               "tests/fixtures/library");
+  const bool initialized = app::init(application, nav, sim.capabilities, memory, persistent, theme,
+                                     "tests/fixtures/library");
   test::expect(initialized, "app::init should succeed with all mandatory capabilities present");
 
   // --- secret store: real on the sim board, structurally separate from state ---
   test::expect(capability::has(sim.capabilities, capability::id::secret),
-              "sim board registers a real secret-store capability");
+               "sim board registers a real secret-store capability");
   char secret_buf[64] = {0};
   test::expect(!secret::get(sim.secret, "network.wifi.password", secret_buf, sizeof(secret_buf)),
-              "an unset secret key reports absent, not a default/empty success");
+               "an unset secret key reports absent, not a default/empty success");
   test::expect(secret::set(sim.secret, "network.wifi.password", "s3cr3t"),
-              "setting a secret succeeds");
+               "setting a secret succeeds");
   test::expect(secret::get(sim.secret, "network.wifi.password", secret_buf, sizeof(secret_buf)) &&
-                  std::strcmp(secret_buf, "s3cr3t") == 0,
-              "the secret round-trips exactly");
+                   std::strcmp(secret_buf, "s3cr3t") == 0,
+               "the secret round-trips exactly");
   test::expect(secret::remove(sim.secret, "network.wifi.password"),
-              "removing an existing secret succeeds");
+               "removing an existing secret succeeds");
   test::expect(!secret::get(sim.secret, "network.wifi.password", secret_buf, sizeof(secret_buf)),
-              "the secret is gone after removal");
+               "the secret is gone after removal");
 
   // --- startup/splash --------------------------------------------------------
   test::expect(shell::top(application.shell) == &nav.splash.base, "splash is the initial page");
@@ -90,7 +95,7 @@ int main() {
 
   settle(sim, application, 100);
   test::expect(shell::top(application.shell) == &nav.splash.base,
-              "splash should not time out before 1500ms");
+               "splash should not time out before 1500ms");
   settle(sim, application, 1500);
   test::expect(shell::top(application.shell) == &nav.home.base, "splash times out to home");
 
@@ -99,11 +104,11 @@ int main() {
 
   // --- home navigation: Down from the book card reaches the Library button ----
   test::expect(application.shell.pages[0]->scope.focus == &nav.home.card.base_widget,
-              "home starts focused on the book card");
+               "home starts focused on the book card");
   board::sim::rotary_right(sim);  // Down
   settle(sim, application);
   test::expect(application.shell.pages[0]->scope.focus == &nav.home.library.base_widget,
-              "Down moves focus from the card to the Library button");
+               "Down moves focus from the card to the Library button");
   board::sim::rotary_push(sim);  // OK
   settle(sim, application);
   test::expect(shell::top(application.shell) == &nav.library.base, "OK on Library pushes it");
@@ -114,20 +119,19 @@ int main() {
   settle(sim, application);
   test::expect(application.shell.dialog_count == 1, "selecting a row shows the book-info dialog");
   test::expect(nav.book_info.base.scope.focus == &nav.book_info.read.base_widget,
-              "book info starts focused on Read");
+               "book info starts focused on Read");
   board::sim::rotary_push(sim);  // OK -> Read -> open_book.
   settle(sim, application);
   test::expect(application.shell.dialog_count == 0, "book info closes after Read");
   test::expect(shell::top(application.shell) == &nav.reader.base, "Read pushes the reader");
   test::expect(application.session.epub_open, "reader session actually opened the EPUB");
   test::expect(application.session.doc.manifest_count == 602,
-              "real manifest count from the fixture EPUB (not a placeholder)");
+               "real manifest count from the fixture EPUB (not a placeholder)");
   test::expect(application.session.doc.spine_count == 596,
-              "real spine count from the fixture EPUB (not a placeholder)");
-  test::expect(std::strcmp(reader::current_text(application.session),
-                           reader::sample_text()) != 0,
-              "reader shows real chapter text, never the Pride and Prejudice fallback, "
-              "while a real EPUB is open");
+               "real spine count from the fixture EPUB (not a placeholder)");
+  test::expect(std::strcmp(reader::current_text(application.session), reader::sample_text()) != 0,
+               "reader shows real chapter text, never the Pride and Prejudice fallback, "
+               "while a real EPUB is open");
 
   // --- reader: touch page turns and chrome toggle -----------------------------
   const int page_before = application.session.page;
@@ -135,7 +139,7 @@ int main() {
                     nav.reader.base.area.y + 10);  // right third -> next page.
   settle(sim, application);
   test::expect(application.session.page != page_before || application.session.current_chapter != 0,
-              "tapping the right third turns the page (or crosses a chapter)");
+               "tapping the right third turns the page (or crosses a chapter)");
 
   // Keep tapping until a chapter boundary is actually crossed (the first tap above may
   // just advance within a long chapter 0) -- this is the only way to exercise the
@@ -150,8 +154,8 @@ int main() {
   }
   test::expect(crossed_chapter, "repeated right-third taps eventually cross a chapter boundary");
   test::expect(application.session.total_pages == application.session.page_count,
-              "total_pages is refreshed immediately on a chapter-crossing page turn, not "
-              "left stale for one render (fixed tech debt inherited from the old app's turn())");
+               "total_pages is refreshed immediately on a chapter-crossing page turn, not "
+               "left stale for one render (fixed tech debt inherited from the old app's turn())");
   test::expect(nav.reader.base.chrome == page::chrome::none, "reader chrome still hidden");
   board::sim::touch(sim, nav.reader.base.area.x + nav.reader.base.area.w / 2,
                     nav.reader.base.area.y + 10);  // center third -> toggle chrome.
@@ -170,11 +174,11 @@ int main() {
   board::sim::inject(sim, event::key(event::key_code::back));
   settle(sim, application);
   test::expect(nav.reader.base.chrome == page::chrome::none,
-              "back with chrome visible hides it first, instead of popping");
+               "back with chrome visible hides it first, instead of popping");
   board::sim::inject(sim, event::key(event::key_code::back));
   settle(sim, application);
   test::expect(shell::top(application.shell) == &nav.library.base,
-              "back with no chrome pops to the library");
+               "back with no chrome pops to the library");
 
   // --- favorites: mark a book favorite from the library dock action -----------
   // The list has 2 rows starting at selected=0: it takes `count` Downs to leave the
@@ -189,7 +193,7 @@ int main() {
   board::sim::rotary_push(sim);  // Favorite is dock action 0.
   settle(sim, application);
   test::expect(application.library.books[favorited_book].favorite,
-              "dock Favorite action marks the selected book");
+               "dock Favorite action marks the selected book");
 
   board::sim::inject(sim, event::key(event::key_code::back));
   settle(sim, application);
@@ -223,7 +227,7 @@ int main() {
   board::sim::rotary_push(sim);  // OK on row 0 (Wi-Fi).
   settle(sim, application);
   test::expect(state::get(memory, app::key::wifi_connected, false) != wifi_before,
-              "selecting the Wi-Fi row flips network.wifi.connected");
+               "selecting the Wi-Fi row flips network.wifi.connected");
 
   board::sim::inject(sim, event::key(event::key_code::down));  // -> Bluetooth.
   board::sim::inject(sim, event::key(event::key_code::down));  // -> Font size.
@@ -231,9 +235,8 @@ int main() {
   const std::int64_t font_before = state::get(memory, app::key::font_size, std::int64_t{1});
   board::sim::rotary_push(sim);
   settle(sim, application);
-  test::expect(state::get(memory, app::key::font_size, std::int64_t{1}) ==
-                  (font_before + 1) % 3,
-              "selecting the Font size row cycles reader.settings.font_size");
+  test::expect(state::get(memory, app::key::font_size, std::int64_t{1}) == (font_before + 1) % 3,
+               "selecting the Font size row cycles reader.settings.font_size");
 
   for (int i = 0; i < 4; ++i) board::sim::inject(sim, event::key(event::key_code::down));
   settle(sim, application);  // row 6: About.
@@ -241,7 +244,7 @@ int main() {
   settle(sim, application);
   test::expect(application.shell.dialog_count == 1, "About row shows a confirm dialog");
   test::expect(nav.about_confirm.base.scope.focus == &nav.about_confirm.no.base_widget,
-              "confirm dialogs default focus to No -- a stray press must not be destructive");
+               "confirm dialogs default focus to No -- a stray press must not be destructive");
   board::sim::inject(sim, event::key(event::key_code::back));
   settle(sim, application);
   test::expect(application.shell.dialog_count == 0, "Back cancels the About dialog");
@@ -271,7 +274,7 @@ int main() {
   board::sim::rotary_push(sim);
   settle(sim, application);
   test::expect(application.library.count == count_before_delete - 1,
-              "confirming delete actually removes the book from the library");
+               "confirming delete actually removes the book from the library");
   board::sim::inject(sim, event::key(event::key_code::back));
   settle(sim, application);
 
@@ -285,7 +288,8 @@ int main() {
   settle(sim, application);
   board::sim::rotary_push(sim);
   settle(sim, application);
-  test::expect(shell::top(application.shell) == &nav.sleep.base, "Sleep button replaces with sleep");
+  test::expect(shell::top(application.shell) == &nav.sleep.base,
+               "Sleep button replaces with sleep");
   board::sim::touch(sim, 10, 10);
   settle(sim, application);
   test::expect(shell::top(application.shell) == &nav.home.base, "any input wakes back to home");
@@ -298,11 +302,11 @@ int main() {
   restored_app.persistent = &persistent;
   app::restore_persistent(restored_app);
   test::expect(state::get(restored, app::key::font_size, std::int64_t{-1}) ==
-                  state::get(memory, app::key::font_size, std::int64_t{-1}),
-              "font size survives a checkpoint/restore round trip");
+                   state::get(memory, app::key::font_size, std::int64_t{-1}),
+               "font size survives a checkpoint/restore round trip");
   test::expect(state::get(restored, app::key::wifi_connected, false) ==
-                  state::get(memory, app::key::wifi_connected, false),
-              "wifi connected flag survives a checkpoint/restore round trip");
+                   state::get(memory, app::key::wifi_connected, false),
+               "wifi connected flag survives a checkpoint/restore round trip");
 
   std::printf("simulator tests: %d checks, %d failures\n", test::checks, test::failures);
   return test::failures == 0 ? 0 : 1;

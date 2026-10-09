@@ -1,12 +1,12 @@
 #pragma once
 
-#include "core/canvas.hpp"
-#include "core/unicode_glyphs.hpp"
-#include "xr/xr_text.h"
-
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+
+#include "core/canvas.hpp"
+#include "core/unicode_glyphs.hpp"
+#include "xr/xr_text.h"
 
 namespace text {
 
@@ -83,8 +83,10 @@ inline void fit_font(const xr_font_t& font, const char* value, int max_width, ch
     used += bytes;
     cursor = next;
   }
-  if (used + 4 < capacity) std::memcpy(output + used, "...", 4);
-  else output[capacity - 1] = '\0';
+  if (used + 4 < capacity)
+    std::memcpy(output + used, "...", 4);
+  else
+    output[capacity - 1] = '\0';
 }
 
 inline void draw_font(display::device& display, int x, int y, const char* value,
@@ -116,9 +118,7 @@ inline void draw_title(display::device& display, int x, int y, const char* value
   draw_font(display, x, y, value, xr_font_alegreya_bold_26, color);
 }
 
-inline int rich_width(const char* value, int scale) {
-  return font_width(rich_font(scale), value);
-}
+inline int rich_width(const char* value, int scale) { return font_width(rich_font(scale), value); }
 
 inline void draw_rich(display::device& display, int x, int y, const char* value, int scale,
                       canvas::gray color) {
@@ -134,33 +134,34 @@ struct glyph {
 /** @brief Returns a compact uppercase-style glyph for basic UI text. */
 inline const std::uint8_t* bitmap(char character) {
   static constexpr glyph glyphs[] = {
-      {' ', {0, 0, 0, 0, 0, 0, 0}}, {'-', {0, 0, 0, 31, 0, 0, 0}},
-      {'.', {0, 0, 0, 0, 0, 6, 6}}, {'/', {1, 2, 4, 8, 16, 0, 0}},
+      {' ', {0, 0, 0, 0, 0, 0, 0}},        {'-', {0, 0, 0, 31, 0, 0, 0}},
+      {'.', {0, 0, 0, 0, 0, 6, 6}},        {'/', {1, 2, 4, 8, 16, 0, 0}},
       {'0', {14, 17, 19, 21, 25, 17, 14}}, {'1', {4, 12, 4, 4, 4, 4, 14}},
-      {'2', {14, 17, 1, 2, 4, 8, 31}}, {'3', {30, 1, 1, 14, 1, 1, 30}},
-      {'4', {2, 6, 10, 18, 31, 2, 2}}, {'5', {31, 16, 16, 30, 1, 1, 30}},
+      {'2', {14, 17, 1, 2, 4, 8, 31}},     {'3', {30, 1, 1, 14, 1, 1, 30}},
+      {'4', {2, 6, 10, 18, 31, 2, 2}},     {'5', {31, 16, 16, 30, 1, 1, 30}},
       {'6', {14, 16, 16, 30, 17, 17, 14}}, {'7', {31, 1, 2, 4, 8, 8, 8}},
       {'8', {14, 17, 17, 14, 17, 17, 14}}, {'9', {14, 17, 17, 15, 1, 1, 14}},
       {'A', {14, 17, 17, 31, 17, 17, 17}}, {'B', {30, 17, 17, 30, 17, 17, 30}},
       {'C', {14, 17, 16, 16, 16, 17, 14}}, {'D', {30, 17, 17, 17, 17, 17, 30}},
       {'E', {31, 16, 16, 30, 16, 16, 31}}, {'F', {31, 16, 16, 30, 16, 16, 16}},
       {'G', {14, 17, 16, 23, 17, 17, 15}}, {'H', {17, 17, 17, 31, 17, 17, 17}},
-      {'I', {14, 4, 4, 4, 4, 4, 14}}, {'J', {7, 2, 2, 2, 2, 18, 12}},
+      {'I', {14, 4, 4, 4, 4, 4, 14}},      {'J', {7, 2, 2, 2, 2, 18, 12}},
       {'K', {17, 18, 20, 24, 20, 18, 17}}, {'L', {16, 16, 16, 16, 16, 16, 31}},
       {'M', {17, 27, 21, 21, 17, 17, 17}}, {'N', {17, 25, 21, 19, 17, 17, 17}},
       {'O', {14, 17, 17, 17, 17, 17, 14}}, {'P', {30, 17, 17, 30, 16, 16, 16}},
       {'Q', {14, 17, 17, 17, 21, 18, 13}}, {'R', {30, 17, 17, 30, 20, 18, 17}},
-      {'S', {15, 16, 16, 14, 1, 1, 30}}, {'T', {31, 4, 4, 4, 4, 4, 4}},
+      {'S', {15, 16, 16, 14, 1, 1, 30}},   {'T', {31, 4, 4, 4, 4, 4, 4}},
       {'U', {17, 17, 17, 17, 17, 17, 14}}, {'V', {17, 17, 17, 17, 17, 10, 4}},
       {'W', {17, 17, 17, 21, 21, 21, 10}}, {'X', {17, 17, 10, 4, 10, 17, 17}},
-      {'Y', {17, 17, 10, 4, 4, 4, 4}}, {'Z', {31, 1, 2, 4, 8, 16, 31}},
-      {':', {0, 6, 6, 0, 6, 6, 0}}, {'%', {17, 2, 4, 8, 17, 0, 0}},
-      {'+', {0, 4, 4, 31, 4, 4, 0}}, {'?', {14, 17, 1, 2, 4, 0, 4}},
-      {'(', {2, 4, 8, 8, 8, 4, 2}}, {')', {8, 4, 2, 2, 2, 4, 8}},
-      {'[', {14, 8, 8, 8, 8, 8, 14}}, {']', {14, 2, 2, 2, 2, 2, 14}},
+      {'Y', {17, 17, 10, 4, 4, 4, 4}},     {'Z', {31, 1, 2, 4, 8, 16, 31}},
+      {':', {0, 6, 6, 0, 6, 6, 0}},        {'%', {17, 2, 4, 8, 17, 0, 0}},
+      {'+', {0, 4, 4, 31, 4, 4, 0}},       {'?', {14, 17, 1, 2, 4, 0, 4}},
+      {'(', {2, 4, 8, 8, 8, 4, 2}},        {')', {8, 4, 2, 2, 2, 4, 8}},
+      {'[', {14, 8, 8, 8, 8, 8, 14}},      {']', {14, 2, 2, 2, 2, 2, 14}},
   };
   if (character >= 'a' && character <= 'z') character = static_cast<char>(character - 'a' + 'A');
-  for (const auto& item : glyphs) if (item.character == character) return item.rows;
+  for (const auto& item : glyphs)
+    if (item.character == character) return item.rows;
   static constexpr std::uint8_t unknown[7] = {14, 17, 1, 2, 4, 0, 4};
   return unknown;
 }
@@ -202,8 +203,7 @@ inline std::uint32_t next_codepoint(const char*& cursor) {
     const auto b3 = static_cast<std::uint8_t>(cursor[2]);
     if (!continuation(b1) || !continuation(b2) || !continuation(b3)) return '?';
     cursor += 3;
-    return ((first & 0x07U) << 18U) | ((b1 & 0x3FU) << 12U) | ((b2 & 0x3FU) << 6U) |
-           (b3 & 0x3FU);
+    return ((first & 0x07U) << 18U) | ((b1 & 0x3FU) << 12U) | ((b2 & 0x3FU) << 6U) | (b3 & 0x3FU);
   }
   return '?';
 }

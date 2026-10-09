@@ -1,12 +1,12 @@
-#include "app/cpp/init.hpp"
-#include "boards/sim/runtime.hpp"
-#include "boards/sim/wayland_backend.hpp"
-
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <thread>
+
+#include "app/cpp/init.hpp"
+#include "boards/sim/runtime.hpp"
+#include "boards/sim/wayland_backend.hpp"
 
 /** @brief Runs the interactive Wayland simulator. */
 int main() {
@@ -16,7 +16,8 @@ int main() {
   char default_root[storage::path_max]{};
   if (root == nullptr) {
     const char* home = std::getenv("HOME");
-    std::snprintf(default_root, sizeof(default_root), "%s/data/sdcard", home != nullptr ? home : ".");
+    std::snprintf(default_root, sizeof(default_root), "%s/data/sdcard",
+                  home != nullptr ? home : ".");
     root = default_root;
   }
   board::sim::mount(sim, root);

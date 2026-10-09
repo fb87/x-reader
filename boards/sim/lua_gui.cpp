@@ -1,7 +1,3 @@
-#include "runtime/lua/frontend.hpp"
-#include "boards/sim/runtime.hpp"
-#include "boards/sim/wayland_backend.hpp"
-
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -10,6 +6,10 @@
 #include <functional>
 #include <string>
 #include <thread>
+
+#include "boards/sim/runtime.hpp"
+#include "boards/sim/wayland_backend.hpp"
+#include "runtime/lua/frontend.hpp"
 
 namespace {
 
@@ -32,12 +32,10 @@ std::size_t source_fingerprint(const char* root, const char* extension) {
     const auto size = static_cast<std::size_t>(it->file_size(ec));
     const auto stamp = static_cast<std::size_t>(it->last_write_time(ec).time_since_epoch().count());
     fingerprint ^= path_hash + 0x9e3779b97f4a7c15ULL + (fingerprint << 6U) + (fingerprint >> 2U);
-    fingerprint ^= size + stamp + 0x9e3779b97f4a7c15ULL + (fingerprint << 6U) +
-                   (fingerprint >> 2U);
+    fingerprint ^= size + stamp + 0x9e3779b97f4a7c15ULL + (fingerprint << 6U) + (fingerprint >> 2U);
   }
   return fingerprint;
 }
-
 
 }  // namespace
 
@@ -49,7 +47,8 @@ int main() {
   char default_root[storage::path_max]{};
   if (root == nullptr) {
     const char* home = std::getenv("HOME");
-    std::snprintf(default_root, sizeof(default_root), "%s/data/sdcard", home != nullptr ? home : ".");
+    std::snprintf(default_root, sizeof(default_root), "%s/data/sdcard",
+                  home != nullptr ? home : ".");
     root = default_root;
   }
   board::sim::mount(sim, root);

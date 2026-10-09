@@ -38,8 +38,8 @@ inline void open_book(context& app, pages& nav, int index) {
         capability::get<storage::device>(*app.capabilities, capability::id::storage);
     epub::file_view view{storage_device, b.path.data(), 0};
     if (!storage::file_size(*storage_device, view.path, view.size)) return;
-    const bool same_book = app.session.epub_open &&
-                           std::strcmp(app.session.storage_view.path, b.path.data()) == 0;
+    const bool same_book =
+        app.session.epub_open && std::strcmp(app.session.storage_view.path, b.path.data()) == 0;
     if (!same_book && !reader::open(app.session, view, b.title.data())) return;
     if (app.session.doc.title[0] != '\0') {
       std::snprintf(b.title.data(), b.title.size(), "%s", app.session.doc.title);

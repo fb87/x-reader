@@ -1,8 +1,8 @@
-#include "boards/sim/runtime.hpp"
-#include "runtime/lua/frontend.hpp"
-
 #include <cstdio>
 #include <cstring>
+
+#include "boards/sim/runtime.hpp"
+#include "runtime/lua/frontend.hpp"
 
 namespace test {
 int checks = 0;

@@ -1,8 +1,8 @@
-#include "app/cpp/init.hpp"
-#include "boards/sim/runtime.hpp"
-
 #include <cstdio>
 #include <cstdlib>
+
+#include "app/cpp/init.hpp"
+#include "boards/sim/runtime.hpp"
 
 int main() {
   const char* directory = std::getenv("XREADER_CHECKPOINT_DIR");

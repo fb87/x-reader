@@ -1,17 +1,17 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <new>
+
 #include "../core/geometry.hpp"
 #include "../core/state.hpp"
 #include "../core/text.hpp"
 #include "epub.hpp"
 #include "library.hpp"
-
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <cstring>
-#include <cstdio>
-#include <new>
 
 #ifdef ESP_PLATFORM
 #include "esp_log.h"
@@ -85,16 +85,18 @@ inline void init(context&, state::store& shared) {
 
 inline std::uint32_t cache_hash(const char* path) {
   std::uint32_t hash = 2166136261U;
-  while (path != nullptr && *path != '\0') hash = (hash ^ static_cast<unsigned char>(*path++)) * 16777619U;
+  while (path != nullptr && *path != '\0')
+    hash = (hash ^ static_cast<unsigned char>(*path++)) * 16777619U;
   return hash;
 }
 
 inline bool cache_path(const char* path, char* output, std::size_t capacity) {
   if (path == nullptr || output == nullptr || capacity == 0) return false;
-  const bool is_sdcard_path = std::strncmp(path, "/sdcard/", 8) == 0 || std::strcmp(path, "/sdcard") == 0;
-  const int written = std::snprintf(output, capacity, "%s/.xreader_epub_%08x.cache",
-                                    is_sdcard_path ? "/sdcard" : ".",
-                                    static_cast<unsigned>(cache_hash(path)));
+  const bool is_sdcard_path =
+      std::strncmp(path, "/sdcard/", 8) == 0 || std::strcmp(path, "/sdcard") == 0;
+  const int written =
+      std::snprintf(output, capacity, "%s/.xreader_epub_%08x.cache",
+                    is_sdcard_path ? "/sdcard" : ".", static_cast<unsigned>(cache_hash(path)));
   return written > 0 && static_cast<std::size_t>(written) < capacity;
 }
 
@@ -114,15 +116,22 @@ inline bool load_cache(session& current, const char* path, std::uint32_t file_si
   std::FILE* file = std::fopen(cache, "rb");
   if (file == nullptr) return false;
   cache_header header{};
-  const bool ok = std::fread(&header, sizeof(header), 1, file) == 1 && header.magic == 0x58524550U &&
-                  header.file_size == file_size && header.path_hash == cache_hash(path) &&
-                   header.manifest_count <= current.manifest.size() &&
-                   header.spine_count <= current.spine.size() &&
-                   std::fread(current.document.package_path, sizeof(current.document.package_path), 1, file) == 1 &&
-                   std::fread(current.document.title, sizeof(current.document.title), 1, file) == 1 &&
-                   std::fread(current.manifest.data(), sizeof(current.manifest[0]), header.manifest_count, file) == header.manifest_count &&
-                   std::fread(current.spine.data(), sizeof(current.spine[0]), header.spine_count, file) == header.spine_count;
-  if (!ok) { std::fclose(file); return false; }
+  const bool ok =
+      std::fread(&header, sizeof(header), 1, file) == 1 && header.magic == 0x58524550U &&
+      header.file_size == file_size && header.path_hash == cache_hash(path) &&
+      header.manifest_count <= current.manifest.size() &&
+      header.spine_count <= current.spine.size() &&
+      std::fread(current.document.package_path, sizeof(current.document.package_path), 1, file) ==
+          1 &&
+      std::fread(current.document.title, sizeof(current.document.title), 1, file) == 1 &&
+      std::fread(current.manifest.data(), sizeof(current.manifest[0]), header.manifest_count,
+                 file) == header.manifest_count &&
+      std::fread(current.spine.data(), sizeof(current.spine[0]), header.spine_count, file) ==
+          header.spine_count;
+  if (!ok) {
+    std::fclose(file);
+    return false;
+  }
   current.document.manifest_count = header.manifest_count;
   current.document.spine_count = header.spine_count;
   bind_document(current);
@@ -132,8 +141,11 @@ inline bool load_cache(session& current, const char* path, std::uint32_t file_si
   current.document.zip_tail_size = header.zip_tail_size;
   current.document.zip_tail_valid = header.zip_tail_size != 0;
   if (header.zip_tail_size > current.document.zip_tail.size() ||
-      (header.zip_tail_size != 0 && std::fread(current.document.zip_tail.data(), 1, header.zip_tail_size, file) != header.zip_tail_size)) {
-    std::fclose(file); return false;
+      (header.zip_tail_size != 0 &&
+       std::fread(current.document.zip_tail.data(), 1, header.zip_tail_size, file) !=
+           header.zip_tail_size)) {
+    std::fclose(file);
+    return false;
   }
   std::fclose(file);
   return true;
@@ -144,14 +156,21 @@ inline void save_cache(const session& current, const char* path, std::uint32_t f
   if (!cache_path(path, cache, sizeof(cache))) return;
   std::FILE* file = std::fopen(cache, "wb");
   if (file == nullptr) return;
-  const cache_header header{0x58524550U, file_size, cache_hash(path), current.document.manifest_count,
-                            current.document.spine_count, current.document.zip_tail_start,
+  const cache_header header{0x58524550U,
+                            file_size,
+                            cache_hash(path),
+                            current.document.manifest_count,
+                            current.document.spine_count,
+                            current.document.zip_tail_start,
                             current.document.zip_tail_valid ? current.document.zip_tail_size : 0};
   if (std::fwrite(&header, sizeof(header), 1, file) == 1 &&
-      std::fwrite(current.document.package_path, sizeof(current.document.package_path), 1, file) == 1 &&
+      std::fwrite(current.document.package_path, sizeof(current.document.package_path), 1, file) ==
+          1 &&
       std::fwrite(current.document.title, sizeof(current.document.title), 1, file) == 1 &&
-      std::fwrite(current.manifest.data(), sizeof(current.manifest[0]), header.manifest_count, file) == header.manifest_count &&
-      std::fwrite(current.spine.data(), sizeof(current.spine[0]), header.spine_count, file) == header.spine_count &&
+      std::fwrite(current.manifest.data(), sizeof(current.manifest[0]), header.manifest_count,
+                  file) == header.manifest_count &&
+      std::fwrite(current.spine.data(), sizeof(current.spine[0]), header.spine_count, file) ==
+          header.spine_count &&
       header.zip_tail_size != 0)
     std::fwrite(current.document.zip_tail.data(), 1, header.zip_tail_size, file);
   std::fclose(file);
@@ -162,7 +181,8 @@ inline bool load_chapter(session& s, std::uint16_t chapter) {
   if (!s.epub_open || chapter >= s.document.spine_count) return false;
   std::uint32_t output = 0;
   if (epub::spine_text(s.document, chapter, s.scratch.data(), s.scratch.size(), s.text.data(),
-                       s.text.size(), output) != epub::status::ok) return false;
+                       s.text.size(), output) != epub::status::ok)
+    return false;
   s.cover_placeholder = s.text[0] == '\0';
   if (s.cover_placeholder) std::strcpy(s.text.data(), "Cover");
   s.current_chapter = chapter;
@@ -186,7 +206,8 @@ inline bool open(session& s, const epub::file_view& storage, const char* fallbac
   }
   if (epub::open(s.document, s.storage_view, s.scratch.data(), s.scratch.size(), s.manifest.data(),
                  static_cast<std::uint16_t>(s.manifest.size()), s.spine.data(),
-                  static_cast<std::uint16_t>(s.spine.size())) != epub::status::ok) return false;
+                 static_cast<std::uint16_t>(s.spine.size())) != epub::status::ok)
+    return false;
   char title_copy[book::title_size]{};
   std::snprintf(title_copy, sizeof(title_copy), "%s", s.document.title);
   book::repair_mojibake(s.document.title, sizeof(s.document.title), title_copy);
@@ -241,9 +262,8 @@ inline std::size_t line_span(const char* text, int max_width, int scale, std::si
 
 /** @brief Paginates the current chapter using the native bitmap text metrics. */
 inline void paginate(session& s, geometry::rect text_rect, int scale) {
-  if (s.pagination_valid && s.paginated_width == text_rect.w &&
-      s.paginated_height == text_rect.h && s.paginated_scale == scale &&
-      s.paginated_chapter == s.current_chapter) {
+  if (s.pagination_valid && s.paginated_width == text_rect.w && s.paginated_height == text_rect.h &&
+      s.paginated_scale == scale && s.paginated_chapter == s.current_chapter) {
     return;
   }
   s.page_count = 0;
@@ -284,11 +304,10 @@ inline bool turn_page(session& s, int delta, geometry::rect text_rect, int scale
 
 inline int progress_percent(const session& s) {
   if (!s.epub_open || s.document.spine_count == 0 || s.page_count == 0) return -1;
-  const std::uint32_t current = static_cast<std::uint32_t>(s.page + 1) * 100U /
-                                static_cast<std::uint32_t>(s.page_count);
-  const std::uint32_t progress =
-      (static_cast<std::uint32_t>(s.current_chapter) * 100U + current) /
-      static_cast<std::uint32_t>(s.document.spine_count);
+  const std::uint32_t current =
+      static_cast<std::uint32_t>(s.page + 1) * 100U / static_cast<std::uint32_t>(s.page_count);
+  const std::uint32_t progress = (static_cast<std::uint32_t>(s.current_chapter) * 100U + current) /
+                                 static_cast<std::uint32_t>(s.document.spine_count);
   return static_cast<int>(std::min<std::uint32_t>(100U, progress));
 }
 
@@ -340,22 +359,28 @@ inline bool open_selected(context& self, state::store& shared) {
 inline void next_page(context& self, state::store& shared, geometry::rect text_rect, int scale) {
   if (turn_page(self.current, 1, text_rect, scale)) {
     state::set(shared, "reader.book.page", static_cast<std::int64_t>(self.current.page));
-    state::set(shared, "reader.book.chapter", static_cast<std::int64_t>(self.current.current_chapter));
-    state::set(shared, "reader.book.progress", static_cast<std::int64_t>(progress_percent(self.current)));
+    state::set(shared, "reader.book.chapter",
+               static_cast<std::int64_t>(self.current.current_chapter));
+    state::set(shared, "reader.book.progress",
+               static_cast<std::int64_t>(progress_percent(self.current)));
   }
 }
 
-inline void previous_page(context& self, state::store& shared, geometry::rect text_rect, int scale) {
+inline void previous_page(context& self, state::store& shared, geometry::rect text_rect,
+                          int scale) {
   if (turn_page(self.current, -1, text_rect, scale)) {
     state::set(shared, "reader.book.page", static_cast<std::int64_t>(self.current.page));
-    state::set(shared, "reader.book.chapter", static_cast<std::int64_t>(self.current.current_chapter));
-    state::set(shared, "reader.book.progress", static_cast<std::int64_t>(progress_percent(self.current)));
+    state::set(shared, "reader.book.chapter",
+               static_cast<std::int64_t>(self.current.current_chapter));
+    state::set(shared, "reader.book.progress",
+               static_cast<std::int64_t>(progress_percent(self.current)));
   }
 }
 
 inline void adjust_font(state::store& shared, int delta) {
   auto value = state::get(shared, "reader.settings.font_size", std::int64_t{1}) + delta;
-  state::set(shared, "reader.settings.font_size", std::max<std::int64_t>(0, std::min<std::int64_t>(2, value)));
+  state::set(shared, "reader.settings.font_size",
+             std::max<std::int64_t>(0, std::min<std::int64_t>(2, value)));
 }
 
 }  // namespace reader

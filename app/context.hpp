@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "../core/capability.hpp"
 #include "../core/connectivity.hpp"
 #include "../core/input.hpp"
@@ -9,8 +11,6 @@
 #include "../core/storage.hpp"
 #include "../reader/library.hpp"
 #include "../reader/session.hpp"
-
-#include <cstdint>
 
 /**
  * @brief The single shared app context, replacing the old `app_t g_app`
@@ -41,9 +41,8 @@ inline constexpr const char* bluetooth_enabled = "network.bluetooth.enabled";
 
 /** @brief Durable keys checkpointed between memory and persistent storage. */
 inline constexpr const char* const durable_keys[] = {
-    key::book_current,     key::font_size,          key::full_refresh_every,
-    key::show_progress,    key::sleep_timeout_minutes, key::wifi_connected,
-    key::bluetooth_enabled,
+    key::book_current,          key::font_size,      key::full_refresh_every, key::show_progress,
+    key::sleep_timeout_minutes, key::wifi_connected, key::bluetooth_enabled,
 };
 
 struct context {

@@ -1,8 +1,8 @@
+#include <cstdio>
+
 #include "core/state.hpp"
 #include "runtime/lua/frontend.hpp"
 #include "selected_board.hpp"
-
-#include <cstdio>
 
 /** @brief Composition root for the Lua application frontend. */
 int main() {

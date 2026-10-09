@@ -32,8 +32,7 @@ inline bool scan(app::context& self) {
   state::set(*self.memory, "network.wifi.available", true);
   scan_context scan_state{.app = &self};
   const bool ok = ::wifi::scan(*device, scan_entry, &scan_state);
-  state::set(*self.memory, "network.wifi.scan.count",
-             static_cast<std::int64_t>(scan_state.count));
+  state::set(*self.memory, "network.wifi.scan.count", static_cast<std::int64_t>(scan_state.count));
   ++self.invalidations;
   return ok;
 }

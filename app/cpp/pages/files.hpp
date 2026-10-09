@@ -1,10 +1,10 @@
 #pragma once
 
-#include "app/cpp/pages/common.hpp"
-#include "app/cpp/routes.hpp"
-
 #include <cstdio>
 #include <cstring>
+
+#include "app/cpp/pages/common.hpp"
+#include "app/cpp/routes.hpp"
 
 namespace app::pages::files {
 
@@ -20,7 +20,8 @@ inline void load_directory(context& self, const char* path);
 inline bool go_parent(context& self) {
   auto* device = capability::get<storage::device>(*self.capabilities, capability::id::storage);
   const char* root = device != nullptr && device->root != nullptr ? device->root : "";
-  if (std::strcmp(self.file_path, root) == 0 || self.file_path[0] == '\0') return_home(self);
+  if (std::strcmp(self.file_path, root) == 0 || self.file_path[0] == '\0')
+    return_home(self);
   else {
     char parent[storage::path_max]{};
     std::snprintf(parent, sizeof(parent), "%s", self.file_path);
@@ -89,9 +90,10 @@ inline void render(context& self) {
     const auto& entry = self.files[static_cast<std::size_t>(index)];
     widget::row(d, {12, 58 + row * 76, d.width - 24, 68}, entry.display,
                 entry.directory ? "Folder" : "EPUB",
-                selection(self) == index && static_cast<focus_area>(state::get(
-                    *self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::content))) ==
-                    focus_area::content,
+                selection(self) == index &&
+                    static_cast<focus_area>(state::get(
+                        *self.memory, "app.focus.area",
+                        static_cast<std::int64_t>(focus_area::content))) == focus_area::content,
                 {}, entry.directory ? XR_ICON_FOLDER : XR_ICON_DESCRIPTION);
   }
   if (self.file_count > visible_rows) {
@@ -100,7 +102,7 @@ inline void render(context& self) {
     canvas::vline(d, track.x + 3, track.y, track.h, canvas::gray::light);
     const int thumb_h = std::max(track.h * visible_rows / self.file_count, 16);
     const int thumb_y = track.y + (track.h - thumb_h) * self.file_offset /
-                        std::max(self.file_count - visible_rows, 1);
+                                      std::max(self.file_count - visible_rows, 1);
     canvas::fill(d, {track.x, thumb_y, 6, thumb_h}, canvas::gray::black);
   }
   if (self.file_count == 0)

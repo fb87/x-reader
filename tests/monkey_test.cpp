@@ -1,7 +1,7 @@
+#include <cstdio>
+
 #include "app/cpp/init.hpp"
 #include "boards/sim/runtime.hpp"
-
-#include <cstdio>
 
 namespace {
 int checks = 0;
@@ -33,9 +33,8 @@ int main() {
   app::pump(application);
   std::uint32_t seed = 0x51a7c0deU;
   constexpr event::key_code keys[] = {
-      event::key_code::up, event::key_code::down, event::key_code::left,
-      event::key_code::right, event::key_code::ok, event::key_code::back,
-      event::key_code::menu,
+      event::key_code::up, event::key_code::down, event::key_code::left, event::key_code::right,
+      event::key_code::ok, event::key_code::back, event::key_code::menu,
   };
 
   for (int step = 0; step < 1000; ++step) {

@@ -1,10 +1,10 @@
 #pragma once
 
+#include <cstdint>
+
 #include "../core/canvas.hpp"
 #include "../core/geometry.hpp"
 #include "../core/text.hpp"
-
-#include <cstdint>
 
 /**
  * @brief Bridges the existing C-compiled bitmap font/icon tables

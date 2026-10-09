@@ -1,24 +1,33 @@
 #pragma once
 
-#include "core/router.hpp"
-#include "app/cpp/model.hpp"
-
 #include <cstddef>
 #include <cstring>
+
+#include "app/cpp/model.hpp"
+#include "core/router.hpp"
 
 namespace app::routes {
 
 inline const char* path_for_page(page value) {
   switch (value) {
-    case page::splash: return "/splash";
-    case page::home: return "/";
-    case page::library: return "/library";
-    case page::favorites: return "/library/favorites";
-    case page::files: return "/files";
-    case page::reader: return "/book/0/reader";
-    case page::settings: return "/settings";
-    case page::connectivity: return "/settings/network";
-    case page::sleep: return "/sleep";
+    case page::splash:
+      return "/splash";
+    case page::home:
+      return "/";
+    case page::library:
+      return "/library";
+    case page::favorites:
+      return "/library/favorites";
+    case page::files:
+      return "/files";
+    case page::reader:
+      return "/book/0/reader";
+    case page::settings:
+      return "/settings";
+    case page::connectivity:
+      return "/settings/network";
+    case page::sleep:
+      return "/sleep";
   }
   return "/";
 }
@@ -58,24 +67,19 @@ inline bool register_all(context& self) {
   };
 
   constexpr route_seed entries[] = {
-      {"/splash", "reader_name", nullptr, 0},
-      {"/", "home", nullptr, 0},
-      {"/library", "library", "home", 10},
-      {"/library/favorites", "favorites", "home", 20},
-      {"/files", "file_manager", "home", 30},
-      {"/book/:id/reader", "reading", nullptr, 0},
-      {"/settings", "settings", "home", 40},
-      {"/sleep", "sleep", "home", 50},
+      {"/splash", "reader_name", nullptr, 0}, {"/", "home", nullptr, 0},
+      {"/library", "library", "home", 10},    {"/library/favorites", "favorites", "home", 20},
+      {"/files", "file_manager", "home", 30}, {"/book/:id/reader", "reading", nullptr, 0},
+      {"/settings", "settings", "home", 40},  {"/sleep", "sleep", "home", 50},
   };
 
   for (const auto& entry : entries) {
-    if (!router::register_route(self.router,
-                                {.path = entry.path,
-                                 .title_key = entry.title,
-                                 .menu_section = entry.menu,
-                                 .menu_order = entry.order,
-                                 .open = open_page,
-                                 .user = &self})) {
+    if (!router::register_route(self.router, {.path = entry.path,
+                                              .title_key = entry.title,
+                                              .menu_section = entry.menu,
+                                              .menu_order = entry.order,
+                                              .open = open_page,
+                                              .user = &self})) {
       return false;
     }
   }

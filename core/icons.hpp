@@ -1,12 +1,11 @@
 #pragma once
 
-#include "core/canvas.hpp"
-#include "core/geometry.hpp"
-
-#include "xr_icons.h"
-
 #include <cstdint>
 #include <cstring>
+
+#include "core/canvas.hpp"
+#include "core/geometry.hpp"
+#include "xr_icons.h"
 
 namespace icon {
 

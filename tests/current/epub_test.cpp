@@ -1,8 +1,9 @@
-#include "boards/sim/runtime.hpp"
 #include "reader/epub.hpp"
 
 #include <cstdio>
 #include <cstring>
+
+#include "boards/sim/runtime.hpp"
 
 /**
  * @brief Real-fixture EPUB regression test, matching the old
@@ -30,18 +31,17 @@ int main(int argc, char** argv) {
   static std::array<std::uint8_t, 80 * 1024> scratch;
   static std::array<char, 64 * 1024> text;
 
-  epub::status status =
-      epub::open(doc, view, scratch.data(), scratch.size(), manifest.data(),
-                static_cast<std::uint16_t>(manifest.size()), spine.data(),
-                static_cast<std::uint16_t>(spine.size()));
+  epub::status status = epub::open(doc, view, scratch.data(), scratch.size(), manifest.data(),
+                                   static_cast<std::uint16_t>(manifest.size()), spine.data(),
+                                   static_cast<std::uint16_t>(spine.size()));
   if (status != epub::status::ok) {
     std::fprintf(stderr, "EPUB open failed: %s\n", epub::status_string(status));
     return 1;
   }
 
   std::uint32_t text_size = 0;
-  status = epub::spine_text(doc, 1, scratch.data(), scratch.size(), text.data(), text.size(),
-                            text_size);
+  status =
+      epub::spine_text(doc, 1, scratch.data(), scratch.size(), text.data(), text.size(), text_size);
   if (status != epub::status::ok || doc.manifest_count != 602 || doc.spine_count != 596 ||
       text[0] == '\0') {
     std::fprintf(stderr, "EPUB import failed: %s (manifest=%u spine=%u text[0]=%u)\n",

@@ -38,7 +38,7 @@ int main() {
     library::index lib{};
     fill_to_cap(lib);
     expect(!library::add(lib, "overflow.epub", "Overflow"),
-          "add() still refuses once the regular cap is reached");
+           "add() still refuses once the regular cap is reached");
     expect(lib.count == library::max_books, "add()'s refusal doesn't touch count");
   }
 
@@ -51,14 +51,14 @@ int main() {
     expect(lib.count == library::max_books + 1, "count grows by one for the transient slot");
     expect(lib.books[idx].transient, "the overflow slot is marked transient");
     expect(std::strcmp(lib.books[idx].path.data(), "overflow.epub") == 0,
-          "the overflow slot holds the requested path");
+           "the overflow slot holds the requested path");
 
     // --- opening a second, different overflow book reuses slot 16, doesn't grow further
     const int idx2 = library::open_transient(lib, "overflow2.epub", "Overflow 2");
     expect(idx2 == library::max_books, "a second overflow book reuses slot 16");
     expect(lib.count == library::max_books + 1, "count does not grow past 17");
     expect(std::strcmp(lib.books[idx2].path.data(), "overflow2.epub") == 0,
-          "slot 16 now holds the second overflow book's path");
+           "slot 16 now holds the second overflow book's path");
 
     // --- re-opening the same overflow path again reuses the slot without changing count
     const int idx3 = library::open_transient(lib, "overflow2.epub", "Overflow 2");
@@ -78,8 +78,7 @@ int main() {
     library::add(lib, "b.epub", "B");
     library::remove(lib, 0);
     expect(lib.count == 1, "remove under the cap compacts normally");
-    expect(std::strcmp(lib.books[0].path.data(), "b.epub") == 0,
-          "the remaining book shifted down");
+    expect(std::strcmp(lib.books[0].path.data(), "b.epub") == 0, "the remaining book shifted down");
   }
 
   // --- deleting a regular book while a transient overflow is present ------------------
@@ -94,7 +93,7 @@ int main() {
     // Two entries disappear: the deleted regular book, and the transient overflow slot
     // that gets evicted alongside it (count 17 -> 15), matching the old app_delete_book.
     expect(lib.count == library::max_books - 1,
-          "deleting a regular book while full drops the transient slot too (count 17 -> 15)");
+           "deleting a regular book while full drops the transient slot too (count 17 -> 15)");
     for (int i = 0; i < lib.count; ++i) {
       expect(!lib.books[i].transient, "no transient entry survives among the regular slots");
     }
@@ -103,12 +102,12 @@ int main() {
     for (int i = 0; i < 5; ++i) {
       std::snprintf(expected, sizeof(expected), "book_%d.epub", i);
       expect(std::strcmp(lib.books[i].path.data(), expected) == 0,
-            "books before the removed index are untouched");
+             "books before the removed index are untouched");
     }
     for (int i = 5; i < lib.count; ++i) {
       std::snprintf(expected, sizeof(expected), "book_%d.epub", i + 1);
       expect(std::strcmp(lib.books[i].path.data(), expected) == 0,
-            "books after the removed index shift down by one, skipping the dropped slot");
+             "books after the removed index shift down by one, skipping the dropped slot");
     }
   }
 
@@ -119,12 +118,12 @@ int main() {
     const int overflow = library::open_transient(lib, "overflow.epub", "Overflow");
     library::remove(lib, overflow);
     expect(lib.count == library::max_books,
-          "removing the transient slot itself drops exactly one entry");
+           "removing the transient slot itself drops exactly one entry");
     for (int i = 0; i < lib.count; ++i) {
       char expected[32];
       std::snprintf(expected, sizeof(expected), "book_%d.epub", i);
       expect(std::strcmp(lib.books[i].path.data(), expected) == 0,
-            "all 16 regular books are untouched after removing only the transient slot");
+             "all 16 regular books are untouched after removing only the transient slot");
     }
   }
 

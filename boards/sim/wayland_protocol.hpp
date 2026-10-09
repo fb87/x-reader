@@ -100,35 +100,40 @@ inline const wl_message xdg_wm_base_requests[] = {
     {"pong", "u", nullptr},
 };
 inline const wl_message xdg_wm_base_events[] = {{"ping", "u", nullptr}};
-inline const wl_interface xdg_wm_base_interface = {
-    "xdg_wm_base", 1, 4, xdg_wm_base_requests, 1, xdg_wm_base_events};
+inline const wl_interface xdg_wm_base_interface = {"xdg_wm_base",        1, 4,
+                                                   xdg_wm_base_requests, 1, xdg_wm_base_events};
 
 inline const wl_message xdg_surface_requests[] = {
-    {"destroy", "", nullptr},
-    {"get_toplevel", "n", xdg_surface_get_toplevel_types},
-    {"get_popup", "noo", nullptr},
-    {"set_window_geometry", "iiii", nullptr},
+    {"destroy", "", nullptr},        {"get_toplevel", "n", xdg_surface_get_toplevel_types},
+    {"get_popup", "noo", nullptr},   {"set_window_geometry", "iiii", nullptr},
     {"ack_configure", "u", nullptr},
 };
 inline const wl_message xdg_surface_events[] = {{"configure", "u", nullptr}};
-inline const wl_interface xdg_surface_interface = {
-    "xdg_surface", 1, 5, xdg_surface_requests, 1, xdg_surface_events};
+inline const wl_interface xdg_surface_interface = {"xdg_surface",        1, 5,
+                                                   xdg_surface_requests, 1, xdg_surface_events};
 
 inline const wl_message xdg_toplevel_requests[] = {
-    {"destroy", "", nullptr},          {"set_parent", "?o", nullptr},
-    {"set_title", "s", nullptr},      {"set_app_id", "s", nullptr},
-    {"show_window_menu", "ouii", nullptr}, {"move", "ou", nullptr},
-    {"resize", "ouu", nullptr},       {"set_max_size", "ii", nullptr},
-    {"set_min_size", "ii", nullptr},  {"set_maximized", "", nullptr},
-    {"unset_maximized", "", nullptr}, {"set_fullscreen", "?o", nullptr},
-    {"unset_fullscreen", "", nullptr},{"set_minimized", "", nullptr},
+    {"destroy", "", nullptr},
+    {"set_parent", "?o", nullptr},
+    {"set_title", "s", nullptr},
+    {"set_app_id", "s", nullptr},
+    {"show_window_menu", "ouii", nullptr},
+    {"move", "ou", nullptr},
+    {"resize", "ouu", nullptr},
+    {"set_max_size", "ii", nullptr},
+    {"set_min_size", "ii", nullptr},
+    {"set_maximized", "", nullptr},
+    {"unset_maximized", "", nullptr},
+    {"set_fullscreen", "?o", nullptr},
+    {"unset_fullscreen", "", nullptr},
+    {"set_minimized", "", nullptr},
 };
 inline const wl_message xdg_toplevel_events[] = {
     {"configure", "iia", nullptr},
     {"close", "", nullptr},
 };
-inline const wl_interface xdg_toplevel_interface = {
-    "xdg_toplevel", 1, 14, xdg_toplevel_requests, 2, xdg_toplevel_events};
+inline const wl_interface xdg_toplevel_interface = {"xdg_toplevel",        1, 14,
+                                                    xdg_toplevel_requests, 2, xdg_toplevel_events};
 
 inline wl_registry* display_get_registry(wl_display* display) {
   return reinterpret_cast<wl_registry*>(wl_proxy_marshal_flags(
@@ -158,13 +163,13 @@ inline wl_shm_pool* shm_create_pool(wl_shm* shm, int fd, std::int32_t size) {
       wl_proxy_get_version(reinterpret_cast<wl_proxy*>(shm)), 0, nullptr, fd, size));
 }
 
-inline wl_buffer* shm_pool_create_buffer(wl_shm_pool* pool, std::int32_t offset,
-                                         std::int32_t width, std::int32_t height,
-                                         std::int32_t stride, std::uint32_t format) {
-  return reinterpret_cast<wl_buffer*>(wl_proxy_marshal_flags(
-      reinterpret_cast<wl_proxy*>(pool), 0, &wl_buffer_interface,
-      wl_proxy_get_version(reinterpret_cast<wl_proxy*>(pool)), 0, nullptr, offset, width, height,
-      stride, format));
+inline wl_buffer* shm_pool_create_buffer(wl_shm_pool* pool, std::int32_t offset, std::int32_t width,
+                                         std::int32_t height, std::int32_t stride,
+                                         std::uint32_t format) {
+  return reinterpret_cast<wl_buffer*>(
+      wl_proxy_marshal_flags(reinterpret_cast<wl_proxy*>(pool), 0, &wl_buffer_interface,
+                             wl_proxy_get_version(reinterpret_cast<wl_proxy*>(pool)), 0, nullptr,
+                             offset, width, height, stride, format));
 }
 
 inline void shm_pool_destroy(wl_shm_pool* pool) {
@@ -177,11 +182,11 @@ inline void buffer_add_listener(wl_buffer* buffer, void (**listener)(void), void
 }
 inline void buffer_destroy(wl_buffer* buffer) {
   wl_proxy_marshal_flags(reinterpret_cast<wl_proxy*>(buffer), 0, nullptr,
-                         wl_proxy_get_version(reinterpret_cast<wl_proxy*>(buffer)), marshal_destroy);
+                         wl_proxy_get_version(reinterpret_cast<wl_proxy*>(buffer)),
+                         marshal_destroy);
 }
 
-inline void surface_attach(wl_surface* surface, wl_buffer* buffer, std::int32_t x,
-                           std::int32_t y) {
+inline void surface_attach(wl_surface* surface, wl_buffer* buffer, std::int32_t x, std::int32_t y) {
   wl_proxy_marshal_flags(reinterpret_cast<wl_proxy*>(surface), 1, nullptr,
                          wl_proxy_get_version(reinterpret_cast<wl_proxy*>(surface)), 0, buffer, x,
                          y);
@@ -190,11 +195,11 @@ inline void surface_damage(wl_surface* surface, std::int32_t x, std::int32_t y, 
                            std::int32_t height) {
   const auto version = wl_proxy_get_version(reinterpret_cast<wl_proxy*>(surface));
   if (version >= 4) {
-    wl_proxy_marshal_flags(reinterpret_cast<wl_proxy*>(surface), 9, nullptr, version, 0, x, y, width,
-                           height);
+    wl_proxy_marshal_flags(reinterpret_cast<wl_proxy*>(surface), 9, nullptr, version, 0, x, y,
+                           width, height);
   } else {
-    wl_proxy_marshal_flags(reinterpret_cast<wl_proxy*>(surface), 2, nullptr, version, 0, x, y, width,
-                           height);
+    wl_proxy_marshal_flags(reinterpret_cast<wl_proxy*>(surface), 2, nullptr, version, 0, x, y,
+                           width, height);
   }
 }
 inline void surface_commit(wl_surface* surface) {
@@ -203,25 +208,24 @@ inline void surface_commit(wl_surface* surface) {
 }
 inline void surface_destroy(wl_surface* surface) {
   wl_proxy_marshal_flags(reinterpret_cast<wl_proxy*>(surface), 0, nullptr,
-                         wl_proxy_get_version(reinterpret_cast<wl_proxy*>(surface)), marshal_destroy);
+                         wl_proxy_get_version(reinterpret_cast<wl_proxy*>(surface)),
+                         marshal_destroy);
 }
 
 inline wl_keyboard* seat_get_keyboard(wl_seat* seat) {
-  return reinterpret_cast<wl_keyboard*>(wl_proxy_marshal_flags(
-      reinterpret_cast<wl_proxy*>(seat), 1, &wl_keyboard_interface,
-      wl_proxy_get_version(reinterpret_cast<wl_proxy*>(seat)), 0, nullptr));
+  return reinterpret_cast<wl_keyboard*>(
+      wl_proxy_marshal_flags(reinterpret_cast<wl_proxy*>(seat), 1, &wl_keyboard_interface,
+                             wl_proxy_get_version(reinterpret_cast<wl_proxy*>(seat)), 0, nullptr));
 }
 inline wl_pointer* seat_get_pointer(wl_seat* seat) {
-  return reinterpret_cast<wl_pointer*>(wl_proxy_marshal_flags(
-      reinterpret_cast<wl_proxy*>(seat), 0, &wl_pointer_interface,
-      wl_proxy_get_version(reinterpret_cast<wl_proxy*>(seat)), 0, nullptr));
+  return reinterpret_cast<wl_pointer*>(
+      wl_proxy_marshal_flags(reinterpret_cast<wl_proxy*>(seat), 0, &wl_pointer_interface,
+                             wl_proxy_get_version(reinterpret_cast<wl_proxy*>(seat)), 0, nullptr));
 }
 inline void seat_add_listener(wl_seat* seat, void (**listener)(void), void* data) {
   wl_proxy_add_listener(reinterpret_cast<wl_proxy*>(seat), listener, data);
 }
-inline void seat_destroy(wl_seat* seat) {
-  wl_proxy_destroy(reinterpret_cast<wl_proxy*>(seat));
-}
+inline void seat_destroy(wl_seat* seat) { wl_proxy_destroy(reinterpret_cast<wl_proxy*>(seat)); }
 inline void keyboard_add_listener(wl_keyboard* keyboard, void (**listener)(void), void* data) {
   wl_proxy_add_listener(reinterpret_cast<wl_proxy*>(keyboard), listener, data);
 }

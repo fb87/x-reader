@@ -1,8 +1,9 @@
-#include "app/app.hpp"
 #include "boards/sim/xteink.hpp"
 
 #include <cstdio>
 #include <cstring>
+
+#include "app/app.hpp"
 
 /**
  * @brief Exercises the app under a second logical profile (480x800 MONO1,
@@ -31,28 +32,34 @@ int main() {
   board::sim::mount(sim, "tests/fixtures/library");
 
   test::expect(sim.display.width == 480 && sim.display.height == 800,
-              "display profile is actually 480x800, not the M5Paper default");
+               "display profile is actually 480x800, not the M5Paper default");
   test::expect(sim.display.format == display::pixel_format::mono1,
-              "display profile is actually MONO1, not GRAY4");
+               "display profile is actually MONO1, not GRAY4");
 
   app::pages nav{};
   app::context application{};
   state::store memory{};
   state::store persistent{};
   static constexpr shell::theme theme{
-      &xr_font_alegreya_14, &xr_font_alegreya_18,      &xr_font_alegreya_bold_18,
-      &xr_font_alegreya_bold_26, &xr_font_alegreya_20, 44,
-      64,                   16,                        72,
+      &xr_font_alegreya_14,
+      &xr_font_alegreya_18,
+      &xr_font_alegreya_bold_18,
+      &xr_font_alegreya_bold_26,
+      &xr_font_alegreya_20,
+      44,
+      64,
+      16,
+      72,
   };
 
   test::expect(app::init(application, nav, sim.capabilities, memory, persistent, theme,
-                        "tests/fixtures/library"),
-              "app::init succeeds on the narrower MONO1 profile");
+                         "tests/fixtures/library"),
+               "app::init succeeds on the narrower MONO1 profile");
   app::scan_library(application);
   board::sim::advance(sim, 1600);
   app::pump(application);
   test::expect(shell::top(application.shell) == &nav.home.base,
-              "splash still times out to home at this geometry");
+               "splash still times out to home at this geometry");
   test::expect(application.library.count == 2, "library scan is unaffected by display profile");
 
   // Open the real fixture EPUB and paginate at the narrower 480px width.
@@ -72,7 +79,7 @@ int main() {
   test::expect(shell::top(application.shell) == &nav.reader.base, "reader pushed correctly");
   test::expect(application.session.epub_open, "the real EPUB opened at this geometry too");
   test::expect(nav.reader.text_rect.w <= 480 - 2 * 28,
-              "the text rect is clipped to the narrower 480px width, not 540px");
+               "the text rect is clipped to the narrower 480px width, not 540px");
   test::expect(application.session.page_count > 0, "pagination produced at least one page");
 
   const int page_before = application.session.page;
@@ -82,8 +89,8 @@ int main() {
   board::sim::advance(sim, 20);
   app::pump(application);
   test::expect(application.session.page != page_before ||
-                  application.session.current_chapter != chapter_before,
-              "touch page-turn still works at the narrower width/MONO1 format");
+                   application.session.current_chapter != chapter_before,
+               "touch page-turn still works at the narrower width/MONO1 format");
 
   std::printf("xteink profile tests: %d checks, %d failures\n", test::checks, test::failures);
   return test::failures == 0 ? 0 : 1;

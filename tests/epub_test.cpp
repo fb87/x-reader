@@ -1,12 +1,14 @@
-#include "core/storage.hpp"
 #include "reader/epub.hpp"
-#include "reader/session.hpp"
+
+#include <zlib.h>
 
 #include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <zlib.h>
+
+#include "core/storage.hpp"
+#include "reader/session.hpp"
 
 namespace test {
 
@@ -46,8 +48,8 @@ inline bool inflate(storage::device&, const void* source, std::uint32_t source_s
 int main() {
   constexpr const char* path = "/home/dao/data/sample.epub";
   std::uint32_t file_size = 0;
-  storage::device storage{.root = "build", .read = test::read, .size = test::size,
-                          .inflate = test::inflate};
+  storage::device storage{
+      .root = "build", .read = test::read, .size = test::size, .inflate = test::inflate};
   if (!storage::size(storage, path, file_size)) {
     std::fprintf(stderr, "fixture missing: %s\n", path);
     return 1;
@@ -66,7 +68,8 @@ int main() {
     return 2;
   }
   std::uint32_t text_size = 0;
-  const auto text_status = epub::spine_text(document, 1, scratch.data(), scratch.size(), text.data(), text.size(), text_size);
+  const auto text_status = epub::spine_text(document, 1, scratch.data(), scratch.size(),
+                                            text.data(), text.size(), text_size);
   if (text_status != epub::status::ok || text[0] == '\0') {
     std::fprintf(stderr, "EPUB text failed: %s manifest=%u spine=%u text=%u\n",
                  epub::status_string(text_status), document.manifest_count, document.spine_count,

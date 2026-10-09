@@ -1,8 +1,8 @@
 #pragma once
 
+#include "app/cpp/model.hpp"
 #include "core/storage.hpp"
 #include "reader/library.hpp"
-#include "app/cpp/model.hpp"
 
 namespace app {
 
@@ -73,6 +73,5 @@ inline bool scan_library(context& self) {
   }
   return library::scan(self.reader.library, *storage, *self.memory);
 }
-
 
 }  // namespace app

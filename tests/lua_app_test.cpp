@@ -1,8 +1,8 @@
-#include "boards/sim/runtime.hpp"
-#include "runtime/lua/frontend.hpp"
-
 #include <cstdio>
 #include <cstring>
+
+#include "boards/sim/runtime.hpp"
+#include "runtime/lua/frontend.hpp"
 
 namespace test {
 int checks = 0;
@@ -35,7 +35,10 @@ int main() {
   test::expect(sim.refresh_count > 0, "Lua GUI performs an initial display refresh");
   bool has_ink = false;
   for (const auto value : sim.framebuffer) {
-    if (value != 0xffU) { has_ink = true; break; }
+    if (value != 0xffU) {
+      has_ink = true;
+      break;
+    }
   }
   test::expect(has_ink, "Lua-defined splash renders into the framebuffer");
 
@@ -60,8 +63,7 @@ int main() {
 
   board::sim::inject(sim, event::key(event::key_code::back));
   settle(sim, application);
-  test::expect(app::current_page(application.native) == app::page::home,
-               "Lua back returns Home");
+  test::expect(app::current_page(application.native) == app::page::home, "Lua back returns Home");
 
   board::sim::rotary_right(sim);
   board::sim::rotary_right(sim);
@@ -88,8 +90,7 @@ int main() {
   settle(sim, application);
   test::expect(std::strcmp(state::get(memory, "system.language", "en"), "vi") == 0,
                "Lua settings cycles language to Vietnamese");
-  test::expect(frame_before_language != sim.framebuffer,
-               "Language change redraws translated GUI");
+  test::expect(frame_before_language != sim.framebuffer, "Language change redraws translated GUI");
 
   lua_app::close(application);
   std::printf("lua app tests: %d checks, %d failures\n", test::checks, test::failures);

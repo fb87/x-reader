@@ -1,10 +1,10 @@
 #pragma once
 
-#include "app/cpp/pages/common.hpp"
-#include "app/cpp/routes.hpp"
-
 #include <cstdio>
 #include <cstring>
+
+#include "app/cpp/pages/common.hpp"
+#include "app/cpp/routes.hpp"
 
 namespace app::pages::settings {
 
@@ -28,19 +28,23 @@ inline void base_row(context& self, int index, int visual_index) {
   std::snprintf(font, sizeof(font), "%s", fonts[font_index]);
   char refresh[24]{};
   const auto full = state::get(*self.memory, "reader.settings.full_refresh_every", std::int64_t{6});
-  if (full == 0) std::snprintf(refresh, sizeof(refresh), "Never");
-  else std::snprintf(refresh, sizeof(refresh), "Every %lld", static_cast<long long>(full));
+  if (full == 0)
+    std::snprintf(refresh, sizeof(refresh), "Never");
+  else
+    std::snprintf(refresh, sizeof(refresh), "Every %lld", static_cast<long long>(full));
   char sleep[24]{};
   std::snprintf(sleep, sizeof(sleep), "%lld MIN",
-                static_cast<long long>(state::get(*self.memory, "reader.settings.sleep_timeout_minutes",
-                                                  std::int64_t{10})));
-  const char* labels[] = {"Bluetooth", "Font size", "Full refresh", "Progress bar",
-                          "Sleep timeout", "About"};
+                static_cast<long long>(state::get(
+                    *self.memory, "reader.settings.sleep_timeout_minutes", std::int64_t{10})));
+  const char* labels[] = {"Bluetooth",    "Font size",     "Full refresh",
+                          "Progress bar", "Sleep timeout", "About"};
   const char* values[] = {
       state::get(*self.memory, "network.bluetooth.enabled", false) ? "On" : "Off",
-      font, refresh,
+      font,
+      refresh,
       state::get(*self.memory, "reader.settings.show_progress", true) ? "On" : "Off",
-      sleep, "READER 0.1",
+      sleep,
+      "READER 0.1",
   };
   draw_row(self, visual_index, 58 + visual_index * 76, labels[index], values[index]);
 }
@@ -78,10 +82,11 @@ inline bool activate_base(context& self, int selected) {
       break;
     case 2: {
       constexpr std::int64_t choices[] = {1, 3, 6, 10, 0};
-      const auto current = state::get(*self.memory, "reader.settings.full_refresh_every",
-                                      std::int64_t{6});
+      const auto current =
+          state::get(*self.memory, "reader.settings.full_refresh_every", std::int64_t{6});
       std::size_t index = 0;
-      for (std::size_t i = 0; i < 5; ++i) if (choices[i] == current) index = i;
+      for (std::size_t i = 0; i < 5; ++i)
+        if (choices[i] == current) index = i;
       state::set(*self.memory, "reader.settings.full_refresh_every", choices[(index + 1) % 5]);
       break;
     }
@@ -90,11 +95,12 @@ inline bool activate_base(context& self, int selected) {
                  !state::get(*self.memory, "reader.settings.show_progress", true));
       break;
     case 4: {
-      const auto current = state::get(*self.memory, "reader.settings.sleep_timeout_minutes",
-                                      std::int64_t{10});
+      const auto current =
+          state::get(*self.memory, "reader.settings.sleep_timeout_minutes", std::int64_t{10});
       state::set(*self.memory, "reader.settings.sleep_timeout_minutes",
-                 current == 10 ? std::int64_t{30}
-                               : current == 30 ? std::int64_t{60} : std::int64_t{10});
+                 current == 10   ? std::int64_t{30}
+                 : current == 30 ? std::int64_t{60}
+                                 : std::int64_t{10});
       break;
     }
     default:
@@ -151,7 +157,10 @@ inline bool event(context& self, const event::value& value) {
     if (value.key == event::key_code::down) return true;
   }
   if (value.key == event::key_code::back) return return_home(self);
-  if (value.key == event::key_code::up) { move_selection(self, -1, count); return true; }
+  if (value.key == event::key_code::up) {
+    move_selection(self, -1, count);
+    return true;
+  }
   if (value.key == event::key_code::down) {
     const auto before = selection(self);
     move_selection(self, 1, count);

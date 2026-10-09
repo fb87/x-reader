@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/text.hpp"
 #include "core/icons.hpp"
+#include "core/text.hpp"
 #include "core/widgets/style.hpp"
 
 namespace widget {
@@ -20,8 +20,9 @@ inline void dock(display::device& display, const char* const* labels, int count,
     if (icons != nullptr && icons[i] != 0)
       icon::draw(display, {i * width + width / 2 - 12, y + 8, 24, 24}, icons[i],
                  active ? style.focus_foreground : style.foreground);
-    text::center(display, {i * width, y + (icons != nullptr && icons[i] != 0 ? 30 : 1), width,
-                           icons != nullptr && icons[i] != 0 ? 33 : 63},
+    text::center(display,
+                 {i * width, y + (icons != nullptr && icons[i] != 0 ? 30 : 1), width,
+                  icons != nullptr && icons[i] != 0 ? 33 : 63},
                  labels[i], style.text_scale, active ? style.focus_foreground : style.foreground);
   }
 }

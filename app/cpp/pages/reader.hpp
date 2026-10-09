@@ -1,16 +1,17 @@
 #pragma once
 
-#include "app/cpp/pages/common.hpp"
-#include "app/cpp/routes.hpp"
-
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 
+#include "app/cpp/pages/common.hpp"
+#include "app/cpp/routes.hpp"
+
 namespace app::pages::reader {
 
 inline int scale(const context& self) {
-  return 2 + static_cast<int>(state::get(*self.memory, "reader.settings.font_size", std::int64_t{1}));
+  return 2 +
+         static_cast<int>(state::get(*self.memory, "reader.settings.font_size", std::int64_t{1}));
 }
 
 inline geometry::rect text_rect(const context& self) {
@@ -52,18 +53,17 @@ inline void render(context& self) {
   const int bottom = chrome ? 88 : 36;
   const int footer_y = d.height - bottom - 20;
   if (state::get(*self.memory, "reader.settings.show_progress", true)) {
-    const int progress = std::max(0, static_cast<int>(::reader::progress_percent(self.reader.current)));
+    const int progress =
+        std::max(0, static_cast<int>(::reader::progress_percent(self.reader.current)));
     canvas::hline(d, 28, footer_y, d.width - 56, canvas::gray::light);
-    canvas::fill(d, {28, footer_y - 1, (d.width - 56) * progress / 100, 3},
-                 canvas::gray::dark);
+    canvas::fill(d, {28, footer_y - 1, (d.width - 56) * progress / 100, 3}, canvas::gray::dark);
   }
   char pages[32]{};
   std::snprintf(pages, sizeof(pages), "%d / %d", self.reader.current.page + 1,
                 self.reader.current.page_count);
-  text::draw(d, 28, footer_y + 16,
-             ::reader::current_chapter_title(self.reader.current), 1, canvas::gray::dark);
-  text::draw(d, d.width - text::width(pages, 1) - 28, footer_y + 16, pages, 1,
+  text::draw(d, 28, footer_y + 16, ::reader::current_chapter_title(self.reader.current), 1,
              canvas::gray::dark);
+  text::draw(d, d.width - text::width(pages, 1) - 28, footer_y + 16, pages, 1, canvas::gray::dark);
   if (chrome) {
     const char* actions[] = {"Close", "A-", "A+"};
     draw_dock(self, actions, 3);
@@ -73,8 +73,8 @@ inline void render(context& self) {
 inline bool event(context& self, const event::value& value) {
   const auto area = text_rect(self);
   const int font_scale = std::min(scale(self), 4);
-  if (const int dock = dock_tap(self, value, 3); dock >= 0 &&
-      state::get(*self.memory, "app.reader.chrome", false)) {
+  if (const int dock = dock_tap(self, value, 3);
+      dock >= 0 && state::get(*self.memory, "app.reader.chrome", false)) {
     state::set(*self.memory, "app.focus.area", static_cast<std::int64_t>(focus_area::dock));
     state::set(*self.memory, "app.dock.selected", static_cast<std::int64_t>(dock));
     if (dock == 0) {

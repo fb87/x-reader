@@ -1,7 +1,7 @@
+#include <cstdio>
+
 #include "app/cpp/init.hpp"
 #include "boards/sim/runtime.hpp"
-
-#include <cstdio>
 
 int main() {
   board::sim::runtime board{};

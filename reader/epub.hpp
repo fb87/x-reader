@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../core/storage.hpp"
-
-#include <cstdint>
 #include <array>
+#include <cstdint>
 #include <cstring>
 #include <new>
+
+#include "../core/storage.hpp"
 
 #ifdef ESP_PLATFORM
 #include "esp_attr.h"
@@ -70,8 +70,13 @@ enum class status {
 /** @brief A human-readable explanation for a status value; never returns nullptr. */
 inline const char* status_string(status value) {
   static const char* const names[] = {
-      "ok",       "invalid argument",  "storage I/O error",      "invalid EPUB format",
-      "unsupported EPUB feature", "archive entry not found", "buffer too small",
+      "ok",
+      "invalid argument",
+      "storage I/O error",
+      "invalid EPUB format",
+      "unsupported EPUB feature",
+      "archive entry not found",
+      "buffer too small",
       "caller capacity exceeded",
   };
   const auto index = static_cast<unsigned>(value);
@@ -195,16 +200,15 @@ inline status zip_find(const context& doc, const char* path, unsigned char heade
   const auto* tail = doc.zip_tail.data();
   int end_offset = -1;
   for (std::int64_t offset = static_cast<std::int64_t>(tail_size) - 22; offset >= 0; --offset) {
-     if (le32(tail + offset) == zip_end_signature) {
+    if (le32(tail + offset) == zip_end_signature) {
       end_offset = static_cast<int>(offset);
       break;
     }
   }
   if (end_offset < 0) return status::format;
-   const unsigned char* end = tail + end_offset;
+  const unsigned char* end = tail + end_offset;
   if (le16(end + 4) != 0 || le16(end + 6) != 0 || le16(end + 8) != le16(end + 10) ||
-      le16(end + 8) == 0xFFFFu || le32(end + 12) == 0xFFFFFFFFu ||
-      le32(end + 16) == 0xFFFFFFFFu) {
+      le16(end + 8) == 0xFFFFu || le32(end + 12) == 0xFFFFFFFFu || le32(end + 16) == 0xFFFFFFFFu) {
     return status::unsupported;
   }
   const std::uint16_t entries = le16(end + 10);
@@ -216,10 +220,10 @@ inline status zip_find(const context& doc, const char* path, unsigned char heade
   for (std::uint16_t i = 0; i < entries; ++i) {
     cooperative_yield(static_cast<std::size_t>(i) * 256U);
     if (!range_ok(pos, zip_central_header_size, directory_end) ||
-       (pos < tail_start || pos + zip_central_header_size > view.size
-            ? read_at(view, pos, header, zip_central_header_size)
-            : (std::memcpy(header, tail + (pos - tail_start), zip_central_header_size), status::ok)) !=
-          status::ok) {
+        (pos < tail_start || pos + zip_central_header_size > view.size
+             ? read_at(view, pos, header, zip_central_header_size)
+             : (std::memcpy(header, tail + (pos - tail_start), zip_central_header_size),
+                status::ok)) != status::ok) {
       return status::format;
     }
     if (le32(header) != zip_central_signature) return status::format;
@@ -231,14 +235,16 @@ inline status zip_find(const context& doc, const char* path, unsigned char heade
                   directory_end)) {
       return status::format;
     }
-     bool same = false;
-     if (next >= tail_start && next + name_size <= view.size && next + name_size <= tail_start + tail_size) {
-       same = std::strncmp(reinterpret_cast<const char*>(tail + (next - tail_start)), path,
-                           name_size) == 0 && path[name_size] == '\0';
-     } else {
-       same = string_equal_at(view, next, name_size, path);
-     }
-     if (same) {
+    bool same = false;
+    if (next >= tail_start && next + name_size <= view.size &&
+        next + name_size <= tail_start + tail_size) {
+      same = std::strncmp(reinterpret_cast<const char*>(tail + (next - tail_start)), path,
+                          name_size) == 0 &&
+             path[name_size] == '\0';
+    } else {
+      same = string_equal_at(view, next, name_size, path);
+    }
+    if (same) {
       header_at = pos;
       return status::ok;
     }
@@ -256,7 +262,7 @@ inline status extract(const context& doc, const char* path, void* destination,
   unsigned char local[30];
   std::uint32_t central_at = 0;
   if (doc.storage == nullptr || path == nullptr || destination == nullptr) return status::argument;
-   status result = detail::zip_find(doc, path, central, central_at);
+  status result = detail::zip_find(doc, path, central, central_at);
   if (result != status::ok) return result;
   const std::uint16_t flags = detail::le16(central + 8);
   const std::uint16_t method = detail::le16(central + 10);
@@ -284,9 +290,8 @@ inline status extract(const context& doc, const char* path, void* destination,
     if (compressed != uncompressed) return status::format;
     result = detail::read_at(*doc.storage, data_at, destination, uncompressed);
   } else if (method == 8) {
-    result = inflate_raw(*doc.storage, data_at, compressed, destination, uncompressed)
-                 ? status::ok
-                 : status::io;
+    result = inflate_raw(*doc.storage, data_at, compressed, destination, uncompressed) ? status::ok
+                                                                                       : status::io;
   } else {
     return status::unsupported;
   }
@@ -333,8 +338,7 @@ inline const char* tag_next(const char* p, const char* limit, const char*& name,
   return nullptr;
 }
 
-inline bool copy_value(char* destination, std::uint32_t size, const char* value,
-                       const char* end) {
+inline bool copy_value(char* destination, std::uint32_t size, const char* value, const char* end) {
   const auto n = static_cast<std::uint32_t>(end - value);
   if (n >= size) return false;
   std::memcpy(destination, value, n);
@@ -373,8 +377,7 @@ inline status parse_container(context& doc, const char* xml, std::uint32_t size)
   const char *name = nullptr, *name_end = nullptr, *tag_end = nullptr;
   while ((p = tag_next(p, limit, name, name_end, tag_end)) != nullptr) {
     if (name_is(name, name_end, "rootfile")) {
-      if (!attribute(name_end, tag_end, "full-path", doc.package_path,
-                     sizeof(doc.package_path))) {
+      if (!attribute(name_end, tag_end, "full-path", doc.package_path, sizeof(doc.package_path))) {
         return status::format;
       }
       return status::ok;
@@ -385,7 +388,8 @@ inline status parse_container(context& doc, const char* xml, std::uint32_t size)
 
 inline std::uint32_t manifest_hash_value(const char* id) {
   std::uint32_t hash = 2166136261U;
-  while (id != nullptr && *id != '\0') hash = (hash ^ static_cast<unsigned char>(*id++)) * 16777619U;
+  while (id != nullptr && *id != '\0')
+    hash = (hash ^ static_cast<unsigned char>(*id++)) * 16777619U;
   return hash;
 }
 
@@ -627,9 +631,9 @@ inline status xhtml_text(const char* source, std::uint32_t source_size, char* te
         ++p;
         continue;
       }
-      if (!closing && (name_is(tag_name, tag_name_end, "head") ||
-                       name_is(tag_name, tag_name_end, "style") ||
-                       name_is(tag_name, tag_name_end, "script"))) {
+      if (!closing &&
+          (name_is(tag_name, tag_name_end, "head") || name_is(tag_name, tag_name_end, "style") ||
+           name_is(tag_name, tag_name_end, "script"))) {
         ignored = name_is(tag_name, tag_name_end, "head")
                       ? "head"
                       : (name_is(tag_name, tag_name_end, "style") ? "style" : "script");

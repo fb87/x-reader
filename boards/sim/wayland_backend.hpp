@@ -1,7 +1,9 @@
 #pragma once
 
-#include "boards/sim/runtime.hpp"
-#include "boards/sim/wayland_protocol.hpp"
+#include <poll.h>
+#include <sys/mman.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <array>
@@ -9,10 +11,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <poll.h>
-#include <sys/mman.h>
-#include <sys/syscall.h>
-#include <unistd.h>
+
+#include "boards/sim/runtime.hpp"
+#include "boards/sim/wayland_protocol.hpp"
 
 namespace board::sim::wayland {
 
@@ -71,16 +72,24 @@ struct backend {
 
 inline event::key_code map_key(std::uint32_t key) {
   switch (key) {
-    case key_up: return event::key_code::up;
-    case key_down: return event::key_code::down;
-    case key_left: return event::key_code::left;
-    case key_right: return event::key_code::right;
+    case key_up:
+      return event::key_code::up;
+    case key_down:
+      return event::key_code::down;
+    case key_left:
+      return event::key_code::left;
+    case key_right:
+      return event::key_code::right;
     case key_enter:
-    case key_space: return event::key_code::ok;
+    case key_space:
+      return event::key_code::ok;
     case key_esc:
-    case key_backspace: return event::key_code::back;
-    case key_m: return event::key_code::menu;
-    default: return event::key_code::none;
+    case key_backspace:
+      return event::key_code::back;
+    case key_m:
+      return event::key_code::menu;
+    default:
+      return event::key_code::none;
   }
 }
 
@@ -97,11 +106,13 @@ inline void release_key(backend& self, std::uint32_t key) {
     return;
   }
   const auto code = map_key(key);
-  if (!self.held.down || code == event::key_code::none || code != self.held.code || self.sim == nullptr) {
+  if (!self.held.down || code == event::key_code::none || code != self.held.code ||
+      self.sim == nullptr) {
     return;
   }
   const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::steady_clock::now() - self.held.started).count();
+                            std::chrono::steady_clock::now() - self.held.started)
+                            .count();
   const auto ms = static_cast<std::uint32_t>(std::max<std::int64_t>(duration, 0));
   board::sim::inject(*self.sim, event::key(code, ms, ms >= event::long_press_threshold_ms));
   self.held = {};
@@ -115,9 +126,7 @@ inline int create_memfd() {
 #endif
 }
 
-inline void buffer_release(void* data, wl_buffer*) {
-  static_cast<shm_buffer*>(data)->busy = false;
-}
+inline void buffer_release(void* data, wl_buffer*) { static_cast<shm_buffer*>(data)->busy = false; }
 
 inline void registry_global(void* data, wl_registry* registry, std::uint32_t name,
                             const char* interface, std::uint32_t version) {

@@ -1,14 +1,14 @@
 #pragma once
 
-#include "app/cpp/init.hpp"
-#include "core/widgets/all.hpp"
-#include "core/connectivity.hpp"
-#include "runtime/lua/api.hpp"
-
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+
+#include "app/cpp/init.hpp"
+#include "core/connectivity.hpp"
+#include "core/widgets/all.hpp"
+#include "runtime/lua/api.hpp"
 
 /** @brief Product-neutral Lua binding runtime. */
 namespace lua {
@@ -203,7 +203,6 @@ inline int l_api_center(api::state* vm) {
   return 0;
 }
 
-
 inline widget::style widget_style_args(api::state* vm, api::library& lib, int first) {
   widget::style s{};
   s.background = gray_arg(vm, lib, first + 0, s.background);
@@ -218,35 +217,47 @@ inline widget::style widget_style_args(api::state* vm, api::library& lib, int fi
 }
 
 inline int l_api_status(api::state* vm) {
-  auto& h = bound(vm); const char* title = h.lib->to_string(vm, 1, nullptr);
+  auto& h = bound(vm);
+  const char* title = h.lib->to_string(vm, 1, nullptr);
   if (display_of(h) != nullptr && h.app->shell.platform != nullptr && title != nullptr)
     widget::status(*display_of(h), *h.app->shell.platform, title, widget_style_args(vm, *h.lib, 2));
   return 0;
 }
 
 inline int l_api_row(api::state* vm) {
-  auto& h = bound(vm); auto& lib = *h.lib; const char* primary = lib.to_string(vm, 5, nullptr);
+  auto& h = bound(vm);
+  auto& lib = *h.lib;
+  const char* primary = lib.to_string(vm, 5, nullptr);
   const char* secondary = lib.to_string(vm, 6, nullptr);
   if (display_of(h) != nullptr && primary != nullptr)
-    widget::row(*display_of(h), {integer_arg(vm, lib, 1), integer_arg(vm, lib, 2), integer_arg(vm, lib, 3), integer_arg(vm, lib, 4)},
-            primary, secondary, lib.to_boolean(vm, 7) != 0, widget_style_args(vm, lib, 8),
-            integer_arg(vm, lib, 16));
+    widget::row(*display_of(h),
+                {integer_arg(vm, lib, 1), integer_arg(vm, lib, 2), integer_arg(vm, lib, 3),
+                 integer_arg(vm, lib, 4)},
+                primary, secondary, lib.to_boolean(vm, 7) != 0, widget_style_args(vm, lib, 8),
+                integer_arg(vm, lib, 16));
   return 0;
 }
 
 inline int l_api_button(api::state* vm) {
-  auto& h = bound(vm); auto& lib = *h.lib; const char* label = lib.to_string(vm, 5, nullptr);
+  auto& h = bound(vm);
+  auto& lib = *h.lib;
+  const char* label = lib.to_string(vm, 5, nullptr);
   if (display_of(h) != nullptr && label != nullptr)
-    widget::button(*display_of(h), {integer_arg(vm, lib, 1), integer_arg(vm, lib, 2), integer_arg(vm, lib, 3), integer_arg(vm, lib, 4)},
-               label, lib.to_boolean(vm, 6) != 0, widget_style_args(vm, lib, 7));
+    widget::button(*display_of(h),
+                   {integer_arg(vm, lib, 1), integer_arg(vm, lib, 2), integer_arg(vm, lib, 3),
+                    integer_arg(vm, lib, 4)},
+                   label, lib.to_boolean(vm, 6) != 0, widget_style_args(vm, lib, 7));
   return 0;
 }
 
 inline int l_api_progress(api::state* vm) {
-  auto& h = bound(vm); auto& lib = *h.lib;
+  auto& h = bound(vm);
+  auto& lib = *h.lib;
   if (display_of(h) != nullptr)
-    widget::progress(*display_of(h), {integer_arg(vm, lib, 1), integer_arg(vm, lib, 2), integer_arg(vm, lib, 3), integer_arg(vm, lib, 4)},
-                 integer_arg(vm, lib, 5), widget_style_args(vm, lib, 6));
+    widget::progress(*display_of(h),
+                     {integer_arg(vm, lib, 1), integer_arg(vm, lib, 2), integer_arg(vm, lib, 3),
+                      integer_arg(vm, lib, 4)},
+                     integer_arg(vm, lib, 5), widget_style_args(vm, lib, 6));
   return 0;
 }
 
@@ -257,16 +268,18 @@ inline int l_api_book_card(api::state* vm) {
   const char* title = lib.to_string(vm, 6, nullptr);
   if (display_of(h) != nullptr && eyebrow != nullptr && title != nullptr) {
     widget::book_card(*display_of(h),
-                      {integer_arg(vm, lib, 1), integer_arg(vm, lib, 2),
-                       integer_arg(vm, lib, 3), integer_arg(vm, lib, 4)},
-                      eyebrow, title, lib.to_boolean(vm, 7) != 0,
-                      widget_style_args(vm, lib, 8));
+                      {integer_arg(vm, lib, 1), integer_arg(vm, lib, 2), integer_arg(vm, lib, 3),
+                       integer_arg(vm, lib, 4)},
+                      eyebrow, title, lib.to_boolean(vm, 7) != 0, widget_style_args(vm, lib, 8));
   }
   return 0;
 }
 
 inline int l_api_dialog(api::state* vm) {
-  auto& h = bound(vm); auto& lib = *h.lib; const char* title = lib.to_string(vm, 1, nullptr); const char* body = lib.to_string(vm, 2, nullptr);
+  auto& h = bound(vm);
+  auto& lib = *h.lib;
+  const char* title = lib.to_string(vm, 1, nullptr);
+  const char* body = lib.to_string(vm, 2, nullptr);
   if (display_of(h) != nullptr && title != nullptr && body != nullptr)
     widget::dialog(*display_of(h), title, body, widget_style_args(vm, lib, 3));
   return 0;
@@ -289,9 +302,8 @@ inline int l_api_reload(api::state* vm) {
 
 inline int l_api_battery(api::state* vm) {
   auto& h = bound(vm);
-  const int value = h.app->shell.platform != nullptr
-                        ? platform::battery_percent(*h.app->shell.platform)
-                        : -1;
+  const int value =
+      h.app->shell.platform != nullptr ? platform::battery_percent(*h.app->shell.platform) : -1;
   h.lib->push_integer(vm, value);
   return 1;
 }
@@ -371,8 +383,9 @@ inline int l_reader_next(api::state* vm) {
   const int bottom = chrome ? 88 : 36;
   const geometry::rect area{28, top, h.app->shell.display->width - 56,
                             h.app->shell.display->height - top - bottom - 24};
-  const int scale = std::min(4, 2 + static_cast<int>(state::get(
-                                  *h.app->memory, "reader.settings.font_size", std::int64_t{1})));
+  const int scale =
+      std::min(4, 2 + static_cast<int>(state::get(*h.app->memory, "reader.settings.font_size",
+                                                  std::int64_t{1})));
   reader::next_page(h.app->reader, *h.app->memory, area, scale);
   h.app->next_refresh = refresh::mode::quality;
   ++h.app->invalidations;
@@ -386,8 +399,9 @@ inline int l_reader_previous(api::state* vm) {
   const int bottom = chrome ? 88 : 36;
   const geometry::rect area{28, top, h.app->shell.display->width - 56,
                             h.app->shell.display->height - top - bottom - 24};
-  const int scale = std::min(4, 2 + static_cast<int>(state::get(
-                                  *h.app->memory, "reader.settings.font_size", std::int64_t{1})));
+  const int scale =
+      std::min(4, 2 + static_cast<int>(state::get(*h.app->memory, "reader.settings.font_size",
+                                                  std::int64_t{1})));
   reader::previous_page(h.app->reader, *h.app->memory, area, scale);
   h.app->next_refresh = refresh::mode::quality;
   ++h.app->invalidations;
@@ -411,8 +425,8 @@ inline geometry::rect lua_reader_area(const host& h) {
 }
 
 inline int lua_reader_scale(const host& h) {
-  return std::min(4, 2 + static_cast<int>(state::get(
-                            *h.app->memory, "reader.settings.font_size", std::int64_t{1})));
+  return std::min(4, 2 + static_cast<int>(state::get(*h.app->memory, "reader.settings.font_size",
+                                                     std::int64_t{1})));
 }
 
 inline int l_reader_line_count(api::state* vm) {
@@ -513,8 +527,8 @@ inline int l_wifi_connect_first(api::state* vm) {
   auto& h = bound(vm);
   auto* device = capability::get<wifi::device>(*h.app->capabilities);
   const char* ssid = state::get(*h.app->memory, "network.wifi.scan.first_ssid", "");
-  const bool ok = device != nullptr && ssid[0] != '\0' &&
-                  wifi::connect(*device, ssid, "test-password");
+  const bool ok =
+      device != nullptr && ssid[0] != '\0' && wifi::connect(*device, ssid, "test-password");
   if (ok) {
     state::set(*h.app->memory, "network.wifi.connected", true);
     state::set(*h.app->memory, "network.wifi.ssid", ssid);
@@ -534,8 +548,8 @@ inline void set_function(runtime& self, const char* name, api::c_function functi
   self.api.set_field(self.vm, -2, name);
 }
 
-inline void set_module(runtime& self, const char* name, int functions,
-                       const char* const* names, const api::c_function* callbacks) {
+inline void set_module(runtime& self, const char* name, int functions, const char* const* names,
+                       const api::c_function* callbacks) {
   self.api.create_table(self.vm, 0, functions);
   for (int i = 0; i < functions; ++i) set_function(self, names[i], callbacks[i]);
   self.api.set_field(self.vm, -2, name);
@@ -545,13 +559,15 @@ inline void register_shell(runtime& self) {
   self.api.create_table(self.vm, 0, 8);
 
   {
-    const char* names[] = {"width", "height", "clear", "fill", "border", "hline", "icon",
-                           "text", "title", "center", "status", "row", "button", "progress",
-                           "book_card", "dialog", "present", "battery", "reload"};
-    const api::c_function callbacks[] = {l_api_width, l_api_height, l_api_clear, l_api_fill,
-                                         l_api_border, l_api_hline, l_api_icon, l_api_text, l_api_title, l_api_center,
-                                         l_api_status, l_api_row, l_api_button, l_api_progress,
-                                         l_api_book_card, l_api_dialog, l_api_present, l_api_battery, l_api_reload};
+    const char* names[] = {"width",  "height",  "clear",   "fill",     "border",
+                           "hline",  "icon",    "text",    "title",    "center",
+                           "status", "row",     "button",  "progress", "book_card",
+                           "dialog", "present", "battery", "reload"};
+    const api::c_function callbacks[] = {
+        l_api_width,  l_api_height,  l_api_clear,   l_api_fill,     l_api_border,
+        l_api_hline,  l_api_icon,    l_api_text,    l_api_title,    l_api_center,
+        l_api_status, l_api_row,     l_api_button,  l_api_progress, l_api_book_card,
+        l_api_dialog, l_api_present, l_api_battery, l_api_reload};
     set_module(self, "api", 19, names, callbacks);
   }
   {
@@ -566,12 +582,12 @@ inline void register_shell(runtime& self) {
     set_module(self, "library", 5, names, callbacks);
   }
   {
-    const char* names[] = {"open_selected", "next", "previous", "adjust_font", "line_count",
-                           "line", "page", "page_count", "progress", "chapter"};
+    const char* names[] = {"open_selected", "next", "previous",   "adjust_font", "line_count",
+                           "line",          "page", "page_count", "progress",    "chapter"};
     const api::c_function callbacks[] = {
-        l_reader_open_selected, l_reader_next, l_reader_previous, l_reader_adjust_font,
-        l_reader_line_count,   l_reader_line,  l_reader_page,     l_reader_page_count,
-        l_reader_progress,     l_reader_chapter};
+        l_reader_open_selected, l_reader_next,   l_reader_previous, l_reader_adjust_font,
+        l_reader_line_count,    l_reader_line,   l_reader_page,     l_reader_page_count,
+        l_reader_progress,      l_reader_chapter};
     set_module(self, "reader", 10, names, callbacks);
   }
 
@@ -727,24 +743,48 @@ inline bool on_event(runtime& self, const event::value& value) {
   self.api.create_table(self.vm, 0, 7);
   const char* kind = "none";
   switch (value.event_type) {
-    case event::type::key: kind = "key"; break;
-    case event::type::tap: kind = "tap"; break;
-    case event::type::press: kind = "press"; break;
-    case event::type::release: kind = "release"; break;
-    default: break;
+    case event::type::key:
+      kind = "key";
+      break;
+    case event::type::tap:
+      kind = "tap";
+      break;
+    case event::type::press:
+      kind = "press";
+      break;
+    case event::type::release:
+      kind = "release";
+      break;
+    default:
+      break;
   }
   self.api.push_string(self.vm, kind);
   self.api.set_field(self.vm, -2, "type");
   const char* key = "none";
   switch (value.key) {
-    case event::key_code::up: key = "up"; break;
-    case event::key_code::down: key = "down"; break;
-    case event::key_code::left: key = "left"; break;
-    case event::key_code::right: key = "right"; break;
-    case event::key_code::ok: key = "ok"; break;
-    case event::key_code::back: key = "back"; break;
-    case event::key_code::menu: key = "menu"; break;
-    default: break;
+    case event::key_code::up:
+      key = "up";
+      break;
+    case event::key_code::down:
+      key = "down";
+      break;
+    case event::key_code::left:
+      key = "left";
+      break;
+    case event::key_code::right:
+      key = "right";
+      break;
+    case event::key_code::ok:
+      key = "ok";
+      break;
+    case event::key_code::back:
+      key = "back";
+      break;
+    case event::key_code::menu:
+      key = "menu";
+      break;
+    default:
+      break;
   }
   self.api.push_string(self.vm, key);
   self.api.set_field(self.vm, -2, "key");
