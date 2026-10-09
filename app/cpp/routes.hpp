@@ -38,7 +38,12 @@ inline page page_for_path(const char* path) {
 
 inline bool open_page(const router::request& request, void* user) {
   auto& self = *static_cast<context*>(user);
-  apply_page(self, page_for_path(request.path));
+  const auto next = page_for_path(request.path);
+  if (next == page::sleep && current_page(self) != page::sleep) {
+    state::set(*self.memory, "app.sleep.return_route",
+               state::get(*self.memory, "app.route.current", "/"));
+  }
+  apply_page(self, next);
   state::set(*self.memory, "app.route.current", request.uri);
   return true;
 }

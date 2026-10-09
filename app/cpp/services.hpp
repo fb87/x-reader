@@ -29,7 +29,7 @@ inline void restore_persistent(context& self) {
     if (state::find(*self.persistent, key) != nullptr)
       state::set(*self.memory, key, state::get(*self.persistent, key, false));
   }
-  const char* string_keys[] = {"network.wifi.ssid", "system.language"};
+  const char* string_keys[] = {"network.wifi.ssid", "system.language", "app.sleep.return_route"};
   for (const char* key : string_keys) {
     if (state::find(*self.persistent, key) != nullptr)
       state::set(*self.memory, key, state::get(*self.persistent, key, ""));
@@ -57,6 +57,8 @@ inline void checkpoint(context& self) {
     state::set(*self.persistent, key, state::get(*self.memory, key, false));
   state::set(*self.persistent, "app.route.current",
              state::get(*self.memory, "app.route.current", "/splash"));
+  state::set(*self.persistent, "app.sleep.return_route",
+             state::get(*self.memory, "app.sleep.return_route", "/"));
   state::set(*self.persistent, "network.wifi.ssid",
              state::get(*self.memory, "network.wifi.ssid", ""));
   state::set(*self.persistent, "system.language",

@@ -22,6 +22,7 @@
 #include <driver/gpio.h>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
+#include <esp_system.h>
 #include <esp_timer.h>
 #include <esp_vfs_fat.h>
 #include <driver/sdspi_host.h>
@@ -58,6 +59,7 @@ inline constexpr auto pixel_format = display::pixel_format::gray4;
 inline constexpr std::size_t input_queue_size = 8;
 inline constexpr int fast_refresh_budget = 15;  ///< force a full flash after N fast updates.
 inline constexpr std::uint32_t rotary_hold_ms = 500;
+inline constexpr std::uint32_t sleep_hold_ms = 5000;
 inline constexpr std::uint32_t battery_sample_interval_ms = 60000;
 inline constexpr std::uint32_t battery_display_interval_ms = 600000;
 
@@ -80,6 +82,8 @@ struct runtime {
   bool rotary_right = false;
   bool rotary_left = false;
   bool rotary_press = false;
+  std::uint32_t rotary_press_at = 0;
+  bool rotary_press_long = false;
   std::uint32_t rotary_right_at = 0;
   std::uint32_t rotary_left_at = 0;
   bool rotary_right_long = false;
@@ -262,7 +266,15 @@ inline bool input_poll(input::device& self, event::value& out) {
   } else if (!left && rt.rotary_left && !rt.rotary_left_long) {
     inject(rt, event::key(event::key_code::up));
   }
-  if (rt.rotary_press && !press) inject(rt, event::key(event::key_code::ok));
+  if (press && !rt.rotary_press) {
+    rt.rotary_press_at = now;
+    rt.rotary_press_long = false;
+  } else if (press && !rt.rotary_press_long && now - rt.rotary_press_at >= sleep_hold_ms) {
+    inject(rt, event::key(event::key_code::ok, sleep_hold_ms, true));
+    rt.rotary_press_long = true;
+  } else if (!press && rt.rotary_press && !rt.rotary_press_long) {
+    inject(rt, event::key(event::key_code::ok));
+  }
   rt.rotary_right = right;
   rt.rotary_left = left;
   rt.rotary_press = press;

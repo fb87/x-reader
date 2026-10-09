@@ -22,6 +22,7 @@ inline bool init(context& self, capability::registry& capabilities, state::store
   auto* platform_device = capability::get<platform::device>(capabilities);
   auto* storage_device = capability::get<storage::device>(capabilities);
   if (display == nullptr || input == nullptr || platform_device == nullptr) return false;
+  const bool woke_from_sleep = platform::woke_from_deep_sleep(*platform_device);
   self.reader.storage = storage_device;
 
   restore_persistent(self);
@@ -44,6 +45,18 @@ inline bool init(context& self, capability::registry& capabilities, state::store
   self.last_input_ms = platform::now_ms(*platform_device);
   self.splash_entered_ms = platform::now_ms(*platform_device);
   (void)scan_library(self);
+  if (woke_from_sleep) {
+    const char* return_route = state::get(memory, "app.sleep.return_route", "");
+    const char* route = return_route;
+    if (route != nullptr && std::strncmp(route, "/book/", 6) == 0) {
+      const auto current = state::get(memory, "reader.book.current", std::int64_t{-1});
+      state::set(memory, "reader.library.selected", current);
+      if (!reader::open_selected(self.reader, memory)) route = "/";
+    }
+    if (route != nullptr && route[0] != '\0' && std::strcmp(route, "/sleep") != 0)
+      routes::replace(self, route);
+    state::set(memory, "app.sleep.return_route", "");
+  }
   if (native_ui) render(self);
   return true;
 }

@@ -11,6 +11,7 @@ struct device {
     bool (*wall_time)(device& self, int& hour, int& minute);
     int (*battery_percent)(device& self);
     void (*enter_deep_sleep)(device& self, std::uint32_t wake_after_ms);
+    bool (*woke_from_deep_sleep)(device& self);
 };
 
 /** @brief Returns monotonic platform time in milliseconds. */
@@ -35,6 +36,11 @@ inline int battery_percent(device& self)
 inline void enter_deep_sleep(device& self, std::uint32_t wake_after_ms = 0)
 {
     if (self.enter_deep_sleep != nullptr) self.enter_deep_sleep(self, wake_after_ms);
+}
+
+inline bool woke_from_deep_sleep(device& self)
+{
+    return self.woke_from_deep_sleep != nullptr && self.woke_from_deep_sleep(self);
 }
 
 } // namespace platform

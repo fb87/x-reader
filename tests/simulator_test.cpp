@@ -316,6 +316,11 @@ int main() {
   test::tap(board, application, 100, 100);
   test::expect(result, app::current_page(application) == app::page::home,
                "input wakes automatic sleep");
+  board::sim::inject(board, event::key(event::key_code::ok, 5000, true));
+  app::pump(application);
+  test::expect(result, app::current_page(application) == app::page::sleep,
+               "five-second push enters sleep screen");
+  test::tap(board, application, 100, 100);
 
   // Persistence.
   app::checkpoint(application);

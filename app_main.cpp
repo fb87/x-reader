@@ -69,14 +69,17 @@ static int run_application() {
     // simulator has its own event loop, while ESP-IDF invokes app_main only
     // once and otherwise leaves the splash frame on the panel forever.
     std::uint32_t last_save = 0;
+    app::page previous_page = app::current_page(application);
     for (;;) {
-        app::pump(application);
-        const auto now = platform::now_ms(*application.shell.platform);
-        if (now - last_save >= 5000U) {
-            app::checkpoint(application);
-            (void)state::save(persistent, state_path);
-            last_save = now;
-        }
+      app::pump(application);
+      const auto now = platform::now_ms(*application.shell.platform);
+      const app::page current = app::current_page(application);
+      if ((current == app::page::sleep && previous_page != app::page::sleep) || now - last_save >= 5000U) {
+        app::checkpoint(application);
+        (void)state::save(persistent, state_path);
+        last_save = now;
+      }
+      previous_page = current;
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 #else

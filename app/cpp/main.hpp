@@ -18,6 +18,10 @@ inline bool on_shell_event(const event::value& value, void* user) {
   if (value.event_type != event::type::key || !value.long_press) return false;
   auto& self = *static_cast<context*>(user);
   self.last_input_ms = platform::now_ms(*self.shell.platform);
+  if (value.key == event::key_code::ok) {
+    routes::set_page(self, page::sleep);
+    return true;
+  }
   if (current_page(self) == page::home)
     state::set(*self.memory, "app.home.card.focused", false);
   state::set(*self.memory, "app.input.long_press", static_cast<std::int64_t>(value.key));
