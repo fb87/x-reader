@@ -33,7 +33,7 @@
  * @brief M5Paper hardware board: composes the IT8951/GT911/inflate drivers
  * and ESP-IDF's SD/FatFS VFS into the same generic capability surface
  * `boards/sim/runtime.hpp` publishes, ported from the composition logic in
- * `port/m5paper/app_main.cpp` (display_update/poll_input/epub_read/
+ * the original M5Paper implementation (display_update/poll_input/epub_read/
  * epub_inflate/list_sd_directory/mount_and_scan_sd).
  *
  * UNVERIFIED IN THIS SANDBOX: no ESP-IDF toolchain is available here. This

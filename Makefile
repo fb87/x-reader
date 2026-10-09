@@ -17,7 +17,7 @@ PLUGIN_STAMP := $(GENERATED)/.plugins.$(PLUGIN_KEY).stamp
 HEADERS := $(shell find core reader app runtime boards plugins -type f -name '*.hpp' 2>/dev/null)
 LUA_SOURCES := $(shell find app/lua runtime/lua plugins -type f -name '*.lua' 2>/dev/null)
 LANG_SOURCES := $(shell find lang -type f -name '*.txt')
-FONT_SOURCES := $(wildcard fonts/xr_font_alegreya_14.c fonts/xr_font_alegreya_17.c fonts/xr_font_alegreya_18.c fonts/xr_font_alegreya_20.c fonts/xr_font_alegreya_24.c fonts/xr_font_alegreya_bold_18.c fonts/xr_font_alegreya_bold_26.c fonts/xr_icons.c)
+FONT_SOURCES := $(wildcard fonts/xr_font_alegreya_14.c fonts/xr_font_alegreya_18.c fonts/xr_font_alegreya_20.c fonts/xr_font_alegreya_24.c fonts/xr_font_alegreya_bold_18.c fonts/xr_font_alegreya_bold_26.c fonts/xr_icons.c)
 FONT_OBJECTS := $(patsubst fonts/%.c,$(BUILD)/fonts/%.o,$(FONT_SOURCES))
 LUA_LIBS := -ldl
 WAYLAND_LIBS ?= $(shell pkg-config --libs wayland-client 2>/dev/null || echo -Wl,-l:libwayland-client.so.0)
@@ -104,6 +104,12 @@ $(BUILD)/book_title_test: tests/book_title_test.cpp $(HEADERS) $(PLUGIN_STAMP) |
 $(BUILD)/persistence_test: tests/persistence_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/persistence_test.cpp $(FONT_OBJECTS) -o $@ -lz
 
+$(BUILD)/font_coverage_test: tests/font_coverage_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/font_coverage_test.cpp $(FONT_OBJECTS) -o $@
+
+$(BUILD)/xteink_test: tests/xteink_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/xteink_test.cpp $(FONT_OBJECTS) -o $@ -lz
+
 $(BUILD)/monkey_test: tests/monkey_test.cpp $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/monkey_test.cpp $(FONT_OBJECTS) -o $@ -lz
 
@@ -116,7 +122,7 @@ $(BUILD)/lua_app_test: tests/lua_app_test.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(H
 $(BUILD)/lua_hot_reload_test: tests/lua_hot_reload_test.cpp $(LUA_SOURCES) $(LANG_SOURCES) $(HEADERS) $(PLUGIN_STAMP) $(FONT_OBJECTS) | $(BUILD)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) tests/lua_hot_reload_test.cpp $(FONT_OBJECTS) -o $@ -lz $(LUA_LIBS)
 
-test-cpp: $(BUILD)/reader $(BUILD)/simulator_gui $(BUILD)/simulator_test $(BUILD)/epub_test $(BUILD)/architecture_test $(BUILD)/router_test $(BUILD)/book_title_test $(BUILD)/persistence_test
+test-cpp: $(BUILD)/reader $(BUILD)/simulator_gui $(BUILD)/simulator_test $(BUILD)/epub_test $(BUILD)/architecture_test $(BUILD)/router_test $(BUILD)/book_title_test $(BUILD)/persistence_test $(BUILD)/font_coverage_test $(BUILD)/xteink_test
 	./$(BUILD)/reader
 	./$(BUILD)/simulator_test
 	./$(BUILD)/epub_test
@@ -124,6 +130,8 @@ test-cpp: $(BUILD)/reader $(BUILD)/simulator_gui $(BUILD)/simulator_test $(BUILD
 	./$(BUILD)/router_test
 	./$(BUILD)/book_title_test
 	./$(BUILD)/persistence_test
+	./$(BUILD)/font_coverage_test
+	./$(BUILD)/xteink_test
 
 test-lua: $(BUILD)/reader-lua $(BUILD)/simulator_lua_gui $(BUILD)/lua_app_test $(BUILD)/lua_parity_test $(BUILD)/lua_hot_reload_test
 	./$(BUILD)/reader-lua

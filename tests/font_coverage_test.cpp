@@ -1,12 +1,12 @@
 #include <cstdio>
 
-#include "app/assets.hpp"
+#include "core/text.hpp"
 
 /**
  * @brief Guards against a font-coverage regression, the specific mistake
  * the architecture prototype this migration is based on made: replacing
  * real bitmap fonts with an ad hoc uppercase-only 5x7 placeholder with no
- * accent/Vietnamese support. app/assets.hpp bridges the exact same
+ * accent/Vietnamese support. core/text.hpp bridges the exact same
  * compiled fonts/xr_font_alegreya_*.c objects the old C app used (not
  * copies -- extern "C" references to the same translation units), so this
  * test is really asserting "whoever builds this tree in the future didn't
@@ -25,7 +25,7 @@ void expect(bool condition, const char* message) {
   }
 }
 
-bool has_codepoint(const text::font& f, std::uint32_t codepoint) {
+bool has_codepoint(const xr_font_t& f, std::uint32_t codepoint) {
   if (f.codepoints == nullptr) return codepoint >= f.first && codepoint <= f.last;
   for (std::uint16_t i = 0; i < f.glyph_count; ++i) {
     if (f.codepoints[i] == codepoint) return true;
@@ -36,7 +36,7 @@ bool has_codepoint(const text::font& f, std::uint32_t codepoint) {
 }  // namespace
 
 int main() {
-  const text::font& body = xr_font_alegreya_18;
+  const xr_font_t& body = text::xr_font_alegreya_18;
 
   expect(has_codepoint(body, 'a') && has_codepoint(body, 'z'), "lowercase a-z covered");
   expect(has_codepoint(body, 'A') && has_codepoint(body, 'Z'), "uppercase A-Z covered");
@@ -63,7 +63,7 @@ int main() {
 
   // The bold/title fonts used for headings must carry the same coverage, not a
   // reduced ASCII-only variant.
-  expect(has_codepoint(xr_font_alegreya_bold_26, 0x1EC7),
+  expect(has_codepoint(text::xr_font_alegreya_bold_26, 0x1EC7),
          "bold heading font also covers Vietnamese, not just the body font");
 
   std::printf("font coverage tests: %d checks, %d failures\n", checks, failures);

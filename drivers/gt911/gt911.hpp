@@ -7,7 +7,7 @@
 
 /**
  * @brief GT911 capacitive touch controller driver, ported from
- * `xreader::drivers::gt911` (port/m5paper/drivers/gt911/gt911.hpp).
+ * the original `xreader::drivers::gt911` implementation.
  *
  * UNVERIFIED IN THIS SANDBOX: no ESP-IDF toolchain is available here. Logic
  * is preserved exactly, including the dual I2C address probe (0x14 primary,

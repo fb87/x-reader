@@ -478,7 +478,7 @@ Interactive mappings may include:
 - Up/Down -> rotary left/right,
 - Enter/Space -> rotary push.
 
-An SDL2 GUI backend is used for interactive development; autonomous tests must not require a display
+The Wayland GUI backend is used for interactive development; autonomous tests must not require a display
 server.
 
 ## 17. Input simulation
@@ -899,9 +899,9 @@ include/xr/xr_hal.h         -> core/display.hpp, core/input.hpp, core/platform.h
 include/xr/xr_storage.h     -> core/storage.hpp
 include/xr/xr_canvas.h      -> core/canvas.hpp
 include/xr/xr_text.h        -> core/text.hpp
-include/xr/xr_widget.h      -> core/widget.hpp
-include/xr/xr_page.h        -> core/page.hpp
-include/xr/xr_dialog.h      -> core/dialog.hpp
+include/xr/xr_widget.h      -> core/widgets/
+include/xr/xr_page.h        -> app/cpp/pages/ and app/lua/pages/
+include/xr/xr_dialog.h      -> core/widgets/dialog.hpp
 include/xr/xr_shell.h       -> core/shell.hpp
 include/xr/xr_refresh.h     -> core/refresh.hpp
 include/xr/xr_epub.h        -> reader/epub.hpp
@@ -909,14 +909,14 @@ src/xr_epub.c               -> reader/epub.hpp
 
 app/app.c                   -> reader/book.hpp + app composition/state usage
 app/book_title.c            -> reader/book.hpp (Vietnamese mojibake title repair)
-app/page_home.c             -> app/page_home.hpp
-app/page_library.c          -> app/page_library.hpp, app/page_favorites.hpp + reader/library.hpp
-app/page_file_manager.c     -> app/page_file_manager.hpp using core/storage.hpp
-app/page_reader.c           -> app/page_reader.hpp + reader/session.hpp (pagination)
-app/page_settings.c         -> app/page_settings.hpp + shared state/capabilities
-app/page_sleep.c            -> app/page_sleep.hpp, now wired to real deep sleep on boards/m5paper
-app/page_splash.c           -> app/page_splash.hpp
-app/dlg_book_info.c         -> app/dlg_book_info.hpp
+app/page_home.c             -> app/{cpp,lua}/pages/home
+app/page_library.c          -> app/{cpp,lua}/pages/library + reader/library.hpp
+app/page_file_manager.c     -> app/cpp/pages/files.hpp using core/storage.hpp
+app/page_reader.c           -> app/{cpp,lua}/pages/reader + reader/session.hpp
+app/page_settings.c         -> app/{cpp,lua}/pages/settings + shared state/capabilities
+app/page_sleep.c            -> app/{cpp,lua}/pages/sleep, wired to M5Paper deep sleep
+app/page_splash.c           -> app/{cpp,lua}/pages/splash
+app/dlg_book_info.c         -> app/cpp/pages/library.hpp + core/widgets/dialog.hpp
 
 port/m5paper/*              -> boards/m5paper/ + drivers/it8951/, drivers/gt911/, drivers/inflate/
 port/sim/*, port/sdl/*      -> boards/sim/

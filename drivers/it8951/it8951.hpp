@@ -10,7 +10,7 @@
 
 /**
  * @brief IT8951 e-ink controller driver, ported from
- * `xreader::drivers::it8951e` (port/m5paper/drivers/it8951e/it8951e.hpp).
+ * the original `xreader::drivers::it8951e` implementation.
  *
  * UNVERIFIED IN THIS SANDBOX: no ESP-IDF toolchain is available here, so
  * this header cannot be compiled or tested in this migration. Logic is

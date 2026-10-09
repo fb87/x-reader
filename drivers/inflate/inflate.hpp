@@ -7,7 +7,7 @@
 
 /**
  * @brief Raw RFC 1951 DEFLATE decoder, ported from `xreader::inflate`
- * (port/m5paper/inflate.hpp). Used on-device to decompress EPUB ZIP
+ * Used on-device to decompress EPUB ZIP
  * entries without pulling zlib onto the ESP32 target.
  *
  * UNVERIFIED IN THIS SANDBOX: no ESP-IDF toolchain is available here.

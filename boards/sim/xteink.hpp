@@ -29,8 +29,7 @@ inline void init(board::sim::runtime& self) {
   self.display.width = width;
   self.display.height = height;
   self.display.format = pixel_format;
-  self.display.stride = canvas::stride_for(width, pixel_format);
-  self.display.update_align = 8;  // 1bpp SPI panels partial-update on 8px boundaries.
+  self.display.stride = width / 8;
 }
 
 }  // namespace board::sim_xteink

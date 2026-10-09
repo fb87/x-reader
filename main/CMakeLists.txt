@@ -3,7 +3,15 @@
 # CMake project here. Reviewed by hand against the Makefile's BOARD=sim build, which
 # does compile and pass `make test` in this sandbox.
 
-file(GLOB XR_FONT_SRCS "../fonts/*.c")
+set(XR_FONT_SRCS
+    "../fonts/xr_font_alegreya_14.c"
+    "../fonts/xr_font_alegreya_18.c"
+    "../fonts/xr_font_alegreya_20.c"
+    "../fonts/xr_font_alegreya_24.c"
+    "../fonts/xr_font_alegreya_bold_18.c"
+    "../fonts/xr_font_alegreya_bold_26.c"
+    "../fonts/xr_icons.c"
+)
 
 set(XR_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${XR_GENERATED_DIR}")

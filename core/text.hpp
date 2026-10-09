@@ -12,7 +12,6 @@ namespace text {
 
 extern "C" {
 extern const xr_font_t xr_font_alegreya_14;
-extern const xr_font_t xr_font_alegreya_17;
 extern const xr_font_t xr_font_alegreya_18;
 extern const xr_font_t xr_font_alegreya_20;
 extern const xr_font_t xr_font_alegreya_24;

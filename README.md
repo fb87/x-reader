@@ -9,12 +9,11 @@ isn't hardware-verified.
 
 ```
 make            # build build/reader (the sim-board host executable)
-make gui        # build and run the interactive M5Paper SDL2 simulator
+make gui        # build and run the interactive M5Paper Wayland simulator
 make test       # build and run the autonomous test suite
-make fonts      # regenerate bitmap fonts (needs Python + Pillow; Alegreya needs ALEGREYA_FONT_DIR)
 ```
 
-Run the interactive simulator on a desktop with SDL2 installed:
+Run the interactive simulator on a Wayland desktop:
 
 ```
 ./build/simulator_gui
@@ -28,7 +27,7 @@ the selected action. Up on the first action returns to page content.
 With Nix:
 
 ```
-nix-shell -p gnumake clang SDL2 pkg-config zlib --run 'make gui'
+nix-shell -p gnumake clang wayland pkg-config zlib --run 'make gui'
 ```
 
 ## Layout
@@ -46,64 +45,32 @@ hardware port (built via `main/CMakeLists.txt` + `idf.py`, not the plain Makefil
 
 ## Model
 
-**Regions** (where things go) and **layers** (what draws on top) are kept separate:
-
-```
-┌──────────────────────┐  status bar  ─┐
-│                      │                ├─ layer 1: content (chrome + top page)
-│      page area       │                │
-│   ┌──────────────┐   │  ← layer 2: dialogs (sized to content, modal)
-│   └──────────────┘   │                │
-├──────────────────────┤  dock         ─┘
-└──────────────────────┘  layer 0: background (wallpaper / sleep image)
-```
-
-Each page declares the chrome it wants (`page::chrome::status | page::chrome::dock`). The shell
-gives the page an `area` that covers whatever space the chrome leaves free. The Reader page runs
-without chrome and toggles it on a tap. When chrome is toggled, the page gets `on_layout` and
-repaginates.
-
 | Module | Role |
 |---|---|
-| `shell` | Owns the screen: page stack (`push/pop/replace`), dialog stack, input routing, status bar, dock, composition |
-| `page` | Mechanism for a screen. Lifecycle: `on_create / on_layout / on_enter / on_exit / on_destroy`, plus `render`, `on_event`, `on_action`, `on_tick` |
-| `dialog` | Mechanism for modal popups. `layout()` sizes the dialog from its content. The result is delivered through a callback. Ships with `dialog::confirm` (Yes/No) |
-| `widget` | Base widget, intrusive tree, focus scope. Stock widgets: label, button, list |
-| `refresh` | Dirty-rect scheduler: merges rects and promotes to a full flash after N quality updates |
+| `app/cpp` | Native routes, state model, services, and page handlers |
+| `app/lua` | Lua pages using the same state and drawing contracts |
+| `shell` | Polls input and dispatches events to the active frontend |
+| `router` | Maps URIs to pages and maintains navigation history |
+| `core/widgets` | Shared status, row, dock, dialog, and progress drawing primitives |
 | `canvas`, `text` | Drawing for MONO1, GRAY4, and GRAY8; bitmap fonts; word wrap; ellipsis |
 | `display`, `input`, `platform` | The board capability contracts: framebuffer/waveform, events, time/battery/sleep |
-
-### Subclassing pattern
-
-```cpp
-struct library_page { page::context base{}; widget::list list{}; /* base first */ };
-
-inline void library_create(page::context& p) {
-  library_page& lp = library_of(p);  // offsetof-based recovery, see app/app.hpp
-  ...
-}
-inline constexpr page::vtbl library_vtbl{library_create, /* ... */};
-```
 
 ### Render pipeline
 
 ```
-event -> shell routes it (top dialog, otherwise page -> focused widget -> dock shortcut -> BACK pops)
-      -> state changes -> shell::invalidate(rect, fast | quality | full)
-      -> shell::flush(): for each merged dirty rect
-            compose layers 0..2 into the framebuffer, clipped to the rect
-            display::update(rect, mode)
+event -> shell callback -> active native/Lua page -> state changes
+      -> page render -> framebuffer -> display::update(rect, mode)
 ```
 
-There is a single framebuffer. Closing a dialog invalidates its rect, and the layers underneath are redrawn there, so no save-under buffer is needed.
+There is a single framebuffer. Native and Lua pages use the same widget and display primitives.
 
 ### Refresh policy
 
 | Mode | Used for |
 |---|---|
 | `fast` | Moving focus, list selection, clock tick |
-| `quality` | Page turns, dialogs, content changes; counted toward the ghosting budget |
-| `full` | Navigating to a new page, or once the budget is spent (`shell::set_full_refresh_every`) |
+| `quality` | Page turns, dialogs, and content changes |
+| `full` | Navigation and periodic ghost-clearing refreshes |
 
 `display::device.update_align` snaps partial updates to the controller's alignment, for example 8 px on 1 bpp SPI panels.
 

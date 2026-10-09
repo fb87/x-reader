@@ -4,7 +4,7 @@
 
 /**
  * @brief M5Paper power/battery/sleep control, ported verbatim from
- * `xreader::board::m5paper` (port/m5paper/board/m5paper/m5paper_board.hpp).
+ * the original `xreader::board::m5paper` implementation.
  * UNVERIFIED IN THIS SANDBOX: no ESP-IDF toolchain is available here.
  */
 namespace board::m5paper {
