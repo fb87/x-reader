@@ -66,6 +66,7 @@ struct context {
   page_binding bound_page{};
   std::uint32_t splash_entered_ms = 0;
   std::uint32_t last_input_ms = 0;
+  std::uint32_t sleep_armed_ms = 0;
   bool sleep_armed = false;
   int invalidations = 0;
 };
@@ -135,6 +136,9 @@ inline void apply_page(context& self, page value) {
     state::set(*self.memory, "app.files.selected", std::int64_t{0});
   if (value == page::reader) state::set(*self.memory, "app.reader.chrome", false);
   self.sleep_armed = value == page::sleep;
+  self.sleep_armed_ms = self.sleep_armed && self.shell.platform != nullptr
+                            ? platform::now_ms(*self.shell.platform)
+                            : 0;
   state::set(*self.memory, "app.home.card.focused",
              value == page::home && previous == page::splash);
   self.next_refresh = refresh::mode::full;

@@ -90,7 +90,7 @@ inline bool on_event(const event::value& value, void* user) {
 inline void tick(context& self) {
   const auto now = self.shell.platform != nullptr ? platform::now_ms(*self.shell.platform) : 0;
   if (current_page(self) == page::sleep) {
-    if (self.sleep_armed) {
+    if (self.sleep_armed && now - self.sleep_armed_ms >= 1500U) {
       self.sleep_armed = false;
       platform::enter_deep_sleep(*self.shell.platform);
     }
