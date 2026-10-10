@@ -1,9 +1,39 @@
 local reader = require("reader")
 local settings = require("settings")
 local icons = require("icons")
+local ActionBar = require("ui.action_bar")
 local scene = { id = "reading", chrome = "fullscreen" }
-function scene.create()
-    return { book = nil, dock_visible = false, focus_scope = "content", dock_selected = 1 }
+function scene.create(context)
+    local actions = {
+        {
+            label = "Close",
+            icon = icons.arrow,
+            invoke = function()
+                context.pop()
+            end,
+        },
+        {
+            label = "A-",
+            icon = icons.circle,
+            invoke = function()
+                settings.decrease_font_size()
+            end,
+        },
+        {
+            label = "A+",
+            icon = icons.add,
+            invoke = function()
+                settings.increase_font_size()
+            end,
+        },
+    }
+    return {
+        book = nil,
+        dock_visible = false,
+        focus_scope = "content",
+        dock_selected = 1,
+        action_bar = ActionBar({ actions = actions, selected = 1 }),
+    }
 end
 function scene.show(stage, params)
     stage.book = params and params.book or stage.book
@@ -11,12 +41,8 @@ function scene.show(stage, params)
         reader.open(stage.book)
     end
 end
-function scene.dock()
-    return {
-        { label = "Close", icon = icons.arrow },
-        { label = "A-", icon = icons.circle },
-        { label = "A+", icon = icons.add },
-    }
+function scene.dock(stage)
+    return stage.action_bar.actions
 end
 function scene.move(_, direction)
     if direction < 0 then
@@ -30,6 +56,8 @@ function scene.activate_content(stage)
     stage.focus_scope = stage.dock_visible and "dock" or "content"
 end
 function scene.activate_dock(stage, context)
+    stage.action_bar.selected = stage.dock_selected
+    stage.action_bar:activate()
     if stage.dock_selected == 1 then
         stage.dock_visible = false
         stage.focus_scope = "content"

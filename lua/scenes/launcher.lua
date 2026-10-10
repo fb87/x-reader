@@ -1,15 +1,28 @@
 local scene = { id = "launcher", chrome = "standard" }
 local icons = require("icons")
+local layout = require("layout")
+local List = require("ui.list")
 local items = { "Resume", "Library", "Files", "Settings" }
 local item_icons = { icons.bookmark, icons.book, icons.folder, icons.circle }
 function scene.create()
-    return { selected = 1, dock_selected = 1, focus_scope = "content" }
+    local rows = {}
+    for index, label in ipairs(items) do
+        rows[index] = { id = label:lower(), title = label, icon = item_icons[index] }
+    end
+    return {
+        selected = 1,
+        dock_selected = 1,
+        focus_scope = "content",
+        list = List({ rows = rows, selected_id = "resume", row_height = 75 }),
+    }
 end
 function scene.dock()
     return { { label = "Sleep", icon = icons.circle }, { label = "Power", icon = icons.bookmark } }
 end
 function scene.move(stage, direction)
     stage.selected = ((stage.selected - 1 + direction) % #items) + 1
+    stage.list.selected_id = items[stage.selected]:lower()
+    stage.list.active = stage.focus_scope == "content"
 end
 function scene.activate_content(stage, context)
     if stage.selected == 2 then
@@ -29,7 +42,7 @@ function scene.activate_dock(stage, context)
 end
 function scene.event(stage, event, context)
     if event.kind == "touch" and event.phase == "up" then
-        local index = math.floor((event.y - 90) / 150) + 1
+        local index = math.floor((event.y - 90) / 75) + 1
         if index >= 1 and index <= 4 then
             stage.focus_scope = "content"
             stage.selected = index
@@ -46,12 +59,8 @@ function scene.event(stage, event, context)
     end
 end
 function scene.draw(stage)
-    for index, label in ipairs(items) do
-        local y = 90 + (index - 1) * 150
-        local highlighted = stage.focus_scope == "content" and index == stage.selected
-        canvas.rectangle(24, y, 492, 112, highlighted and 3 or 14)
-        canvas.text(56, y + 32, item_icons[index], 4, highlighted and 15 or 0)
-        canvas.text(112, y + 38, label, 2, highlighted and 15 or 0)
-    end
+    stage.list.selected_id = items[stage.selected]:lower()
+    stage.list:layout({ x = 24, y = 90, width = 492, height = layout.content_height(90, 40) })
+    stage.list:draw()
 end
 return scene

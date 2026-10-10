@@ -61,6 +61,15 @@ x-reader/
 |   |-- app.lua
 |   |-- chrome.lua
 |   |-- input.lua
+|   |-- theme.lua
+|   |-- ui/
+|   |   |-- widget.lua
+|   |   |-- label.lua
+|   |   |-- button.lua
+|   |   |-- list.lua
+|   |   |-- action_bar.lua
+|   |   |-- status_bar.lua
+|   |   `-- progress.lua
 |   `-- scenes/
 |       |-- loader.lua
 |       |-- launcher.lua
@@ -93,6 +102,8 @@ It is not part of the source tree.
 9. Enable `CONFIG_APP_REPRODUCIBLE_BUILD` and configure PSRAM, FatFs, and SD.
 10. Pin clang-format, clang-tidy, and StyLua as build-time tools.
 11. Add tracked formatting configuration and a safe pre-commit hook.
+
+The simulator-first UI implementation begins with retained widget primitives.
 
 ## Phase 2: Three-Layer Skeleton
 

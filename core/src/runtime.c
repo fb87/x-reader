@@ -5,6 +5,7 @@
 #include <lua.h>
 #include <lualib.h>
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -97,12 +98,75 @@ static int display_text(lua_State* state) {
         return luaL_error(state, "invalid canvas.text arguments");
     }
     const bool icon_scale = scale > 3;
-    const struct font* font = icon_scale ? font_default() : font_for_size((unsigned)scale);
-    const uint8_t render_scale = icon_scale ? (uint8_t)scale : 1U;
+    const struct font* font =
+        icon_scale ? font_for_size((unsigned)scale - 3U) : font_for_size((unsigned)scale);
+    const uint8_t render_scale = 1U;
     const enum platform_status status =
         runtime->platform.display.text(runtime->platform.display.context, font, (int32_t)x,
                                        (int32_t)y, text, length, render_scale, (uint8_t)gray);
     return status == PLATFORM_OK ? 0 : luaL_error(state, "canvas.text failed");
+}
+
+static size_t text_codepoint(const char* text, size_t length, uint32_t* codepoint) {
+    const uint8_t first = (uint8_t)text[0];
+    if (first < 0x80U) {
+        *codepoint = first;
+        return 1U;
+    }
+    if ((first & 0xe0U) == 0xc0U && length >= 2U) {
+        *codepoint = ((uint32_t)(first & 0x1fU) << 6U) | ((uint8_t)text[1] & 0x3fU);
+        return 2U;
+    }
+    if ((first & 0xf0U) == 0xe0U && length >= 3U) {
+        *codepoint = ((uint32_t)(first & 0x0fU) << 12U) |
+                     ((uint32_t)((uint8_t)text[1] & 0x3fU) << 6U) | ((uint8_t)text[2] & 0x3fU);
+        return 3U;
+    }
+    *codepoint = 0xfffdU;
+    return 1U;
+}
+
+static int display_measure(lua_State* state) {
+    size_t length = 0U;
+    const char* text = luaL_checklstring(state, 1, &length);
+    const lua_Integer requested_size = luaL_optinteger(state, 2, 2);
+    if (requested_size < 1 || requested_size > 8) {
+        return luaL_error(state, "invalid canvas.measure size");
+    }
+    const unsigned size = (unsigned)requested_size;
+    const bool icon_scale = size > 3U;
+    const struct font* font = icon_scale ? font_for_size(size - 3U) : font_for_size(size);
+    const uint8_t render_scale = 1U;
+    int32_t width = 0;
+    int32_t top = INT32_MAX;
+    int32_t bottom = INT32_MIN;
+    for (size_t offset = 0U; offset < length;) {
+        uint32_t codepoint = 0U;
+        const size_t consumed = text_codepoint(&text[offset], length - offset, &codepoint);
+        const struct font_glyph* glyph = font_lookup(font, codepoint);
+        if (glyph == NULL) {
+            glyph = font_lookup(font, '?');
+        }
+        if (glyph != NULL) {
+            width += (int32_t)glyph->advance * render_scale;
+            const int32_t glyph_top = ((int32_t)glyph->bearing_y + font->baseline) * render_scale;
+            const int32_t glyph_bottom = glyph_top + (int32_t)glyph->height * render_scale;
+            if (glyph_top < top)
+                top = glyph_top;
+            if (glyph_bottom > bottom)
+                bottom = glyph_bottom;
+        }
+        offset += consumed;
+    }
+    if (top == INT32_MAX) {
+        top = 0;
+        bottom = font->baseline;
+    }
+    lua_pushinteger(state, width);
+    lua_pushinteger(state, bottom - top);
+    lua_pushinteger(state, top);
+    lua_pushinteger(state, bottom);
+    return 4;
 }
 
 static int display_present(lua_State* state) {
@@ -143,6 +207,9 @@ static void register_services(struct runtime* runtime) {
     push_runtime_userdata(state, runtime);
     lua_pushcclosure(state, display_text, 1);
     lua_setfield(state, -2, "text");
+    push_runtime_userdata(state, runtime);
+    lua_pushcclosure(state, display_measure, 1);
+    lua_setfield(state, -2, "measure");
     lua_setglobal(state, "canvas");
 
     lua_newtable(state);

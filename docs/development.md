@@ -10,6 +10,7 @@ The project uses a pinned Nix flake. Initial inputs are:
 - One exact Espressif Lua source revision
 - SDL2 and zlib for the simulator
 - Pillow and the font conversion script for generated font assets
+- Google Material Symbols source font for generated icon assets
 
 The Lua source is fetched once by Nix with a fixed hash and compiled for both
 firmware and simulator. ESP-IDF Component Manager network access is disabled in
@@ -39,7 +40,8 @@ generated glyph array.
 
 Lua exposes font sizes as the semantic values `small`, `medium`, and `large`;
 the renderer maps those values to bitmap scaling. Alegreya licensing is kept
-in `docs/licenses/Alegreya-OFL.txt`.
+in `docs/licenses/Alegreya-OFL.txt`. Material Symbols licensing is kept in
+`docs/licenses/Material-Symbols-Apache-2.0.txt`.
 
 ## Formatting
 

@@ -17,7 +17,7 @@ end
 function scene.draw()
     canvas.clear(15)
     canvas.rectangle(210, 220, 120, 120, 2)
-    canvas.text(126, 400, "X-Reader", 4, 0)
+    canvas.text(126, 400, "X-Reader", 3, 0)
     canvas.text(158, 458, "EPUB reader for ESP32", 1, 4)
     canvas.text(218, 700, "Loading", 1, 0)
 end

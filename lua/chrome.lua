@@ -20,6 +20,8 @@ function chrome.dock(actions, selected, active)
     canvas.rectangle(area.x, area.y, area.width, 1, 8)
     local width = math.floor(area.width / math.max(1, #actions))
     for index, action in ipairs(actions) do
+        local slot =
+            { x = area.x + (index - 1) * width, y = area.y, width = width, height = area.height }
         local highlighted = active and index == selected
         if highlighted then
             canvas.rectangle(
@@ -34,18 +36,18 @@ function chrome.dock(actions, selected, active)
             canvas.rectangle(area.x + (index - 1) * width, area.y, 1, area.height, 8)
         end
         canvas.text(
-            area.x + (index - 1) * width + layout.scale_x(24),
-            layout.scale_y(906),
+            slot.x + layout.scale_x(58),
+            layout.text_y(slot, action.label, 1),
             action.label,
             1,
             highlighted and 15 or 0
         )
         if action.icon ~= nil then
             canvas.text(
-                area.x + (index - 1) * width + layout.scale_x(18),
-                layout.scale_y(906),
+                slot.x + layout.scale_x(14),
+                layout.text_y(slot, action.icon, 6),
                 action.icon,
-                4,
+                6,
                 highlighted and 15 or 0
             )
         end

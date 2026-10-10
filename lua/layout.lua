@@ -27,12 +27,42 @@ function layout.rect(x, y, width, height)
     }
 end
 
+function layout.text_y(rect, text, size)
+    local _, height, top = canvas.measure(text, size)
+    return rect.y + math.floor((rect.height - height) / 2) - top
+end
+
+function layout.text_group_y(rect, entries, gap)
+    local metrics = {}
+    local total = 0
+    for index, entry in ipairs(entries) do
+        local _, height, top = canvas.measure(entry.text, entry.size)
+        metrics[index] = { height = height, top = top }
+        total = total + height
+        if index > 1 then
+            total = total + gap
+        end
+    end
+    local cursor = rect.y + math.floor((rect.height - total) / 2)
+    local positions = {}
+    for index, metric in ipairs(metrics) do
+        positions[index] = cursor - metric.top
+        cursor = cursor + metric.height + gap
+    end
+    return positions
+end
+
 function layout.standard()
     return {
         status = layout.rect(0, 0, 540, 56),
         content = layout.rect(0, 56, 540, 824),
         dock = layout.rect(0, 880, 540, 80),
     }
+end
+
+function layout.content_height(top, bottom_margin)
+    local regions = layout.standard()
+    return regions.content.y + regions.content.height - top - (bottom_margin or 0)
 end
 
 function layout.fullscreen()

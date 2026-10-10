@@ -10,16 +10,16 @@ FONT_SIZES = (("small", 19), ("medium", 22), ("large", 26))
 UNICODE_RANGES = ((0x0020, 0x007E), (0x00A0, 0x00FF), (0x0100, 0x024F),
                   (0x0300, 0x036F), (0x1E00, 0x1EFF))
 ICONS = {
-    0xE000: [0x18, 0x3C, 0x7E, 0xDB, 0xFF, 0x24, 0x24, 0x00],
-    0xE001: [0x3C, 0x42, 0x99, 0xA5, 0xA5, 0x99, 0x42, 0x3C],
-    0xE002: [0x18, 0x18, 0x7E, 0xDB, 0x18, 0x18, 0x3C, 0x00],
-    0xE003: [0x18, 0x18, 0xFF, 0x18, 0x18, 0x00, 0x00, 0x00],
-    0xE004: [0x00, 0x18, 0x18, 0x7E, 0x18, 0x18, 0x00, 0x00],
-    0xE005: [0x3C, 0x42, 0x81, 0x81, 0x81, 0x42, 0x3C, 0x00],
+    "book": 0xE865,
+    "folder": 0xE2C7,
+    "bookmark": 0xE866,
+    "add": 0xE145,
+    "arrow": 0xE5C4,
+    "circle": 0xE88E,
 }
 
 
-def make_font(input_path, size):
+def make_font(input_path, size, icon_input):
     font = ImageFont.truetype(input_path, size)
     baseline = font.getmetrics()[0]
     glyphs = []
@@ -37,11 +37,19 @@ def make_font(input_path, size):
             bitmap.extend(image.tobytes())
         glyphs.append((codepoint, offset, width, height, round(font.getlength(character)), left, top))
 
-    for codepoint, rows in ICONS.items():
-        offset = len(bitmap)
-        glyphs.append((codepoint, offset, 8, 8, 9, 0, -baseline))
-        for row in rows:
-            bitmap.extend(255 if row & (1 << (7 - column)) else 0 for column in range(8))
+    icon_font = ImageFont.truetype(icon_input, 24)
+    if hasattr(icon_font, "set_variation_by_axes"):
+        icon_font.set_variation_by_axes([100.0, 0.0, 24.0, 500.0])
+    for codepoint in ICONS.values():
+        character = chr(codepoint)
+        left, top, right, bottom = icon_font.getbbox(character, anchor="ls")
+        width = max(1, right - left)
+        height = max(1, bottom - top)
+        image = Image.new("L", (width, height), 0)
+        ImageDraw.Draw(image).text((-left, -top), character, font=icon_font, fill=255, anchor="ls")
+        glyphs.append((codepoint, len(bitmap), width, height, round(icon_font.getlength(character)), 0, -baseline))
+        bitmap.extend(image.tobytes())
+    glyphs.sort(key=lambda glyph: glyph[0])
     return baseline, glyphs, bitmap
 
 
@@ -80,8 +88,8 @@ const struct font_glyph* font_lookup(const struct font* font, uint32_t codepoint
     )
 
 
-def write_source(path, input_path):
-    generated = [(name, make_font(input_path, size)) for name, size in FONT_SIZES]
+def write_source(path, input_path, icon_input):
+    generated = [(name, make_font(input_path, size, icon_input)) for name, size in FONT_SIZES]
     with path.open("w", encoding="ascii") as output:
         output.write('#include "font.h"\n\n')
         for name, (baseline, glyphs, bitmap) in generated:
@@ -130,11 +138,12 @@ def write_source(path, input_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=Path)
+    parser.add_argument("icon_input", type=Path)
     parser.add_argument("header", type=Path)
     parser.add_argument("source", type=Path)
     arguments = parser.parse_args()
     write_header(arguments.header)
-    write_source(arguments.source, arguments.input)
+    write_source(arguments.source, arguments.input, arguments.icon_input)
 
 
 if __name__ == "__main__":

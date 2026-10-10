@@ -1,8 +1,8 @@
 return {
-    book = "\u{E000}",
-    folder = "\u{E001}",
-    bookmark = "\u{E002}",
-    add = "\u{E003}",
-    arrow = "\u{E004}",
-    circle = "\u{E005}",
+    book = "\u{E865}",
+    folder = "\u{E2C7}",
+    bookmark = "\u{E866}",
+    add = "\u{E145}",
+    arrow = "\u{E5C4}",
+    circle = "\u{E88E}",
 }

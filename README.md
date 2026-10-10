@@ -73,6 +73,7 @@ hardware initialization path. It is not expected to provide a complete reader.
 - [Development workflow](docs/development.md)
 - [Quality and production readiness](docs/quality.md)
 - [Lua scene architecture](docs/scenes.md)
+- [Lua widget architecture](docs/widgets.md)
 
 ## Toolchain Status
 

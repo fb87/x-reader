@@ -88,6 +88,11 @@ different scene is active. Loader, Reading, and Sleep are fullscreen; Launcher,
 Library, File Manager, and Settings use shared status/content/dock chrome.
 See [Lua scenes](scenes.md).
 
+Scene rendering uses retained widgets. `ui/` widgets own measured layout,
+standard rows, labels, buttons, status bars, and the shared Dock Action Bar.
+Scene stages retain only serializable selection, scroll, and focus state.
+See [Lua widgets](widgets.md).
+
 Lua owns application lifecycle policy, reader state, rendering composition,
 menus, navigation, and input decisions. It calls only APIs exposed by
 `lua_binding.c`. It does not own framebuffer memory, files, decompression

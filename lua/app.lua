@@ -187,11 +187,16 @@ local function create_application()
             if stage.dock_visible then
                 chrome.status(scene.title and scene.title(stage) or scene.id, true)
                 scene.draw(stage, chrome.content)
-                chrome.dock(
-                    scene.dock(stage),
-                    stage.dock_selected or 1,
-                    stage.focus_scope == "dock"
-                )
+                if stage.action_bar then
+                    stage.action_bar.selected = stage.dock_selected or 1
+                    stage.action_bar:draw()
+                else
+                    chrome.dock(
+                        scene.dock(stage),
+                        stage.dock_selected or 1,
+                        stage.focus_scope == "dock"
+                    )
+                end
             else
                 scene.draw(stage, { x = 0, y = 0, width = 540, height = 960 })
             end
