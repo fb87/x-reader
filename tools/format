@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+check=0
+staged=0
+if [[ "${1:-}" == "--check" ]]; then
+    check=1
+    shift
+elif [[ "${1:-}" == "--staged" ]]; then
+    staged=1
+    shift
+fi
+if (($# != 0)); then
+    printf 'usage: %s [--check]\n' "$0" >&2
+    exit 2
+fi
+
+if command -v git >/dev/null 2>&1; then
+    root=$(git rev-parse --show-toplevel)
+else
+    root=$PWD
+fi
+cd "$root"
+
+mapfile -d '' -t c_files < <(
+    find core platform simulator -type f \( -name '*.c' -o -name '*.h' \) -print0
+)
+mapfile -d '' -t lua_files < <(find lua -type f -name '*.lua' -print0)
+
+format_args=(--style=file --fallback-style=none --fail-on-incomplete-format)
+if ((check)); then
+    format_args+=(--dry-run --Werror)
+else
+    format_args+=(-i)
+fi
+
+if ((staged)); then
+    mapfile -d '' -t staged_files < <(git diff --cached --name-only --diff-filter=ACMR -z)
+    for file in "${staged_files[@]}"; do
+        if [[ ! -f "$file" ]]; then
+            continue
+        fi
+        if git diff --quiet -- "$file"; then
+            case "$file" in
+                core/*.c|core/*.h|core/*/*.c|core/*/*.h|platform/*.c|platform/*.h|platform/*/*.c|platform/*/*.h|simulator/*.c|simulator/*.h)
+                    clang-format -i --style=file --fallback-style=none \
+                        --fail-on-incomplete-format -- "$file"
+                    git add -- "$file"
+                    ;;
+                lua/*.lua)
+                    stylua "$file"
+                    git add -- "$file"
+                    ;;
+            esac
+        else
+            printf 'error: partially staged file cannot be autoformatted: %s\n' "$file" >&2
+            exit 1
+        fi
+    done
+    exit 0
+fi
+
+if ((${#c_files[@]} > 0)); then
+    clang-format "${format_args[@]}" -- "${c_files[@]}"
+fi
+if ((${#lua_files[@]} > 0)); then
+    if ((check)); then
+        stylua --check "${lua_files[@]}"
+    else
+        stylua "${lua_files[@]}"
+    fi
+fi

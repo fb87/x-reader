@@ -1,0 +1,10 @@
+Checks: >-
+  -*,
+  bugprone-*,
+  cert-*,
+  performance-*,
+  portability-*,
+  readability-duplicate-include,
+  readability-redundant-declaration
+WarningsAsErrors: '*'
+HeaderFilterRegex: '(^|/)(core|platform|simulator)/.*'

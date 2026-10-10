@@ -28,6 +28,18 @@ nix flake check --no-update-lock-file
 Builds must not run ESP-IDF installers, `pip install`, or unpinned network
 downloads. Firmware enables `CONFIG_APP_REPRODUCIBLE_BUILD=y`.
 
+## Font Assets
+
+The runtime does not load TTF files. Alegreya SemiBold is converted at build
+preparation time with `tools/generate_font.py` into `core/src/font.c` and
+`core/include/font.h`. The generated table contains bounded text glyphs and the
+small icon range used by the Lua interface. Runtime code only consumes the
+generated glyph array.
+
+Lua exposes font sizes as the semantic values `small`, `medium`, and `large`;
+the renderer maps those values to bitmap scaling. Alegreya licensing is kept
+in `docs/licenses/Alegreya-OFL.txt`.
+
 ## Formatting
 
 C uses a checked-in `.clang-format` based on LLVM style with 4-space

@@ -32,7 +32,9 @@ used because stale closures and userdata cannot be rolled back reliably.
 Snapshots support nil, booleans, numbers, strings, arrays, and tables with
 string keys. Functions, threads, userdata, metatables, and cycles are rejected.
 Depth, item count, string length, and total encoded bytes are bounded. Native
-handles never cross VM generations.
+handles never cross VM generations. The initial runtime scaffold transfers only
+the `screen` string from the returned table; the generic bounded snapshot codec
+must be completed before broader application state is persisted across reloads.
 
 Hot reload is not compiled into production firmware. Simulator release runs
 leave it disabled unless `--watch` is explicitly supplied.
