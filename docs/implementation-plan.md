@@ -58,8 +58,17 @@ x-reader/
 |       `-- lua_binding.c
 |-- lua/
 |   |-- init.lua
-|   |-- bookshelf.lua
-|   `-- reader.lua
+|   |-- app.lua
+|   |-- chrome.lua
+|   |-- input.lua
+|   `-- scenes/
+|       |-- loader.lua
+|       |-- launcher.lua
+|       |-- library.lua
+|       |-- file_manager.lua
+|       |-- settings.lua
+|       |-- reading.lua
+|       `-- sleep.lua
 |-- tools/
 |   `-- format
 |-- tests/
@@ -145,6 +154,12 @@ state, menus, navigation, rendering composition, and input policy. It delegates
 pixel loops, archive decompression, XML tokenization, pagination, and native
 resource ownership to C services.
 
+The application uses retained scene stages and a unique stack. Loader replaces
+Launcher; Launcher pushes Library, File Manager, and Settings; Library and File
+Manager push Reading; Sleep is pushed over the current scene and pops on wake.
+Back reveals the previous stage without resetting its selection, scroll, focus,
+or dock highlight. See `docs/scenes.md`.
+
 ## Phase 5: Processing Pipeline
 
 ```text
@@ -171,6 +186,8 @@ book or an unbounded chapter into memory.
 - Log the selected SDL video backend.
 - Support SDL's dummy video driver for headless smoke tests.
 - Do not simulate visual ghosting initially.
+- Start the simulator with a fixed 540 x 960 portrait window; preserve logical
+  aspect ratio rather than stretching the framebuffer.
 - Add `--watch` and `Ctrl+R` development reload controls.
 - Poll and debounce changes under `lua/` without another dependency.
 - Replace Lua VMs transactionally and preserve a bounded data-only snapshot.
@@ -206,6 +223,8 @@ book or an unbounded chapter into memory.
 - Replay bounded fuzz corpora for all untrusted parsers and Lua bindings.
 - Compare two clean firmware builds for reproducibility.
 - Check dependency licenses, simulator closure, and firmware link map.
+- Test retained scene stacks, Back restoration, dock focus, three-key input,
+  long Push sleep/wake, optional mouse touch activation, and fullscreen layout.
 
 ## Skeleton Acceptance Criteria
 

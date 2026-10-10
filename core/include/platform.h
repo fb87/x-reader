@@ -29,10 +29,13 @@ struct platform_event {
     int32_t x;
     int32_t y;
     int32_t button;
+    bool pressed;
 };
 
 struct platform_display {
     void* context;
+    int32_t width;
+    int32_t height;
     enum platform_status (*clear)(void* context, uint8_t gray);
     enum platform_status (*rectangle)(void* context, int32_t x, int32_t y, int32_t width,
                                       int32_t height, uint8_t gray);

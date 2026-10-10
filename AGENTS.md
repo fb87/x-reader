@@ -14,6 +14,9 @@
 - `core/include/platform.h` is the portability boundary. Public core headers must not expose ESP-IDF, FreeRTOS, SDL, Wayland, or zlib types.
 - Keep native files, parsers, framebuffers, and decompression state in checked C userdata; never expose pointers, integer handles, or light userdata to Lua.
 - Bind high-level `library`, `epub`, `canvas`, `display`, `settings`, and `system` services. Input is delivered through the Lua application callback, not polled as raw hardware.
+- Keep Lua scenes retained behind a unique stack: Back pops to the previous stage and must restore its highlight, scroll, focus, and dock selection.
+- Loader, Reading, and Sleep are fullscreen; Launcher, Library, File Manager, and Settings use shared status/content/dock chrome.
+- The physical input contract is Up, Down, and Push; SDL mouse is optional touch. Long Up/Down toggle content and dock focus; long Push toggles Sleep/wake.
 - Do not add a blanket `xr` prefix. Use descriptive module names such as `epub_open`, `display_present`, and `layout_next_page`.
 - Preserve the minimal layout in `docs/implementation-plan.md`; split modules only for a demonstrated ownership or build need.
 
@@ -32,6 +35,7 @@
 - Simulator hot reload replaces the whole VM transactionally; never reload by mutating `package.loaded` in place.
 - On reload failure, keep the old VM running. Snapshots are bounded, acyclic data only and must reject functions, threads, userdata, and metatables.
 - Hot reload is simulator-only; `--watch` enables file watching and `Ctrl+R` requests a manual reload.
+- After every Lua edit, run `nix fmt`, allow the watched simulator to reload, and verify the existing simulator process remains alive before making the next change.
 
 ## Build And Verification
 

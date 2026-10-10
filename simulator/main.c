@@ -4,6 +4,7 @@
 
 #include <SDL.h>
 
+#include <dirent.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -12,17 +13,42 @@
 enum { DEFAULT_INSTRUCTION_LIMIT = 1000000 };
 
 static uint64_t script_stamp(const char* directory) {
-    const char* names[] = {"init.lua", "bookshelf.lua", "reader.lua"};
-    uint64_t stamp = 0U;
-    for (size_t index = 0U; index < sizeof(names) / sizeof(names[0]); ++index) {
+    DIR* stream = opendir(directory);
+    if (stream == NULL) {
+        return 0U;
+    }
+    uint64_t stamp = 1469598103934665603ULL;
+    struct dirent* entry = NULL;
+    while ((entry = readdir(stream)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
         char path[512];
-        const int written = snprintf(path, sizeof(path), "%s/%s", directory, names[index]);
+        const int written = snprintf(path, sizeof(path), "%s/%s", directory, entry->d_name);
+        if (written < 0 || (size_t)written >= sizeof(path)) {
+            continue;
+        }
         struct stat file = {0};
-        if (written >= 0 && (size_t)written < sizeof(path) && stat(path, &file) == 0 &&
-            (uint64_t)file.st_mtime > stamp) {
-            stamp = (uint64_t)file.st_mtime;
+        if (stat(path, &file) != 0) {
+            continue;
+        }
+        if (S_ISDIR(file.st_mode)) {
+            stamp ^= script_stamp(path);
+            stamp *= 1099511628211ULL;
+        } else if (S_ISREG(file.st_mode) &&
+                   (strlen(entry->d_name) > 4U &&
+                    strcmp(entry->d_name + strlen(entry->d_name) - 4U, ".lua") == 0)) {
+            for (const char* character = path; *character != '\0'; ++character) {
+                stamp ^= (uint8_t)*character;
+                stamp *= 1099511628211ULL;
+            }
+            stamp ^= (uint64_t)file.st_mtime;
+            stamp *= 1099511628211ULL;
+            stamp ^= (uint64_t)file.st_size;
+            stamp *= 1099511628211ULL;
         }
     }
+    closedir(stream);
     return stamp;
 }
 

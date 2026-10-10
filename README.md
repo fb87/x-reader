@@ -72,6 +72,7 @@ hardware initialization path. It is not expected to provide a complete reader.
 - [PC simulator](docs/simulator.md)
 - [Development workflow](docs/development.md)
 - [Quality and production readiness](docs/quality.md)
+- [Lua scene architecture](docs/scenes.md)
 
 ## Toolchain Status
 

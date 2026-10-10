@@ -82,6 +82,12 @@ responds to those events.
 - `bookshelf.lua` controls book discovery and selection.
 - `reader.lua` controls page navigation, menus, and reading interaction.
 
+The application is organized as retained Lua scenes. The scene registry and
+stack retain each stage's focus, scroll, selection, and internal mode while a
+different scene is active. Loader, Reading, and Sleep are fullscreen; Launcher,
+Library, File Manager, and Settings use shared status/content/dock chrome.
+See [Lua scenes](scenes.md).
+
 Lua owns application lifecycle policy, reader state, rendering composition,
 menus, navigation, and input decisions. It calls only APIs exposed by
 `lua_binding.c`. It does not own framebuffer memory, files, decompression
@@ -118,6 +124,10 @@ Input is delivered through `event()` rather than exposing a hardware polling
 API. Binding functions validate argument types, ranges, and object generation.
 Native objects use checked userdata; light userdata and integer pointers are
 not exposed. Stale handles fail safely.
+
+The normalized input contract is limited to `up`, `down`, and `push` keys plus
+optional touch events. Lua handles debounce, long-press actions, scene focus,
+and dock navigation. SDL mouse input is converted to touch coordinates.
 
 Lua has no unrestricted filesystem or native-module access. The runtime omits
 unsafe `io`, `os`, and `debug` capabilities and controls script and module

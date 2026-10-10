@@ -25,6 +25,22 @@ function settings.font_scale()
     return 2
 end
 
+function settings.decrease_font_size()
+    if settings.font_size == "large" then
+        settings.font_size = "medium"
+    elseif settings.font_size == "medium" then
+        settings.font_size = "small"
+    end
+end
+
+function settings.increase_font_size()
+    if settings.font_size == "small" then
+        settings.font_size = "medium"
+    elseif settings.font_size == "medium" then
+        settings.font_size = "large"
+    end
+end
+
 function settings.toggle_refresh()
     settings.partial_refresh = not settings.partial_refresh
 end

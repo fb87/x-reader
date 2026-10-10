@@ -9,6 +9,7 @@ The project uses a pinned Nix flake. Initial inputs are:
 - ESP-IDF 5.5.2 for classic ESP32
 - One exact Espressif Lua source revision
 - SDL2 and zlib for the simulator
+- Pillow and the font conversion script for generated font assets
 
 The Lua source is fetched once by Nix with a fixed hash and compiled for both
 firmware and simulator. ESP-IDF Component Manager network access is disabled in
@@ -65,6 +66,10 @@ linked worktrees.
 
 Every code edit must be formatted before compilation and tests. Editors should
 use format-on-save with tools inherited from `nix develop`.
+
+When the simulator runs with `--watch`, every Lua change must be followed by
+`nix fmt` and a hot-reload verification. Do not restart the simulator for a
+Lua-only change; keep the existing process and confirm it remains alive.
 
 ## Commit Hook
 

@@ -119,6 +119,13 @@ static int system_monotonic_ms(lua_State* state) {
     return 1;
 }
 
+static int display_size(lua_State* state) {
+    struct runtime* runtime = runtime_from_upvalue(state);
+    lua_pushinteger(state, runtime->platform.display.width);
+    lua_pushinteger(state, runtime->platform.display.height);
+    return 2;
+}
+
 static void push_runtime_userdata(lua_State* state, struct runtime* runtime) {
     struct runtime** value = lua_newuserdatauv(state, sizeof(*value), 0);
     *value = runtime;
@@ -142,6 +149,9 @@ static void register_services(struct runtime* runtime) {
     push_runtime_userdata(state, runtime);
     lua_pushcclosure(state, display_present, 1);
     lua_setfield(state, -2, "present");
+    push_runtime_userdata(state, runtime);
+    lua_pushcclosure(state, display_size, 1);
+    lua_setfield(state, -2, "size");
     lua_setglobal(state, "display");
 
     lua_newtable(state);
@@ -368,6 +378,11 @@ enum platform_status runtime_step(struct runtime* runtime, const struct platform
     lua_setfield(runtime->state, -2, "y");
     lua_pushinteger(runtime->state, event->button);
     lua_setfield(runtime->state, -2, "button");
+    lua_pushboolean(runtime->state, event->pressed);
+    lua_setfield(runtime->state, -2, "pressed");
+    lua_pushinteger(runtime->state,
+                    (lua_Integer)runtime->platform.monotonic_ms(runtime->platform.context));
+    lua_setfield(runtime->state, -2, "time");
     return call_application(runtime, "event", 1, 0);
 }
 

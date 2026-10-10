@@ -162,6 +162,12 @@ static enum platform_status next_event(void* opaque, struct platform_event* even
     case SDL_KEYDOWN:
         event->type = PLATFORM_EVENT_BUTTON;
         event->button = (int32_t)sdl_event.key.keysym.sym;
+        event->pressed = true;
+        break;
+    case SDL_KEYUP:
+        event->type = PLATFORM_EVENT_BUTTON;
+        event->button = (int32_t)sdl_event.key.keysym.sym;
+        event->pressed = false;
         break;
     case SDL_MOUSEBUTTONDOWN:
         event->type = PLATFORM_EVENT_TOUCH_DOWN;
@@ -236,6 +242,8 @@ enum platform_status sdl_platform_create(struct platform* platform, const char* 
     platform->context = context;
     platform->display = (struct platform_display){
         .context = context,
+        .width = DISPLAY_WIDTH,
+        .height = DISPLAY_HEIGHT,
         .clear = clear_display,
         .rectangle = draw_rectangle,
         .text = draw_text,

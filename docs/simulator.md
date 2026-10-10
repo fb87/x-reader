@@ -67,9 +67,10 @@ hard-coded.
 
 ## Display
 
-The SDL window presents a 540 x 960 logical display and may be resized while
-preserving aspect ratio. The core's packed 4-bit framebuffer is converted to a
-32-bit grayscale SDL texture using nearest-neighbor scaling.
+The SDL window presents a fixed 540 x 960 portrait display. The core's packed
+4-bit framebuffer is converted to a 32-bit grayscale SDL texture using
+nearest-neighbor scaling. The window is not stretched into a landscape aspect
+ratio.
 
 The first version models:
 
@@ -90,6 +91,10 @@ Visual ghosting is not initially simulated.
 - Enter simulates the center action.
 - A documented shortcut simulates power or sleep.
 - `Ctrl+R` requests script reload in watch-enabled development runs.
+
+Keyboard mapping is limited to Up, Down, and Push: arrow Up, arrow Down, and
+Enter. Short presses navigate the active content or dock scope; long Up/Down
+toggle content and dock focus; long Push toggles Sleep/wake.
 
 Display and input use the same orientation transform.
 
