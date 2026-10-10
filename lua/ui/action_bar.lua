@@ -5,8 +5,8 @@ return function(properties)
     local bar = widget.base(properties)
     bar.actions = properties.actions or {}
     bar.selected = properties.selected or 1
-    function bar:draw()
-        chrome.dock(self.actions, self.selected, true)
+    function bar:draw(active)
+        chrome.dock(self.actions, self.selected, active ~= false)
     end
     function bar:move(direction)
         self.selected = ((self.selected - 1 + direction) % #self.actions) + 1

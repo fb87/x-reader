@@ -1,4 +1,5 @@
 local icons = require("icons")
+local layout = require("layout")
 local List = require("ui.list")
 -- watcher verification
 local scene = { id = "settings", chrome = "standard" }

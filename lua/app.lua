@@ -1,6 +1,8 @@
 local chrome = require("chrome")
 local input = require("input")
 local layout = require("layout")
+local ActionBar = require("ui.action_bar")
+local StatusBar = require("ui.status_bar")
 
 local scenes = {
     loader = require("scenes.loader"),
@@ -121,6 +123,18 @@ local function create_application()
         chrome.content = layout.standard().content
     end
 
+    local function prepare_chrome(scene, stage)
+        if stage.status_bar == nil then
+            stage.status_bar = StatusBar({ title = scene.id })
+        end
+        if stage.action_bar == nil then
+            stage.action_bar = ActionBar({ actions = {} })
+        end
+        stage.status_bar.title = scene.title and scene.title(stage) or scene.id
+        stage.action_bar.actions = scene.dock(stage)
+        stage.action_bar.selected = stage.dock_selected or 1
+    end
+
     function application.start(snapshot)
         configure_layout()
         if snapshot and snapshot.screen and scenes[snapshot.screen] then
@@ -180,9 +194,10 @@ local function create_application()
         local scene, stage = context.active()
         canvas.clear(15)
         if scene.chrome == "standard" then
-            chrome.status(scene.title and scene.title(stage) or scene.id, true)
+            prepare_chrome(scene, stage)
+            stage.status_bar:draw()
             scene.draw(stage, chrome.content)
-            chrome.dock(scene.dock(stage), stage.dock_selected or 1, stage.focus_scope == "dock")
+            stage.action_bar:draw(stage.focus_scope == "dock")
         else
             if stage.dock_visible then
                 chrome.status(scene.title and scene.title(stage) or scene.id, true)
