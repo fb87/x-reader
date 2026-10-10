@@ -42,6 +42,7 @@
 - The intended pinned toolchain is Nix, ESP-IDF 5.5.2, C11, clang-format, clang-tidy, and StyLua.
 - After `flake.nix` exists, use `nix build .#firmware`, `nix build .#simulator`, and `nix flake check --no-update-lock-file`.
 - Run the simulator with `nix run .#simulator -- --library ./books`; force Wayland only for testing with `SDL_VIDEODRIVER=wayland`.
+- The simulator defaults `SDCARD_ROOT` to `/home/dao/data/sdcard`; use `--library` only for an explicit test override.
 - Run headless SDL checks with `SDL_VIDEODRIVER=dummy SDL_RENDER_DRIVER=software`.
 - No focused-test command is defined yet. Add and document one when the test harness is created rather than inventing an ad hoc command.
 - Do not run ESP-IDF installers, `pip install`, or network-enabled component resolution inside builds.

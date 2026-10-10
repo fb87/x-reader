@@ -7,6 +7,8 @@ struct runtime;
 
 struct runtime_config {
     const char* script_directory;
+    const char* library_directory;
+    const char* state_directory;
     size_t memory_limit;
     uint32_t instruction_limit;
 };

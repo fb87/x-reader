@@ -23,6 +23,12 @@ enum platform_event_type {
 };
 
 struct font;
+struct zip_archive;
+
+struct platform_archive {
+    struct zip_archive* archive;
+    void* context;
+};
 
 struct platform_event {
     enum platform_event_type type;
@@ -30,6 +36,15 @@ struct platform_event {
     int32_t y;
     int32_t button;
     bool pressed;
+};
+
+enum { PLATFORM_NAME_MAX = 128, PLATFORM_PATH_MAX = 512 };
+
+struct platform_entry {
+    char name[PLATFORM_NAME_MAX];
+    char path[PLATFORM_PATH_MAX];
+    uint64_t size;
+    bool directory;
 };
 
 struct platform_display {
@@ -50,6 +65,12 @@ struct platform {
     enum platform_status (*next_event)(void* context, struct platform_event* event);
     uint64_t (*monotonic_ms)(void* context);
     void (*sleep_ms)(void* context, uint32_t milliseconds);
+    enum platform_status (*list_storage)(void* context, const char* root, const char* relative,
+                                         struct platform_entry* entries, uint32_t capacity,
+                                         uint32_t* count);
+    enum platform_status (*open_archive)(void* context, const char* root, const char* path,
+                                         struct platform_archive* archive);
+    void (*close_archive)(void* context, struct platform_archive* archive);
 };
 
 #endif

@@ -36,7 +36,7 @@ local pages = {
     },
 }
 
-local function wrap_paragraph(paragraph, width, output)
+local function wrap_paragraph(paragraph, width, size, output)
     if paragraph == "" then
         output[#output + 1] = ""
         return
@@ -44,7 +44,7 @@ local function wrap_paragraph(paragraph, width, output)
     local line = ""
     for word in paragraph:gmatch("%S+") do
         local candidate = line == "" and word or line .. " " .. word
-        if line ~= "" and #candidate > width then
+        if line ~= "" and canvas.measure(candidate, size) > width then
             output[#output + 1] = line
             line = word
         else
@@ -56,14 +56,63 @@ local function wrap_paragraph(paragraph, width, output)
     end
 end
 
+local function has_supported_text(text)
+    for _, codepoint in utf8.codes(text) do
+        if
+            (codepoint >= 0x30 and codepoint <= 0x7a)
+            or (codepoint >= 0xc0 and codepoint <= 0x24f)
+            or (codepoint >= 0x1e00 and codepoint <= 0x1eff)
+        then
+            return true
+        end
+    end
+    return false
+end
+
 reader.book = nil
 reader.page = 1
 reader.bookmarks = {}
+reader.document = nil
+reader.content = nil
+reader.error = nil
+reader.spine = nil
+reader.spine_index = 1
+reader.page_count = #pages
 
 function reader.open(book)
     reader.book = book
     reader.page = 1
     reader.bookmarks = {}
+    reader.document = nil
+    reader.content = nil
+    reader.error = nil
+    reader.spine = nil
+    reader.spine_index = 1
+    reader.page_count = #pages
+    if book.path ~= nil then
+        local document, error_message = epub.open(book.path)
+        if document ~= nil then
+            reader.document = document
+            local metadata = epub.metadata(document)
+            local spine = epub.spine(document)
+            book.title = metadata.title ~= nil and metadata.title ~= "" and metadata.title
+                or book.title
+            book.author = metadata.creator ~= nil and metadata.creator or book.author
+            reader.spine = spine
+            reader.page_count = 1
+            reader.load_spine = function(index)
+                reader.spine_index = index
+                reader.page = 1
+                local content, text_error = epub.text(document, index)
+                reader.content = content
+                reader.error = content == nil and (text_error or "Unable to read EPUB content")
+                    or nil
+            end
+            reader.load_spine(1)
+        else
+            reader.error = error_message or "Unable to open EPUB"
+        end
+    end
 end
 
 function reader.close()
@@ -79,14 +128,19 @@ function reader.is_bookmarked()
 end
 
 function reader.next_page()
-    if reader.book ~= nil and reader.page < #pages then
+    if reader.book ~= nil and reader.page < reader.page_count then
         reader.page = reader.page + 1
+    elseif reader.spine ~= nil and reader.spine_index < #reader.spine then
+        reader.load_spine(reader.spine_index + 1)
     end
 end
 
 function reader.previous_page()
     if reader.page > 1 then
         reader.page = reader.page - 1
+    elseif reader.spine ~= nil and reader.spine_index > 1 then
+        reader.load_spine(reader.spine_index - 1)
+        reader.page = reader.page_count
     end
 end
 
@@ -95,17 +149,67 @@ function reader.go_to_page(page)
 end
 
 function reader.progress_width(width)
-    if reader.book == nil or #pages == 0 then
+    if reader.book == nil or reader.page_count == 0 then
         return 0
     end
-    return math.floor(width * reader.page / #pages)
+    return math.floor(width * reader.page / reader.page_count)
 end
 
-function reader.page_lines(scale, limit)
-    local width = scale == 1 and 50 or scale == 2 and 26 or 17
+function reader.chapter_name()
+    if reader.content ~= nil then
+        for line in reader.content:gmatch("[^\n]+") do
+            local text = line:gsub("\194\160", " "):gsub("&nbsp;", " "):match("^%s*(.-)%s*$")
+            if text ~= "" then
+                return text
+            end
+        end
+    end
+    if reader.spine == nil then
+        return "Sample chapter"
+    end
+    local item = reader.spine[reader.spine_index]
+    local href = item and item.href or nil
+    if href == nil or href == "" then
+        return string.format("Chapter %d", reader.spine_index)
+    end
+    local name = href:gsub("[?#].*$", ""):match("([^/]+)$") or href
+    name = name:gsub("%.[^%.]+$", "")
+    return name ~= "" and name or string.format("Chapter %d", reader.spine_index)
+end
+
+function reader.page_lines(scale, limit, max_width)
+    if reader.content ~= nil then
+        local wrapped = {}
+        local pending_break = false
+        for paragraph in (reader.content .. "\n"):gmatch("(.-)\n") do
+            local normalized = paragraph
+                :gsub("\194\160", " ")
+                :gsub("&nbsp;", " ")
+                :gsub("%s+", " ")
+                :match("^%s*(.-)%s*$")
+            if normalized == "" then
+                pending_break = #wrapped > 0
+            elseif has_supported_text(normalized) then
+                if pending_break and wrapped[#wrapped] ~= "" then
+                    wrapped[#wrapped + 1] = ""
+                end
+                wrap_paragraph(normalized, max_width or 452, scale, wrapped)
+                pending_break = false
+            end
+        end
+        local pages_available = math.max(1, math.ceil(#wrapped / limit))
+        reader.page_count = pages_available
+        local first = (reader.page - 1) * limit + 1
+        local result = {}
+        for index = first, math.min(#wrapped, first + limit - 1) do
+            result[#result + 1] = wrapped[index]
+        end
+        return result
+    end
+    local width = max_width or 452
     local wrapped = {}
     for _, paragraph in ipairs(pages[reader.page] or pages[1]) do
-        wrap_paragraph(paragraph, width, wrapped)
+        wrap_paragraph(paragraph, width, scale, wrapped)
         if limit ~= nil and #wrapped >= limit then
             break
         end

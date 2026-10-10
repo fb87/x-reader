@@ -5,6 +5,9 @@ local List = require("ui.list")
 local scene = { id = "settings", chrome = "standard" }
 local categories = { "Reading", "Display", "Storage", "System" }
 local category_icons = { icons.bookmark, icons.circle, icons.folder, icons.book }
+function scene.title(stage)
+    return stage.page == "root" and "Settings" or stage.page .. " Settings"
+end
 function scene.create()
     local rows = {}
     for index, category in ipairs(categories) do
@@ -16,7 +19,7 @@ function scene.create()
         dock_selected = 1,
         page = "root",
         focus_scope = "content",
-        list = List({ rows = rows, selected_id = "settings:Reading", row_height = 75 }),
+        list = List({ rows = rows, selected_id = "settings:Reading", row_height = 84 }),
     }
 end
 function scene.dock()
@@ -60,9 +63,9 @@ function scene.event(stage, event, context)
                 stage.page = "root"
             end
         end
-    elseif stage.page == "root" and event.y >= 90 and event.y < 90 + #categories * 75 then
+    elseif stage.page == "root" and event.y >= 113 and event.y < 113 + #categories * 84 then
         stage.focus_scope = "content"
-        stage.selected = math.max(1, math.min(4, math.floor((event.y - 90) / 75) + 1))
+        stage.selected = math.max(1, math.min(4, math.floor((event.y - 113) / 84) + 1))
         stage.list.selected_id = "settings:" .. categories[stage.selected]
         stage.page = categories[stage.selected]
     end
@@ -71,7 +74,8 @@ function scene.draw(stage)
     if stage.page == "root" then
         stage.list.selected_id = "settings:" .. categories[stage.selected]
         stage.list.active = stage.focus_scope == "content"
-        stage.list:layout({ x = 24, y = 90, width = 492, height = layout.content_height(90, 40) })
+        canvas.text(24, 60, "Settings", 3, 0)
+        stage.list:layout({ x = 24, y = 113, width = 492, height = layout.content_height(113, 40) })
         stage.list:draw()
     else
         canvas.text(24, 92, "Settings for " .. stage.page, 2, 0)

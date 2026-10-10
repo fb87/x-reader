@@ -17,7 +17,7 @@
             version = "0.1.0";
             src = self;
             nativeBuildInputs = [ pkgs.cmake pkgs.ninja pkgs.pkg-config ];
-            buildInputs = [ pkgs.SDL2 pkgs.lua5_4 ];
+            buildInputs = [ pkgs.SDL2 pkgs.lua5_4 pkgs.zlib ];
             cmakeFlags = [ "-G" "Ninja" ];
           };
           default = self.packages.${system}.simulator;
@@ -46,7 +46,7 @@
               pkgs.stylua
               (pkgs.python3.withPackages (pythonPackages: [ pythonPackages.pillow ]))
             ];
-            buildInputs = [ pkgs.SDL2 pkgs.lua5_4 ];
+            buildInputs = [ pkgs.SDL2 pkgs.lua5_4 pkgs.zlib ];
           };
           quality = pkgs.mkShell {
             packages = [ pkgs.clang-tools pkgs.findutils pkgs.stylua ];

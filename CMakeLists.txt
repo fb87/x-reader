@@ -30,6 +30,8 @@ find_package(Lua 5.4 REQUIRED)
 add_library(core STATIC
     core/src/font.c
     core/src/runtime.c
+    core/src/zip.c
+    core/src/epub.c
 )
 target_include_directories(core PUBLIC core/include)
 target_include_directories(core PRIVATE ${LUA_INCLUDE_DIR})
@@ -40,7 +42,11 @@ add_executable(x-reader-sim
     platform/sdl/platform.c
 )
 target_include_directories(x-reader-sim PRIVATE . core/include ${LUA_INCLUDE_DIR})
-target_link_libraries(x-reader-sim PRIVATE core SDL2::SDL2 ${LUA_LIBRARIES})
+target_link_libraries(x-reader-sim PRIVATE core SDL2::SDL2 ${LUA_LIBRARIES} z)
+
+add_executable(zip-probe simulator/zip_probe.c)
+target_include_directories(zip-probe PRIVATE core/include)
+target_link_libraries(zip-probe PRIVATE core z)
 
 install(TARGETS x-reader-sim RUNTIME DESTINATION bin)
 install(DIRECTORY lua/ DESTINATION share/x-reader/lua)

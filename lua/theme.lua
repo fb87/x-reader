@@ -1,12 +1,12 @@
 return {
     color = {
-        background = 15,
+        background = 14,
         surface = 14,
-        selected = 0,
-        selected_text = 15,
+        selected = 12,
+        selected_text = 0,
         text = 0,
-        secondary = 6,
-        divider = 8,
+        secondary = 5,
+        divider = 12,
         disabled = 10,
     },
     spacing = { small = 8, medium = 16, large = 24 },

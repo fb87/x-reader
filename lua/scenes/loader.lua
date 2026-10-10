@@ -1,4 +1,5 @@
 local scene = { id = "loader", chrome = "fullscreen" }
+local theme = require("theme")
 function scene.create()
     return { started = 0 }
 end
@@ -15,7 +16,7 @@ function scene.update(stage, now, context)
     end
 end
 function scene.draw()
-    canvas.clear(15)
+    canvas.clear(theme.color.background)
     canvas.rectangle(210, 220, 120, 120, 2)
     canvas.text(126, 400, "X-Reader", 3, 0)
     canvas.text(158, 458, "EPUB reader for ESP32", 1, 4)

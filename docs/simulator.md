@@ -102,8 +102,17 @@ Display and input use the same orientation transform.
 
 Host paths are explicit so tests do not depend on a user's home directory:
 
+The simulator takes its microSD root from `SDCARD_ROOT`. If unset, it defaults
+to `/home/dao/data/sdcard`. Override it explicitly for tests when needed:
+
 ```bash
 nix run .#simulator -- --library ./books --state ./build/sim-state
+```
+
+The equivalent environment configuration is:
+
+```bash
+SDCARD_ROOT=/home/dao/data/sdcard nix run .#simulator
 ```
 
 The library path represents the microSD book directory. The state path stores

@@ -187,6 +187,11 @@ Platform storage
 Every boundary uses bounded buffers. No interface requires loading a whole
 book or an unbounded chapter into memory.
 
+The first parser implementation is the bounded stored-entry ZIP central-directory
+index in `core/src/zip.c`. It intentionally stops before DEFLATE and EPUB
+package parsing; progress and remaining validation work are tracked in
+`docs/parser.md`.
+
 ## Phase 6: Simulator Behavior
 
 - Expand the packed 4-bit framebuffer into an SDL `XRGB8888` texture.

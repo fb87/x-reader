@@ -3,6 +3,7 @@ local input = require("input")
 local layout = require("layout")
 local ActionBar = require("ui.action_bar")
 local StatusBar = require("ui.status_bar")
+local theme = require("theme")
 
 local scenes = {
     loader = require("scenes.loader"),
@@ -85,7 +86,7 @@ local function create_application()
 
     function context.pop()
         if #stack <= 1 then
-            if active_id() == "reading" then
+            if active_id() ~= "launcher" then
                 context.replace("launcher")
             end
             return
@@ -192,15 +193,17 @@ local function create_application()
 
     function application.draw()
         local scene, stage = context.active()
-        canvas.clear(15)
+        canvas.clear(theme.color.background)
         if scene.chrome == "standard" then
             prepare_chrome(scene, stage)
             stage.status_bar:draw()
             scene.draw(stage, chrome.content)
             stage.action_bar:draw(stage.focus_scope == "dock")
         else
+            if scene.status then
+                chrome.status(scene.title and scene.title(stage) or scene.id, scene.status_title)
+            end
             if stage.dock_visible then
-                chrome.status(scene.title and scene.title(stage) or scene.id, true)
                 scene.draw(stage, chrome.content)
                 if stage.action_bar then
                     stage.action_bar.selected = stage.dock_selected or 1

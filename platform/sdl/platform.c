@@ -1,11 +1,17 @@
 #include "platform/sdl/platform.h"
 #include "font.h"
+#include "zip.h"
 
 #include <SDL.h>
 
+#include <zlib.h>
+
+#include <dirent.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 enum {
     DISPLAY_WIDTH = 540,
@@ -20,6 +26,11 @@ struct sdl_context {
     uint8_t* framebuffer;
     uint32_t* pixels;
     uint64_t started;
+};
+
+struct host_archive {
+    FILE* file;
+    struct zip_archive* archive;
 };
 
 static uint8_t* pixel_at(struct sdl_context* context, int32_t x, int32_t y) {
@@ -201,6 +212,154 @@ static void sleep_ms(void* opaque, uint32_t milliseconds) {
     SDL_Delay(milliseconds);
 }
 
+static int entry_compare(const void* left, const void* right) {
+    const struct platform_entry* a = left;
+    const struct platform_entry* b = right;
+    if (a->directory != b->directory)
+        return a->directory ? -1 : 1;
+    return strcmp(a->name, b->name);
+}
+
+static enum platform_status list_storage(void* opaque, const char* root, const char* relative,
+                                         struct platform_entry* entries, uint32_t capacity,
+                                         uint32_t* count) {
+    (void)opaque;
+    if (root == NULL || relative == NULL || entries == NULL || count == NULL) {
+        return PLATFORM_INVALID_ARGUMENT;
+    }
+    char directory[PLATFORM_PATH_MAX];
+    const int written = snprintf(directory, sizeof(directory), "%s/%s", root, relative);
+    if (written < 0 || (size_t)written >= sizeof(directory))
+        return PLATFORM_INVALID_ARGUMENT;
+    DIR* stream = opendir(directory);
+    if (stream == NULL)
+        return PLATFORM_ERROR;
+    uint32_t found = 0U;
+    struct dirent* item = NULL;
+    while ((item = readdir(stream)) != NULL && found < capacity) {
+        if (strcmp(item->d_name, ".") == 0 || strcmp(item->d_name, "..") == 0)
+            continue;
+        char full_path[PLATFORM_PATH_MAX];
+        const int full_written =
+            snprintf(full_path, sizeof(full_path), "%s/%s", directory, item->d_name);
+        if (full_written < 0 || (size_t)full_written >= sizeof(full_path))
+            continue;
+        struct stat file = {0};
+        if (stat(full_path, &file) != 0)
+            continue;
+        const bool is_directory = S_ISDIR(file.st_mode);
+        if (!is_directory && strstr(item->d_name, ".epub") == NULL)
+            continue;
+        const size_t name_length = strlen(item->d_name);
+        if (name_length >= sizeof(entries[found].name))
+            continue;
+        struct platform_entry* entry = &entries[found++];
+        memcpy(entry->name, item->d_name, name_length + 1U);
+        if (relative[0] == '\0')
+            snprintf(entry->path, sizeof(entry->path), "%s", item->d_name);
+        else
+            snprintf(entry->path, sizeof(entry->path), "%s/%s", relative, item->d_name);
+        entry->size = is_directory ? 0U : (uint64_t)file.st_size;
+        entry->directory = is_directory;
+    }
+    closedir(stream);
+    qsort(entries, found, sizeof(*entries), entry_compare);
+    *count = found;
+    return PLATFORM_OK;
+}
+
+static enum zip_status archive_read_at(void* context, uint64_t offset, void* buffer,
+                                       size_t length) {
+    FILE* file = context;
+    return fseek(file, (long)offset, SEEK_SET) == 0 && fread(buffer, 1U, length, file) == length
+               ? ZIP_OK
+               : ZIP_IO_ERROR;
+}
+
+static enum zip_status archive_inflate(void* context, uint64_t offset, size_t compressed_size,
+                                       void* output, size_t output_size) {
+    FILE* file = context;
+    uint8_t* compressed = malloc(compressed_size == 0U ? 1U : compressed_size);
+    if (compressed == NULL)
+        return ZIP_OUT_OF_MEMORY;
+    if (archive_read_at(file, offset, compressed, compressed_size) != ZIP_OK) {
+        free(compressed);
+        return ZIP_IO_ERROR;
+    }
+    z_stream stream = {0};
+    stream.next_in = compressed;
+    stream.avail_in = (uInt)compressed_size;
+    stream.next_out = output;
+    stream.avail_out = (uInt)output_size;
+    const int result =
+        inflateInit2(&stream, -MAX_WBITS) == Z_OK ? inflate(&stream, Z_FINISH) : Z_STREAM_ERROR;
+    const bool valid = result == Z_STREAM_END && stream.total_out == output_size;
+    inflateEnd(&stream);
+    free(compressed);
+    return valid ? ZIP_OK : ZIP_MALFORMED;
+}
+
+static enum platform_status open_archive(void* opaque, const char* root, const char* path,
+                                         struct platform_archive* result) {
+    (void)opaque;
+    if (root == NULL || path == NULL || result == NULL)
+        return PLATFORM_INVALID_ARGUMENT;
+    char full_path[PLATFORM_PATH_MAX];
+    const int written = snprintf(full_path, sizeof(full_path), "%s/%s", root, path);
+    if (written < 0 || (size_t)written >= sizeof(full_path))
+        return PLATFORM_INVALID_ARGUMENT;
+    FILE* file = fopen(full_path, "rb");
+    if (file == NULL || fseek(file, 0, SEEK_END) != 0) {
+        if (file != NULL)
+            fclose(file);
+        return PLATFORM_ERROR;
+    }
+    const long end = ftell(file);
+    if (end < 0) {
+        fclose(file);
+        return PLATFORM_ERROR;
+    }
+    struct host_archive* host = calloc(1U, sizeof(*host));
+    if (host == NULL) {
+        fclose(file);
+        return PLATFORM_ERROR;
+    }
+    host->file = file;
+    const struct zip_source source = {
+        .context = file,
+        .size = (uint64_t)end,
+        .read_at = archive_read_at,
+        .inflate_raw = archive_inflate,
+    };
+    const struct zip_limits limits = {
+        .max_entries = 4096U,
+        .max_name_bytes = 1024U,
+        .max_entry_uncompressed_bytes = 16U * 1024U * 1024U,
+        .max_total_uncompressed_bytes = 128U * 1024U * 1024U,
+        .max_read_all_bytes = 4U * 1024U * 1024U,
+    };
+    if (zip_open(&source, &limits, &host->archive) != ZIP_OK) {
+        fclose(file);
+        free(host);
+        return PLATFORM_ERROR;
+    }
+    result->archive = host->archive;
+    result->context = host;
+    return PLATFORM_OK;
+}
+
+static void close_archive(void* opaque, struct platform_archive* archive) {
+    (void)opaque;
+    if (archive == NULL || archive->context == NULL)
+        return;
+    struct host_archive* host = archive->context;
+    zip_close(host->archive);
+    fclose(host->file);
+    free(host);
+    archive->archive = NULL;
+    archive->context = NULL;
+}
+
 enum platform_status sdl_platform_create(struct platform* platform, const char* title) {
     if (platform == NULL || title == NULL) {
         return PLATFORM_INVALID_ARGUMENT;
@@ -252,6 +411,10 @@ enum platform_status sdl_platform_create(struct platform* platform, const char* 
     platform->next_event = next_event;
     platform->monotonic_ms = monotonic_ms;
     platform->sleep_ms = sleep_ms;
+    platform->list_storage = list_storage;
+    platform->open_archive = open_archive;
+    platform->close_archive = close_archive;
+    platform->list_storage = list_storage;
     return PLATFORM_OK;
 }
 

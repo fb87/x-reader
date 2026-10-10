@@ -1,4 +1,5 @@
 #include "runtime.h"
+#include "epub.h"
 #include "font.h"
 
 #include <lauxlib.h>
@@ -19,9 +20,17 @@ struct runtime {
     lua_State* state;
     struct platform platform;
     struct memory_budget memory;
+    const char* library_directory;
+    const char* state_directory;
     char error[256];
     uint32_t instruction_limit;
     uint32_t instructions;
+};
+
+struct epub_userdata {
+    struct runtime* runtime;
+    struct platform_archive archive;
+    struct epub_book* book;
 };
 
 static void* bounded_allocator(void* opaque, void* pointer, size_t old_size, size_t new_size) {
@@ -183,6 +192,141 @@ static int system_monotonic_ms(lua_State* state) {
     return 1;
 }
 
+static int system_library_root(lua_State* state) {
+    struct runtime* runtime = runtime_from_upvalue(state);
+    lua_pushstring(state, runtime->library_directory);
+    return 1;
+}
+
+static int system_state_root(lua_State* state) {
+    struct runtime* runtime = runtime_from_upvalue(state);
+    lua_pushstring(state, runtime->state_directory);
+    return 1;
+}
+
+static int library_list(lua_State* state) {
+    struct runtime* runtime = runtime_from_upvalue(state);
+    const char* relative = luaL_optstring(state, 1, "");
+    const uint32_t capacity = 128U;
+    struct platform_entry* entries = calloc(capacity, sizeof(*entries));
+    if (entries == NULL)
+        return luaL_error(state, "library list allocation failed");
+    uint32_t count = 0U;
+    if (runtime->platform.list_storage == NULL)
+        return luaL_error(state, "storage service unavailable");
+    const enum platform_status status = runtime->platform.list_storage(
+        runtime->platform.context, runtime->library_directory, relative, entries, capacity, &count);
+    if (status != PLATFORM_OK) {
+        free(entries);
+        lua_pushnil(state);
+        lua_pushliteral(state, "library list failed");
+        return 2;
+    }
+    lua_createtable(state, (int)count, 0);
+    for (uint32_t index = 0U; index < count; ++index) {
+        lua_createtable(state, 0, 4);
+        lua_pushstring(state, entries[index].name);
+        lua_setfield(state, -2, "name");
+        lua_pushstring(state, entries[index].path);
+        lua_setfield(state, -2, "path");
+        lua_pushinteger(state, (lua_Integer)entries[index].size);
+        lua_setfield(state, -2, "size");
+        lua_pushboolean(state, entries[index].directory);
+        lua_setfield(state, -2, "directory");
+        lua_seti(state, -2, (lua_Integer)index + 1);
+    }
+    free(entries);
+    return 1;
+}
+
+static struct epub_userdata* check_epub(lua_State* state, int index) {
+    return luaL_checkudata(state, index, "reader.epub");
+}
+
+static int epub_gc(lua_State* state) {
+    struct epub_userdata* value = check_epub(state, 1);
+    if (value->book != NULL)
+        epub_close(value->book);
+    if (value->runtime != NULL && value->runtime->platform.close_archive != NULL)
+        value->runtime->platform.close_archive(value->runtime->platform.context, &value->archive);
+    value->book = NULL;
+    value->runtime = NULL;
+    return 0;
+}
+
+static int epub_open_lua(lua_State* state) {
+    struct runtime* runtime = runtime_from_upvalue(state);
+    const char* path = luaL_checkstring(state, 1);
+    if (runtime->platform.open_archive == NULL)
+        return luaL_error(state, "EPUB service unavailable");
+    struct epub_userdata* value = lua_newuserdatauv(state, sizeof(*value), 0);
+    memset(value, 0, sizeof(*value));
+    value->runtime = runtime;
+    luaL_getmetatable(state, "reader.epub");
+    lua_setmetatable(state, -2);
+    if (runtime->platform.open_archive(runtime->platform.context, runtime->library_directory, path,
+                                       &value->archive) != PLATFORM_OK ||
+        epub_open(value->archive.archive, NULL, &value->book) != EPUB_OK) {
+        epub_gc(state);
+        lua_pop(state, 1);
+        lua_pushnil(state);
+        lua_pushliteral(state, "unable to open EPUB");
+        return 2;
+    }
+    return 1;
+}
+
+static int epub_metadata_lua(lua_State* state) {
+    struct epub_userdata* value = check_epub(state, 1);
+    lua_newtable(state);
+    lua_pushstring(state, epub_title(value->book));
+    lua_setfield(state, -2, "title");
+    lua_pushstring(state, epub_creator(value->book));
+    lua_setfield(state, -2, "creator");
+    lua_pushstring(state, epub_opf_path(value->book));
+    lua_setfield(state, -2, "opf");
+    return 1;
+}
+
+static int epub_spine_lua(lua_State* state) {
+    struct epub_userdata* value = check_epub(state, 1);
+    const uint32_t count = epub_spine_count(value->book);
+    lua_createtable(state, (int)count, 0);
+    for (uint32_t index = 0U; index < count; ++index) {
+        struct epub_spine_item item;
+        if (epub_spine_get(value->book, index, &item) != EPUB_OK)
+            continue;
+        lua_newtable(state);
+        lua_pushstring(state, item.id);
+        lua_setfield(state, -2, "id");
+        lua_pushstring(state, item.href);
+        lua_setfield(state, -2, "href");
+        lua_pushstring(state, item.media_type);
+        lua_setfield(state, -2, "media_type");
+        lua_seti(state, -2, (lua_Integer)index + 1);
+    }
+    return 1;
+}
+
+static int epub_text_lua(lua_State* state) {
+    struct epub_userdata* value = check_epub(state, 1);
+    const lua_Integer requested = luaL_checkinteger(state, 2);
+    if (requested < 1 || requested > INT32_MAX)
+        return luaL_error(state, "invalid spine index");
+    uint8_t* text = NULL;
+    size_t length = 0U;
+    const enum epub_status status =
+        epub_spine_text(value->book, (uint32_t)requested - 1U, &text, &length);
+    if (status != EPUB_OK) {
+        lua_pushnil(state);
+        lua_pushliteral(state, "unable to read spine item");
+        return 2;
+    }
+    lua_pushlstring(state, (const char*)text, length);
+    epub_text_free(text);
+    return 1;
+}
+
 static int display_size(lua_State* state) {
     struct runtime* runtime = runtime_from_upvalue(state);
     lua_pushinteger(state, runtime->platform.display.width);
@@ -225,7 +369,35 @@ static void register_services(struct runtime* runtime) {
     push_runtime_userdata(state, runtime);
     lua_pushcclosure(state, system_monotonic_ms, 1);
     lua_setfield(state, -2, "monotonic_ms");
+    push_runtime_userdata(state, runtime);
+    lua_pushcclosure(state, system_library_root, 1);
+    lua_setfield(state, -2, "library_root");
+    push_runtime_userdata(state, runtime);
+    lua_pushcclosure(state, system_state_root, 1);
+    lua_setfield(state, -2, "state_root");
     lua_setglobal(state, "system");
+
+    lua_newtable(state);
+    push_runtime_userdata(state, runtime);
+    lua_pushcclosure(state, library_list, 1);
+    lua_setfield(state, -2, "list");
+    lua_setglobal(state, "library");
+
+    luaL_newmetatable(state, "reader.epub");
+    lua_pushcfunction(state, epub_gc);
+    lua_setfield(state, -2, "__gc");
+    lua_pop(state, 1);
+    lua_newtable(state);
+    push_runtime_userdata(state, runtime);
+    lua_pushcclosure(state, epub_open_lua, 1);
+    lua_setfield(state, -2, "open");
+    lua_pushcfunction(state, epub_metadata_lua);
+    lua_setfield(state, -2, "metadata");
+    lua_pushcfunction(state, epub_spine_lua);
+    lua_setfield(state, -2, "spine");
+    lua_pushcfunction(state, epub_text_lua);
+    lua_setfield(state, -2, "text");
+    lua_setglobal(state, "epub");
 }
 
 static void restrict_libraries(lua_State* state) {
@@ -356,6 +528,8 @@ static enum platform_status create_runtime(struct runtime** result,
         return PLATFORM_ERROR;
     }
     runtime->platform = *platform;
+    runtime->library_directory = config->library_directory;
+    runtime->state_directory = config->state_directory;
     runtime->instruction_limit = config->instruction_limit;
     runtime->memory.limit = config->memory_limit;
     runtime->state = lua_newstate(bounded_allocator, &runtime->memory);

@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -54,6 +55,8 @@ static uint64_t script_stamp(const char* directory) {
 
 int main(int argc, char** argv) {
     const char* script_directory = "lua";
+    const char* library_directory = NULL;
+    const char* state_directory = NULL;
     bool self_test = false;
     bool watch = false;
     for (int argument = 1; argument < argc; ++argument) {
@@ -63,10 +66,34 @@ int main(int argc, char** argv) {
             watch = true;
         } else if (strcmp(argv[argument], "--lua") == 0 && argument + 1 < argc) {
             script_directory = argv[++argument];
+        } else if (strcmp(argv[argument], "--library") == 0 && argument + 1 < argc) {
+            library_directory = argv[++argument];
+        } else if (strcmp(argv[argument], "--state") == 0 && argument + 1 < argc) {
+            state_directory = argv[++argument];
         } else {
-            fprintf(stderr, "usage: %s [--lua DIRECTORY] [--watch|--self-test]\n", argv[0]);
+            fprintf(stderr,
+                    "usage: %s [--lua DIRECTORY] [--library DIRECTORY] [--state DIRECTORY] "
+                    "[--watch|--self-test]\n",
+                    argv[0]);
             return 2;
         }
+    }
+
+    char default_library[512];
+    char default_state[512];
+    const char* home = getenv("HOME");
+    const char* sdcard_root = getenv("SDCARD_ROOT");
+    if (library_directory == NULL) {
+        const int written = snprintf(default_library, sizeof(default_library), "%s",
+                                     sdcard_root == NULL ? "/home/dao/data/sdcard" : sdcard_root);
+        library_directory =
+            written >= 0 && (size_t)written < sizeof(default_library) ? default_library : ".";
+    }
+    if (state_directory == NULL) {
+        const int written = snprintf(default_state, sizeof(default_state),
+                                     "%s/.local/state/x-reader", home == NULL ? "." : home);
+        state_directory =
+            written >= 0 && (size_t)written < sizeof(default_state) ? default_state : ".";
     }
 
     struct platform platform = {0};
@@ -77,6 +104,8 @@ int main(int argc, char** argv) {
     struct runtime* runtime = NULL;
     const struct runtime_config config = {
         .script_directory = script_directory,
+        .library_directory = library_directory,
+        .state_directory = state_directory,
         .memory_limit = 1024U * 1024U,
         .instruction_limit = DEFAULT_INSTRUCTION_LIMIT,
     };

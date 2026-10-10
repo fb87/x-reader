@@ -3,6 +3,9 @@ local icons = require("icons")
 local layout = require("layout")
 local List = require("ui.list")
 local scene = { id = "library", chrome = "standard" }
+function scene.title()
+    return "Library"
+end
 function scene.create()
     local rows = {}
     for index, book in ipairs(bookshelf.books) do
@@ -18,7 +21,7 @@ function scene.create()
         dock_selected = 1,
         scroll = 0,
         focus_scope = "content",
-        list = List({ rows = rows, selected_id = "book:1", row_height = 75 }),
+        list = List({ rows = rows, selected_id = "book:1", row_height = 84 }),
     }
 end
 function scene.dock()
@@ -29,6 +32,9 @@ function scene.dock()
     }
 end
 function scene.move(stage, direction)
+    if #bookshelf.books == 0 then
+        return
+    end
     stage.selected = ((stage.selected - 1 + direction) % #bookshelf.books) + 1
     stage.list.selected_id = "book:" .. tostring(stage.selected)
     stage.list.page = math.floor(
@@ -38,11 +44,15 @@ function scene.move(stage, direction)
     stage.list.active = stage.focus_scope == "content"
 end
 function scene.activate_content(stage, context)
-    context.push("reading", { book = bookshelf.books[stage.selected] })
+    if #bookshelf.books > 0 then
+        context.push("reading", { book = bookshelf.books[stage.selected] })
+    end
 end
 function scene.activate_dock(stage, context)
     if stage.dock_selected == 1 then
-        context.push("reading", { book = bookshelf.books[stage.selected] })
+        if #bookshelf.books > 0 then
+            context.push("reading", { book = bookshelf.books[stage.selected] })
+        end
     elseif stage.dock_selected == 3 then
         context.pop()
     end
@@ -70,24 +80,27 @@ function scene.event(stage, event, context)
             stage.selected = math.min(#bookshelf.books, stage.selected + page_size)
         end
         stage.list.page = math.floor((stage.selected - 1) / page_size) + 1
-    elseif event.y >= 90 and event.y < 90 + #bookshelf.books * 75 then
+    elseif event.y >= 119 and event.y < 119 + #bookshelf.books * stage.list.row_height then
         stage.focus_scope = "content"
-        stage.selected =
-            math.max(1, math.min(#bookshelf.books, math.floor((event.y - 90) / 75) + 1))
+        stage.selected = math.max(
+            1,
+            math.min(#bookshelf.books, math.floor((event.y - 119) / stage.list.row_height) + 1)
+        )
         stage.list.page = math.floor((stage.selected - 1) / (stage.list.page_size or 1)) + 1
     end
 end
 function scene.draw(stage)
     stage.list.selected_id = "book:" .. tostring(stage.selected)
+    canvas.text(24, 60, "Library", 3, 0)
+    stage.list:layout({ x = 20, y = 119, width = 500, height = layout.content_height(119, 24) })
     stage.list.page = math.floor(
         (stage.selected - 1)
             / math.max(1, math.floor(stage.list.bounds.height / stage.list.row_height))
     ) + 1
-    stage.list:layout({ x = 20, y = 90, width = 500, height = layout.content_height(90, 70) })
     stage.list:draw()
     canvas.text(
         210,
-        810,
+        layout.standard().dock.y - 28,
         "Page " .. tostring(stage.list.page) .. " / " .. tostring(stage.list.page_count),
         1,
         5

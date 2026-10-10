@@ -2,12 +2,31 @@ local layout = require("layout")
 local theme = require("theme")
 local widget = require("ui.widget")
 
+local function truncate_text(text, size, width)
+    local suffix = "..."
+    if canvas.measure(text, size) <= width then
+        return text
+    end
+    local length = #text
+    while length > 0 and canvas.measure(text:sub(1, length) .. suffix, size) > width do
+        length = length - 1
+        while length > 0 do
+            local byte = text:byte(length)
+            if byte < 128 or byte >= 192 then
+                break
+            end
+            length = length - 1
+        end
+    end
+    return text:sub(1, length) .. suffix
+end
+
 return function(properties)
     local list = widget.base(properties)
     list.rows = properties.rows or {}
     list.selected_id = properties.selected_id
     list.active = properties.active ~= false
-    list.row_height = properties.row_height or 96
+    list.row_height = properties.row_height or 84
     list.page = 1
     list.on_activate = properties.on_activate
     function list:move(direction)
@@ -50,33 +69,49 @@ return function(properties)
                 height = self.row_height,
             }
             local selected = self.active and row.id == self.selected_id
-            canvas.rectangle(
-                bounds.x,
-                bounds.y,
-                bounds.width,
-                bounds.height,
-                selected and theme.color.selected or theme.color.surface
-            )
-            local text_gray = selected and theme.color.selected_text or theme.color.text
-            if row.icon then
-                canvas.text(
-                    bounds.x + 24,
-                    layout.text_y(bounds, row.icon, 6),
-                    row.icon,
-                    6,
-                    text_gray
+            if selected then
+                canvas.rectangle(
+                    bounds.x,
+                    bounds.y - 1,
+                    bounds.width,
+                    bounds.height + 1,
+                    theme.color.selected
                 )
             end
+            local text_gray = selected and theme.color.selected_text or theme.color.text
             local text_x = bounds.x + (row.icon and 88 or 24)
-            if row.subtitle then
-                local text_y = layout.text_group_y(bounds, {
-                    { text = row.title, size = 2 },
-                    { text = row.subtitle, size = 1 },
+            local text_width = bounds.width - (text_x - bounds.x) - (row.trailing and 96 or 16)
+            local title = truncate_text(row.title, 2, text_width)
+            local subtitle = row.subtitle
+                    and row.subtitle ~= ""
+                    and truncate_text(row.subtitle, 1, text_width)
+                or nil
+            local text_y
+            if subtitle then
+                text_y = layout.text_group_y(bounds, {
+                    { text = title, size = 2 },
+                    { text = subtitle, size = 1 },
                 }, 4)
-                canvas.text(text_x, text_y[1], row.title, 2, text_gray)
-                canvas.text(text_x, text_y[2], row.subtitle, 1, text_gray)
             else
-                canvas.text(text_x, layout.text_y(bounds, row.title, 2), row.title, 2, text_gray)
+                text_y = { layout.text_y(bounds, title, 2) }
+            end
+            if row.icon then
+                local icon_y = layout.text_y(bounds, row.icon, 6)
+                if subtitle then
+                    local _, _, title_top, title_bottom = canvas.measure(title, 2)
+                    local _, _, subtitle_top, subtitle_bottom = canvas.measure(subtitle, 1)
+                    local visual_top = text_y[1] + title_top
+                    local visual_bottom = text_y[2] + subtitle_bottom
+                    local _, icon_height, icon_top = canvas.measure(row.icon, 6)
+                    icon_y = math.floor((visual_top + visual_bottom - icon_height) / 2 - icon_top)
+                end
+                canvas.text(bounds.x + 24, icon_y, row.icon, 6, text_gray)
+            end
+            if subtitle then
+                canvas.text(text_x, text_y[1], title, 2, text_gray)
+                canvas.text(text_x, text_y[2], subtitle, 1, text_gray)
+            else
+                canvas.text(text_x, text_y[1], title, 2, text_gray)
             end
             if row.trailing then
                 canvas.text(
@@ -85,6 +120,15 @@ return function(properties)
                     row.trailing,
                     1,
                     text_gray
+                )
+            end
+            if index < last and not selected then
+                canvas.rectangle(
+                    bounds.x + 12,
+                    bounds.y + bounds.height - 1,
+                    bounds.width - 24,
+                    1,
+                    theme.color.divider
                 )
             end
         end
