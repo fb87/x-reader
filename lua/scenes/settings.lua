@@ -4,17 +4,19 @@ local List = require("ui.list")
 -- watcher verification
 local scene = { id = "settings", chrome = "standard" }
 local categories = { "Reading", "Display", "Storage", "System" }
+local category_icons = { icons.bookmark, icons.circle, icons.folder, icons.book }
 function scene.create()
     local rows = {}
     for index, category in ipairs(categories) do
-        rows[index] = { id = "settings:" .. category, title = category }
+        rows[index] =
+            { id = "settings:" .. category, title = category, icon = category_icons[index] }
     end
     return {
         selected = 1,
         dock_selected = 1,
         page = "root",
         focus_scope = "content",
-        list = List({ rows = rows, selected_id = "settings:Reading", row_height = 130 }),
+        list = List({ rows = rows, selected_id = "settings:Reading", row_height = 75 }),
     }
 end
 function scene.dock()
@@ -48,7 +50,7 @@ function scene.event(stage, event, context)
     if event.kind ~= "touch" or event.phase ~= "up" then
         return
     end
-    if event.y >= 880 then
+    if event.y >= layout.standard().dock.y then
         stage.focus_scope = "dock"
         stage.dock_selected = math.floor(event.x / 180) + 1
         if stage.dock_selected == 1 then
@@ -58,9 +60,9 @@ function scene.event(stage, event, context)
                 stage.page = "root"
             end
         end
-    elseif stage.page == "root" and event.y >= 90 and event.y < 650 then
+    elseif stage.page == "root" and event.y >= 90 and event.y < 90 + #categories * 75 then
         stage.focus_scope = "content"
-        stage.selected = math.max(1, math.min(4, math.floor((event.y - 90) / 130) + 1))
+        stage.selected = math.max(1, math.min(4, math.floor((event.y - 90) / 75) + 1))
         stage.list.selected_id = "settings:" .. categories[stage.selected]
         stage.page = categories[stage.selected]
     end

@@ -35,7 +35,7 @@ function scene.activate_dock(stage, context)
     end
 end
 function scene.event(stage, event, context)
-    if event.kind == "touch" and event.phase == "up" and event.y >= 880 then
+    if event.kind == "touch" and event.phase == "up" and event.y >= layout.standard().dock.y then
         stage.dock_selected = math.floor(event.x / 180) + 1
         if stage.dock_selected == 3 then
             context.pop()

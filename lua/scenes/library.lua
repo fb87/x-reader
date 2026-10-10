@@ -51,7 +51,7 @@ function scene.event(stage, event, context)
     if event.kind ~= "touch" or event.phase ~= "up" then
         return
     end
-    if event.y >= 880 then
+    if event.y >= layout.standard().dock.y then
         stage.focus_scope = "dock"
         stage.dock_selected = math.floor(event.x / 180) + 1
         if stage.dock_selected == 1 then

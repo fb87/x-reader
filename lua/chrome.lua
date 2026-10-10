@@ -1,16 +1,44 @@
 local layout = require("layout")
+local icons = require("icons")
 local chrome = {}
 -- The simulator watcher reloads this module after every Lua edit.
 
 chrome.content = layout.standard().content
 
-function chrome.status(title)
+function chrome.status(_)
     local area = layout.standard().status
+    local battery_width = canvas.measure("95%", 1)
     canvas.rectangle(area.x, area.y, area.width, area.height, 14)
     canvas.rectangle(area.x, area.y + area.height - 1, area.width, 1, 8)
-    canvas.text(layout.scale_x(18), layout.scale_y(18), "10:27", 1, 0)
-    canvas.text(layout.scale_x(210), layout.scale_y(18), title, 1, 0)
-    canvas.text(layout.scale_x(476), layout.scale_y(18), "95%", 1, 0)
+    canvas.text(layout.scale_x(18), layout.text_y(area, "10:27", 1), "10:27", 1, 0)
+    canvas.text(
+        area.x + area.width - layout.scale_x(110),
+        layout.text_y(area, "95%", 1),
+        "95%",
+        1,
+        0
+    )
+    canvas.text(
+        area.x + area.width - layout.scale_x(78),
+        layout.text_y(area, icons.battery, 4),
+        icons.battery,
+        4,
+        0
+    )
+    canvas.text(
+        area.x + area.width - layout.scale_x(52),
+        layout.text_y(area, icons.wifi, 4),
+        icons.wifi,
+        4,
+        0
+    )
+    canvas.text(
+        area.x + area.width - layout.scale_x(26),
+        layout.text_y(area, icons.bluetooth, 4),
+        icons.bluetooth,
+        4,
+        0
+    )
 end
 
 function chrome.dock(actions, selected, active)

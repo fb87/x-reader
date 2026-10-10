@@ -89,8 +89,10 @@ dock:       880..959
 Only `chrome.lua` draws the status bar and dock. Scenes receive the content
 rectangle and cannot draw over shared chrome.
 
-Status values come from services. Unknown clock, battery, or storage values
-render as unavailable; fabricated values are not allowed.
+Status values come from services. Scene titles belong in scene content; the
+status bar contains clock, battery, and connectivity indicators. Unknown clock,
+battery, or storage values render as unavailable; fabricated values are not
+allowed.
 
 The dock is returned by the active scene as zero to three actions. Chrome owns
 slot geometry, enabled state, focus, touch hit testing, and invocation.

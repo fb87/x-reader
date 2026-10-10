@@ -5,4 +5,7 @@ return {
     add = "\u{E145}",
     arrow = "\u{E5C4}",
     circle = "\u{E88E}",
+    battery = "\u{E1A4}",
+    wifi = "\u{E63E}",
+    bluetooth = "\u{E1A7}",
 }

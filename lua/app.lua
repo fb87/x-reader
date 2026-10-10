@@ -163,7 +163,7 @@ local function create_application()
             event.kind == "touch"
             and event.phase == "up"
             and (scene.chrome == "standard" or stage.dock_visible)
-            and event.y >= 880
+            and event.y >= layout.standard().dock.y
         then
             local actions = scene.dock(stage)
             stage.focus_scope = "dock"

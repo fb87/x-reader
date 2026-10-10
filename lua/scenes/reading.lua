@@ -1,6 +1,7 @@
 local reader = require("reader")
 local settings = require("settings")
 local icons = require("icons")
+local layout = require("layout")
 local ActionBar = require("ui.action_bar")
 local scene = { id = "reading", chrome = "fullscreen" }
 function scene.create(context)
@@ -74,7 +75,7 @@ function scene.event(stage, event, context)
         return
     end
     if stage.dock_visible then
-        if event.y >= 880 then
+        if event.y >= layout.standard().dock.y then
             if event.x < 180 then
                 stage.dock_visible = false
                 stage.focus_scope = "content"

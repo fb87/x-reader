@@ -16,6 +16,9 @@ ICONS = {
     "add": 0xE145,
     "arrow": 0xE5C4,
     "circle": 0xE88E,
+    "battery": 0xE1A4,
+    "wifi": 0xE63E,
+    "bluetooth": 0xE1A7,
 }
 
 

@@ -54,9 +54,9 @@ end
 
 function layout.standard()
     return {
-        status = layout.rect(0, 0, 540, 56),
-        content = layout.rect(0, 56, 540, 824),
-        dock = layout.rect(0, 880, 540, 80),
+        status = layout.rect(0, 0, 540, 48),
+        content = layout.rect(0, 48, 540, 848),
+        dock = layout.rect(0, 896, 540, 64),
     }
 end
 
