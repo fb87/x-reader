@@ -22,6 +22,37 @@ Exact pin definitions and power sequencing must be verified against the board
 schematic before driver implementation. They belong in `platform/esp`, not in
 generic display, touch, or reader code.
 
+### Paper v1.1 Pin Map
+
+The official M5Stack Paper v1.1 documentation identifies the following board
+connections:
+
+| Function | ESP32 GPIO |
+| --- | --- |
+| IT8951E and microSD MISO | 13 |
+| IT8951E and microSD MOSI | 12 |
+| IT8951E and microSD SCK | 14 |
+| IT8951E CS | 15 |
+| microSD CS | 4 |
+| GT911 SDA | 21 |
+| GT911 SCL | 22 |
+| GT911 interrupt | 36 |
+| IT8951E busy | 27 |
+| Dial right | 37 |
+| Dial push/power button | 38 |
+| Dial left | 39 |
+| Power control | 2 |
+| External power enable | 5 |
+| E-paper power enable | 23 |
+
+These values are recorded as board data in
+`platform/esp/board_config.h`. Reset lines, peripheral power sequencing, and
+controller-ready behavior still require implementation and hardware validation.
+
+Source: [M5Stack Paper v1.1 documentation](https://docs.m5stack.com/en/core/Paper_v1.1),
+including the linked [Paper schematic](https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/docs/schematic/Core/m5paper/M5_PAPER_SCH.pdf)
+and the [M5EPD driver pin definitions](https://github.com/m5stack/M5EPD/blob/main/src/M5EPD.h).
+
 ## Driver Policy
 
 The project does not use M5Stack's Arduino libraries, M5Unified, M5EPD, or an

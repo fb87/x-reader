@@ -19,7 +19,8 @@ enum platform_status runtime_reload(struct runtime** runtime, const struct runti
 enum platform_status runtime_stop(struct runtime* runtime);
 void runtime_destroy(struct runtime* runtime);
 enum platform_status runtime_step(struct runtime* runtime, const struct platform_event* event);
-enum platform_status runtime_update(struct runtime* runtime, uint64_t monotonic_ms);
+enum platform_status runtime_update(struct runtime* runtime, uint64_t monotonic_ms,
+                                    bool* needs_redraw);
 enum platform_status runtime_draw(struct runtime* runtime);
 bool runtime_failed(const struct runtime* runtime);
 const char* runtime_error(const struct runtime* runtime);

@@ -12,6 +12,7 @@
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 #include <freertos/task.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,11 +22,26 @@ enum {
     FRAMEBUFFER_HEIGHT = 960,
     FRAMEBUFFER_BYTES = FRAMEBUFFER_WIDTH * FRAMEBUFFER_HEIGHT / 2,
     /* Covers the status bar (48px) and dock (64px) chrome rows defined in
-     * lua/layout.lua, plus the reading scene's own header/footer bands.
-     * Updates touching these rows always use GL16 so the frequent small
-     * redraws there (clock, focus highlight, page footer) cannot build up
-     * DU-mode ghosting at the panel edges. */
+     * lua/layout.lua, plus the reading scene's own header/footer bands. Any
+     * refresh touching these rows is widened to cover the whole band so the
+     * band's unchanging background pixels (which never show up in a byte
+     * diff) still get redriven along with whatever glyph actually changed. */
     CHROME_EDGE_MARGIN = 64,
+    /* Each physical click produces two queued events (press, then release),
+     * and each one costs a full redraw cycle (several hundred ms on this
+     * panel) to process. A deep queue would let a user who taps rapidly
+     * build up a backlog that keeps the display turning pages/highlights
+     * for seconds after they've stopped touching the device. Capping it at
+     * two clicks' worth keeps a short, deliberate double-tap intact while
+     * dropping further spam instead of queuing it indefinitely -- xQueueSend
+     * already fails silently once full (see input_task_main), so excess
+     * events are simply not observed, not buffered. */
+    INPUT_QUEUE_CAPACITY = 4,
+    /* Minimum spacing, in microseconds, between recognized button
+     * transitions. The e-ink panel can't keep up with a user mashing the
+     * dial faster than it can redraw; this throttles recognition at the
+     * source rather than just bounding how much backlog can queue up. */
+    BUTTON_DEBOUNCE_US = 150000,
 };
 
 struct app_platform {
@@ -39,6 +55,12 @@ struct app_platform {
     bool presented;
     int64_t started_us;
     int dial_levels[3];
+    int64_t last_button_event_us;
+    uint32_t refresh_count;
+    bool top_band_primed;
+    bool bottom_band_primed;
+    QueueHandle_t input_queue;
+    TaskHandle_t input_task;
 };
 
 static const char* const TAG = "x-reader-app";
@@ -144,7 +166,8 @@ static enum platform_status text_display(void* opaque, const struct font* font, 
     return PLATFORM_OK;
 }
 
-static enum platform_status present_display(void* opaque, bool partial) {
+static enum platform_status present_display(void* opaque, bool partial, bool high_quality) {
+    const int64_t present_started_us = esp_timer_get_time();
     struct app_platform* context = opaque;
     uint16_t min_x = FRAMEBUFFER_WIDTH;
     uint16_t min_y = FRAMEBUFFER_HEIGHT;
@@ -156,8 +179,18 @@ static enum platform_status present_display(void* opaque, bool partial) {
         max_x = FRAMEBUFFER_WIDTH;
         max_y = FRAMEBUFFER_HEIGHT;
     } else {
+        /* Both buffers live in PSRAM, where scattered single-byte access is
+         * markedly slower than sequential bulk access. memcmp() over the
+         * whole row first lets the toolchain's optimized implementation
+         * rule out the common case (an unchanged row) in one bulk compare
+         * instead of up to 270 individual byte reads; the byte-wise scan
+         * below only runs for rows that actually differ. */
         for (uint16_t row = 0U; row < FRAMEBUFFER_HEIGHT; ++row) {
             const size_t row_offset = (size_t)row * (FRAMEBUFFER_WIDTH / 2U);
+            if (memcmp(&context->framebuffer[row_offset],
+                       &context->previous_framebuffer[row_offset], FRAMEBUFFER_WIDTH / 2U) == 0) {
+                continue;
+            }
             for (uint16_t column = 0U; column < FRAMEBUFFER_WIDTH; column += 2U) {
                 const size_t offset = row_offset + column / 2U;
                 if (context->framebuffer[offset] == context->previous_framebuffer[offset]) {
@@ -181,42 +214,85 @@ static enum platform_status present_display(void* opaque, bool partial) {
     if (min_x >= max_x || min_y >= max_y) {
         return PLATFORM_OK;
     }
-    /* A dirty rect that merely touches the status bar or dock band only
-     * covers the bytes that actually differ (e.g. clock glyph pixels), not
-     * the band's unchanging background rows. Those rows would then never be
-     * flagged dirty again and would never receive a genuine refresh. Widen
-     * the rect to the whole band, full width, whenever it overlaps either
-     * edge so the entire chrome element is redriven together. */
-    if (min_y < CHROME_EDGE_MARGIN) {
-        min_y = 0U;
-        if (max_y < CHROME_EDGE_MARGIN) {
-            max_y = CHROME_EDGE_MARGIN;
+    const bool touches_top = min_y < CHROME_EDGE_MARGIN;
+    const bool touches_bottom = max_y > FRAMEBUFFER_HEIGHT - CHROME_EDGE_MARGIN;
+    /* The first time a chrome band is touched after boot, widen the rect to
+     * its full extent, full width: that one-time pass ensures rows which
+     * are always background (and so never show up in a byte diff) still get
+     * painted. Once primed, later touches -- e.g. a dock highlight moving
+     * from one button to another -- keep the diff's natural, much smaller
+     * extent so the refresh only covers the button rects that changed. */
+    if (touches_top) {
+        if (!context->top_band_primed) {
+            min_y = 0U;
+            if (max_y < CHROME_EDGE_MARGIN) {
+                max_y = CHROME_EDGE_MARGIN;
+            }
+            min_x = 0U;
+            max_x = FRAMEBUFFER_WIDTH;
         }
-        min_x = 0U;
-        max_x = FRAMEBUFFER_WIDTH;
+        context->top_band_primed = true;
     }
-    if (max_y > FRAMEBUFFER_HEIGHT - CHROME_EDGE_MARGIN) {
-        max_y = FRAMEBUFFER_HEIGHT;
-        if (min_y > FRAMEBUFFER_HEIGHT - CHROME_EDGE_MARGIN) {
-            min_y = FRAMEBUFFER_HEIGHT - CHROME_EDGE_MARGIN;
+    if (touches_bottom) {
+        if (!context->bottom_band_primed) {
+            max_y = FRAMEBUFFER_HEIGHT;
+            if (min_y > FRAMEBUFFER_HEIGHT - CHROME_EDGE_MARGIN) {
+                min_y = FRAMEBUFFER_HEIGHT - CHROME_EDGE_MARGIN;
+            }
+            min_x = 0U;
+            max_x = FRAMEBUFFER_WIDTH;
         }
-        min_x = 0U;
-        max_x = FRAMEBUFFER_WIDTH;
+        context->bottom_band_primed = true;
     }
     min_x &= 0xfffcU;
     max_x = (uint16_t)((max_x + 3U) & 0xfffcU);
     if (max_x > FRAMEBUFFER_WIDTH) {
         max_x = FRAMEBUFFER_WIDTH;
     }
-    const uint16_t width = max_x - min_x;
-    const uint16_t height = max_y - min_y;
-    const uint32_t area = (uint32_t)width * height;
-    const bool touches_chrome_edge =
-        min_y < CHROME_EDGE_MARGIN || max_y > FRAMEBUFFER_HEIGHT - CHROME_EDGE_MARGIN;
-    const enum m5paper_it8951_update_mode mode =
-        context->presented && (partial || area <= FRAMEBUFFER_WIDTH * 120U) && !touches_chrome_edge
-            ? M5PAPER_IT8951_UPDATE_DU
-            : M5PAPER_IT8951_UPDATE_GL16;
+    uint16_t width = max_x - min_x;
+    uint16_t height = max_y - min_y;
+    uint32_t area = (uint32_t)width * height;
+    /* DU doesn't reliably redraw the dock/status chrome on this panel (even
+     * for a single highlight move), so any refresh touching those bands
+     * always uses GL16 -- still only over the (now possibly much smaller,
+     * primed) rect, not a full-screen refresh. Dialogs request the same
+     * via high_quality. */
+    enum m5paper_it8951_update_mode mode;
+    if (high_quality || touches_top || touches_bottom) {
+        mode = M5PAPER_IT8951_UPDATE_GL16;
+    } else if (context->presented && (partial || area <= FRAMEBUFFER_WIDTH * 120U)) {
+        mode = M5PAPER_IT8951_UPDATE_DU;
+    } else {
+        mode = M5PAPER_IT8951_UPDATE_GL16;
+    }
+    /* DU refreshes never fully reset a pixel's analog state, so a run of
+     * frequent small updates gradually builds up ghosting. Count only
+     * consecutive DU refreshes; any GL16/GC16 pass already redrives its
+     * pixels properly and resets the count. After 15 DU refreshes in a row,
+     * force a full-panel pass regardless of what the current update would
+     * otherwise have covered. GC16 is the deepest clean but, measured on
+     * hardware, can take several *seconds* over a content-heavy full
+     * screen (vs. ~400-700ms for GL16) -- long enough to feel like a
+     * freeze if it lands mid-read. GL16 already fully redrives every
+     * pixel's waveform, so it resets DU ghosting just as reliably; it's
+     * just not quite as deep a clean as GC16. Use it here to keep the
+     * periodic refresh bounded in time. */
+    if (mode == M5PAPER_IT8951_UPDATE_DU) {
+        context->refresh_count++;
+    } else {
+        context->refresh_count = 0U;
+    }
+    if (context->refresh_count >= 15U) {
+        context->refresh_count = 0U;
+        mode = M5PAPER_IT8951_UPDATE_GL16;
+        min_x = 0U;
+        min_y = 0U;
+        max_x = FRAMEBUFFER_WIDTH;
+        max_y = FRAMEBUFFER_HEIGHT;
+        width = max_x - min_x;
+        height = max_y - min_y;
+        area = (uint32_t)width * height;
+    }
     const int64_t refresh_started_us = esp_timer_get_time();
     if (m5paper_it8951_present(&context->display, &context->display_info, context->framebuffer,
                                min_x, min_y, width, height, mode) != ESP_OK) {
@@ -225,23 +301,36 @@ static enum platform_status present_display(void* opaque, bool partial) {
     const int64_t refresh_us = esp_timer_get_time() - refresh_started_us;
     memcpy(context->previous_framebuffer, context->framebuffer, FRAMEBUFFER_BYTES);
     context->presented = true;
-    ESP_LOGI(TAG, "refresh %ux%u at %u,%u using %s in %lldms", width, height, min_x, min_y,
-             mode == M5PAPER_IT8951_UPDATE_DU ? "DU" : "GL16", (long long)(refresh_us / 1000));
+    const char* mode_name = mode == M5PAPER_IT8951_UPDATE_DU     ? "DU"
+                            : mode == M5PAPER_IT8951_UPDATE_GC16 ? "GC16"
+                                                                 : "GL16";
+    const int64_t total_us = esp_timer_get_time() - present_started_us;
+    ESP_LOGI(TAG, "refresh %ux%u at %u,%u using %s: spi %lldms, total %lldms (diff+copy %lldms)",
+             width, height, min_x, min_y, mode_name, (long long)(refresh_us / 1000),
+             (long long)(total_us / 1000), (long long)((total_us - refresh_us) / 1000));
     return PLATFORM_OK;
 }
 
-static enum platform_status next_event(void* opaque, struct platform_event* event) {
-    struct app_platform* context = opaque;
-    if (event == NULL) {
-        return PLATFORM_INVALID_ARGUMENT;
-    }
+/* Polls the dial GPIOs and touch controller directly; only ever called from
+ * the dedicated input task (see input_task_main below), never from the main
+ * task, so dial_levels and the touch I2C transaction have a single owner. */
+static enum platform_status poll_input(struct app_platform* context, struct platform_event* event) {
     memset(event, 0, sizeof(*event));
     const gpio_num_t pins[] = {M5PAPER_DIAL_RIGHT, M5PAPER_DIAL_LEFT, M5PAPER_DIAL_PUSH};
     const int32_t buttons[] = {1073741906, 1073741905, 13};
+    const int64_t now_us = esp_timer_get_time();
     for (size_t index = 0U; index < sizeof(pins) / sizeof(pins[0]); ++index) {
         const int level = gpio_get_level(pins[index]);
-        if (level != context->dial_levels[index]) {
+        /* Within the debounce window, leave dial_levels untouched rather
+         * than dropping the transition outright: the next poll keeps
+         * re-checking against the same recorded level, so once the window
+         * clears we recognize whatever the pin's current state is. Any
+         * bounces in between are coalesced into that one transition
+         * instead of each being queued as its own event. */
+        if (level != context->dial_levels[index] &&
+            now_us - context->last_button_event_us >= BUTTON_DEBOUNCE_US) {
             context->dial_levels[index] = level;
+            context->last_button_event_us = now_us;
             event->type = PLATFORM_EVENT_BUTTON;
             event->button = buttons[index];
             event->pressed = level == 0;
@@ -256,6 +345,33 @@ static enum platform_status next_event(void* opaque, struct platform_event* even
         event->y = points[0].y;
         return PLATFORM_OK;
     }
+    return PLATFORM_OK;
+}
+
+/* Polls continuously, independent of whatever the main task is doing (Lua
+ * execution, a blocking SPI present, EPUB parsing). Without this, a button
+ * press during a multi-hundred-millisecond screen refresh would simply not
+ * be observed until the refresh finished. */
+static void input_task_main(void* parameter) {
+    struct app_platform* context = parameter;
+    while (true) {
+        struct platform_event event;
+        if (poll_input(context, &event) == PLATFORM_OK && event.type != PLATFORM_EVENT_NONE) {
+            (void)xQueueSend(context->input_queue, &event, 0);
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+static enum platform_status next_event(void* opaque, struct platform_event* event) {
+    struct app_platform* context = opaque;
+    if (event == NULL) {
+        return PLATFORM_INVALID_ARGUMENT;
+    }
+    if (xQueueReceive(context->input_queue, event, 0) == pdTRUE) {
+        return PLATFORM_OK;
+    }
+    memset(event, 0, sizeof(*event));
     return PLATFORM_OK;
 }
 
@@ -363,9 +479,9 @@ esp_err_t esp_platform_create(struct platform* platform) {
      * over from the panel's prior analog state (e.g. a reset mid-refresh
      * during a reflash) is cleared before the first real frame is drawn. */
     (void)clear_display(context, 0x0U);
-    (void)present_display(context, false);
+    (void)present_display(context, false, false);
     (void)clear_display(context, 0xfU);
-    (void)present_display(context, false);
+    (void)present_display(context, false, false);
     /* Make the first real Lua-drawn frame a guaranteed full refresh rather
      * than a dirty-rect diff against this priming flash: rows that render
      * identically to the primed background (e.g. the status bar's empty
@@ -373,6 +489,25 @@ esp_err_t esp_platform_create(struct platform* platform) {
      * changed and would never receive a genuine GL16 push with real
      * content. */
     context->presented = false;
+    context->input_queue = xQueueCreate(INPUT_QUEUE_CAPACITY, sizeof(struct platform_event));
+    if (context->input_queue == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    /* Runs independently of the main task so a button press is still
+     * observed while the main task is blocked in a multi-hundred-ms SPI
+     * present or parsing an EPUB chapter -- that only requires the input
+     * task to be *ready* to run while main is blocked/yielded, which
+     * FreeRTOS already guarantees for any task regardless of priority.
+     * Equal priority to the main task (ESP-IDF's default of 1) means it's
+     * scheduled via normal time-slicing instead of hard-preempting active
+     * rendering computation every 10ms, which measurably slowed draws when
+     * this ran at a higher priority. */
+    if (xTaskCreate(input_task_main, "x-reader-input", 4096, context, 1, &context->input_task) !=
+        pdPASS) {
+        vQueueDelete(context->input_queue);
+        context->input_queue = NULL;
+        return ESP_ERR_NO_MEM;
+    }
     *platform = (struct platform){
         .context = context,
         .display = {.context = context,
@@ -399,6 +534,14 @@ void esp_platform_destroy(struct platform* platform) {
         return;
     }
     struct app_platform* context = platform->context;
+    if (context->input_task != NULL) {
+        vTaskDelete(context->input_task);
+        context->input_task = NULL;
+    }
+    if (context->input_queue != NULL) {
+        vQueueDelete(context->input_queue);
+        context->input_queue = NULL;
+    }
     m5paper_storage_unmount(&context->storage);
     m5paper_gt911_deinit(&context->touch);
     m5paper_it8951_deinit(&context->display);

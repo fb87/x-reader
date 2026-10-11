@@ -141,8 +141,9 @@ static enum platform_status draw_text(void* opaque, const struct font* font, int
     return PLATFORM_OK;
 }
 
-static enum platform_status present_display(void* opaque, bool partial) {
+static enum platform_status present_display(void* opaque, bool partial, bool high_quality) {
     (void)partial;
+    (void)high_quality;
     struct sdl_context* context = opaque;
     for (int32_t y = 0; y < DISPLAY_HEIGHT; ++y) {
         for (int32_t x = 0; x < DISPLAY_WIDTH; ++x) {

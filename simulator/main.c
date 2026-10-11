@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
             previous_script_stamp = current_script_stamp;
         }
         if (running &&
-            runtime_update(runtime, platform.monotonic_ms(platform.context)) != PLATFORM_OK) {
+            runtime_update(runtime, platform.monotonic_ms(platform.context), NULL) != PLATFORM_OK) {
             fprintf(stderr, "Lua update failed: %s\n", runtime_error(runtime));
             break;
         }

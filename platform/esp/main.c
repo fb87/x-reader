@@ -3,6 +3,7 @@
 
 #include <esp_log.h>
 #include <esp_spiffs.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -43,29 +44,37 @@ void app_main(void) {
         return;
     }
     ESP_LOGI(TAG, "Lua runtime started");
-    if (runtime_update(runtime, platform.monotonic_ms(platform.context)) != PLATFORM_OK ||
+    if (runtime_update(runtime, platform.monotonic_ms(platform.context), NULL) != PLATFORM_OK ||
         runtime_draw(runtime) != PLATFORM_OK) {
         ESP_LOGE(TAG, "Lua application initial frame failed: %s", runtime_error(runtime));
     } else {
         ESP_LOGI(TAG, "Lua application initial frame presented");
     }
     bool launcher_presented = false;
-    uint64_t next_redraw = 250U;
     while (true) {
         struct platform_event event = {0};
         const uint64_t now = platform.monotonic_ms(platform.context);
+        bool needs_redraw = false;
         if (platform.next_event(platform.context, &event) != PLATFORM_OK ||
             (event.type != PLATFORM_EVENT_NONE && runtime_step(runtime, &event) != PLATFORM_OK) ||
-            runtime_update(runtime, now) != PLATFORM_OK) {
+            runtime_update(runtime, now, &needs_redraw) != PLATFORM_OK) {
             ESP_LOGE(TAG, "Lua application loop failed: %s", runtime_error(runtime));
             break;
         }
-        if (now >= next_redraw || event.type != PLATFORM_EVENT_NONE) {
+        /* Redraw only on a real input event or when Lua's update() reports
+         * a state change (e.g. an internal, timer-driven scene transition
+         * like the loader->launcher splash or auto-sleep). No unconditional
+         * periodic redraw: clearing, redrawing, and diffing the full
+         * framebuffer costs well over 100ms even when nothing visually
+         * changed, and almost nothing in this app changes on a timer. */
+        if (needs_redraw || event.type != PLATFORM_EVENT_NONE) {
+            const int64_t draw_started_us = esp_timer_get_time();
             if (runtime_draw(runtime) != PLATFORM_OK) {
                 ESP_LOGE(TAG, "Lua application redraw failed: %s", runtime_error(runtime));
                 break;
             }
-            next_redraw = now + 250U;
+            ESP_LOGI(TAG, "frame: event=%d draw+present in %lldms", (int)event.type,
+                     (long long)((esp_timer_get_time() - draw_started_us) / 1000));
             if (!launcher_presented && now >= 700U) {
                 launcher_presented = true;
                 ESP_LOGI(TAG, "Lua launcher frame presented");

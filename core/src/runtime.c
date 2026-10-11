@@ -76,6 +76,7 @@ static void* bounded_allocator(void* opaque, void* pointer, size_t old_size, siz
 
 static void set_error(struct runtime* runtime, const char* message) {
     (void)snprintf(runtime->error, sizeof(runtime->error), "%s", message);
+    (void)fprintf(stderr, "Lua runtime error: %s\n", runtime->error);
 }
 
 static void instruction_hook(lua_State* state, lua_Debug* debug) {
@@ -205,8 +206,9 @@ static int display_measure(lua_State* state) {
 static int display_present(lua_State* state) {
     struct runtime* runtime = runtime_from_upvalue(state);
     const bool partial = lua_toboolean(state, 1) != 0;
+    const bool high_quality = lua_toboolean(state, 2) != 0;
     const enum platform_status status =
-        runtime->platform.display.present(runtime->platform.display.context, partial);
+        runtime->platform.display.present(runtime->platform.display.context, partial, high_quality);
     return status == PLATFORM_OK ? 0 : luaL_error(state, "display.present failed");
 }
 
@@ -272,7 +274,7 @@ static int system_state_save(lua_State* state) {
 static int library_list(lua_State* state) {
     struct runtime* runtime = runtime_from_upvalue(state);
     const char* relative = luaL_optstring(state, 1, "");
-    const uint32_t capacity = 128U;
+    const uint32_t capacity = 64U;
     struct platform_entry* entries = calloc(capacity, sizeof(*entries));
     if (entries == NULL)
         return luaL_error(state, "library list allocation failed");
@@ -495,7 +497,7 @@ static void restrict_libraries(lua_State* state) {
 }
 
 static enum platform_status call_application(struct runtime* runtime, const char* field,
-                                             int arguments, int results) {
+                                             int arguments, int results, bool* out_bool) {
     lua_State* state = runtime->state;
     lua_getglobal(state, "application");
     if (!lua_istable(state, -1)) {
@@ -518,6 +520,9 @@ static enum platform_status call_application(struct runtime* runtime, const char
         set_error(runtime, message == NULL ? "Lua callback failed" : message);
         lua_settop(state, 0);
         return PLATFORM_ERROR;
+    }
+    if (out_bool != NULL && results >= 1) {
+        *out_bool = lua_toboolean(state, -1) != 0;
     }
     lua_settop(state, 0);
     return PLATFORM_OK;
@@ -603,7 +608,11 @@ static enum platform_status create_runtime(struct runtime** result,
     runtime->state_directory = config->state_directory;
     runtime->instruction_limit = config->instruction_limit;
     runtime->memory.limit = config->memory_limit;
+#ifdef ESP_PLATFORM
+    runtime->state = lua_newstate(bounded_allocator, &runtime->memory, 0U);
+#else
     runtime->state = lua_newstate(bounded_allocator, &runtime->memory);
+#endif
     if (runtime->state == NULL) {
         free(runtime);
         return PLATFORM_ERROR;
@@ -622,7 +631,7 @@ static enum platform_status create_runtime(struct runtime** result,
             lua_pushstring(runtime->state, snapshot);
             lua_setfield(runtime->state, -2, "screen");
         }
-        if (call_application(runtime, "start", 1, 0) == PLATFORM_OK) {
+        if (call_application(runtime, "start", 1, 0, NULL) == PLATFORM_OK) {
             *result = runtime;
             return PLATFORM_OK;
         }
@@ -658,7 +667,7 @@ enum platform_status runtime_reload(struct runtime** result, const struct runtim
         return status;
     }
     lua_pushliteral(old_runtime->state, "reload");
-    (void)call_application(old_runtime, "stop", 1, 0);
+    (void)call_application(old_runtime, "stop", 1, 0, NULL);
     runtime_destroy(old_runtime);
     *result = new_runtime;
     return PLATFORM_OK;
@@ -678,7 +687,7 @@ enum platform_status runtime_stop(struct runtime* runtime) {
     if (runtime == NULL)
         return PLATFORM_INVALID_ARGUMENT;
     lua_pushliteral(runtime->state, "shutdown");
-    return call_application(runtime, "stop", 1, 0);
+    return call_application(runtime, "stop", 1, 0, NULL);
 }
 
 enum platform_status runtime_step(struct runtime* runtime, const struct platform_event* event) {
@@ -686,7 +695,7 @@ enum platform_status runtime_step(struct runtime* runtime, const struct platform
         return PLATFORM_INVALID_ARGUMENT;
     }
     if (event == NULL) {
-        return call_application(runtime, "start", 0, 0);
+        return call_application(runtime, "start", 0, 0, NULL);
     }
     lua_newtable(runtime->state);
     lua_pushinteger(runtime->state, event->type);
@@ -702,22 +711,26 @@ enum platform_status runtime_step(struct runtime* runtime, const struct platform
     lua_pushinteger(runtime->state,
                     (lua_Integer)runtime->platform.monotonic_ms(runtime->platform.context));
     lua_setfield(runtime->state, -2, "time");
-    return call_application(runtime, "event", 1, 0);
+    return call_application(runtime, "event", 1, 0, NULL);
 }
 
 enum platform_status runtime_draw(struct runtime* runtime) {
     if (runtime == NULL) {
         return PLATFORM_INVALID_ARGUMENT;
     }
-    return call_application(runtime, "draw", 0, 0);
+    return call_application(runtime, "draw", 0, 0, NULL);
 }
 
-enum platform_status runtime_update(struct runtime* runtime, uint64_t monotonic_ms) {
+enum platform_status runtime_update(struct runtime* runtime, uint64_t monotonic_ms,
+                                    bool* needs_redraw) {
     if (runtime == NULL) {
         return PLATFORM_INVALID_ARGUMENT;
     }
+    if (needs_redraw != NULL) {
+        *needs_redraw = false;
+    }
     lua_pushinteger(runtime->state, (lua_Integer)monotonic_ms);
-    return call_application(runtime, "update", 1, 0);
+    return call_application(runtime, "update", 1, 1, needs_redraw);
 }
 
 bool runtime_failed(const struct runtime* runtime) {

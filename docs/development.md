@@ -30,6 +30,11 @@ nix flake check --no-update-lock-file
 Builds must not run ESP-IDF installers, `pip install`, or unpinned network
 downloads. Firmware enables `CONFIG_APP_REPRODUCIBLE_BUILD=y`.
 
+The firmware shell exposes the pinned ESP-IDF 5.5.2 source as `IDF_PATH`, adds
+`idf.py`, `esptool`, and the Xtensa toolchain to `PATH`, and defaults
+`IDF_TARGET` to `esp32`. Required Python modules are pinned Nix packages; the
+shell does not create a virtual environment or run `pip`.
+
 ## Font Assets
 
 The runtime does not load TTF files. Alegreya SemiBold is converted at build

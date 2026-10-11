@@ -18,6 +18,7 @@ end
 function persistence.load()
     local data = system.state_load()
     if data == nil then
+        bookshelf.start()
         return
     end
     local values = parse(data)

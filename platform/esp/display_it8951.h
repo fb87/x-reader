@@ -16,10 +16,12 @@ struct m5paper_it8951_info {
 struct m5paper_it8951 {
     spi_device_handle_t device;
     gpio_num_t busy_pin;
+    uint8_t* row_chunk_buffer;
 };
 
 enum m5paper_it8951_update_mode {
     M5PAPER_IT8951_UPDATE_DU = 1,
+    M5PAPER_IT8951_UPDATE_GC16 = 2,
     M5PAPER_IT8951_UPDATE_GL16 = 3,
 };
 

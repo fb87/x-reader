@@ -4,11 +4,13 @@
 
 #include "driver/gpio.h"
 
+#include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <esp_rom_sys.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <stdlib.h>
 #include <string.h>
 
 enum {
@@ -31,6 +33,13 @@ enum {
     IT8951_VCOM_MILLIVOLTS = 2300,
     DIAGNOSTIC_BAND_HEIGHT = 60,
     IT8951_MAX_LOGICAL_WIDTH = 540,
+    /* Rows batched into one SPI transaction during image load. The SPI bus
+     * is configured for max_transfer_sz = 4096 bytes (see buses.c); each row
+     * costs up to IT8951_MAX_LOGICAL_WIDTH / 2 bytes, plus a 2-byte preamble
+     * once per transaction, so 15 rows (4052 bytes) stays under that limit
+     * while cutting the number of wait_ready/acquire/release cycles roughly
+     * 15x versus one SPI transaction per row. */
+    IT8951_ROW_CHUNK_ROWS = 15,
 };
 
 static const char* const TAG = "x-reader-display";
@@ -112,14 +121,20 @@ static esp_err_t write_pixel_word(struct m5paper_it8951* display, uint16_t value
     return transfer_locked(display, transmit, NULL, sizeof(transmit), false);
 }
 
-static esp_err_t write_pixel_row(struct m5paper_it8951* display, const uint8_t* framebuffer,
-                                 size_t row_offset, uint16_t x, uint16_t width) {
-    uint8_t transmit[2U + IT8951_MAX_LOGICAL_WIDTH / 2U];
+static esp_err_t write_pixel_rows(struct m5paper_it8951* display, const uint8_t* framebuffer,
+                                  size_t row_offset, size_t row_stride, uint16_t x, uint16_t width,
+                                  uint16_t row_count) {
+    uint8_t* transmit = display->row_chunk_buffer;
     transmit[0] = 0U;
     transmit[1] = 0U;
     const size_t row_bytes = (size_t)width / 2U;
-    memcpy(&transmit[2], &framebuffer[row_offset + (size_t)x / 2U], row_bytes);
-    return transfer_locked(display, transmit, NULL, 2U + row_bytes, false);
+    size_t position = 2U;
+    for (uint16_t row = 0U; row < row_count; ++row) {
+        memcpy(&transmit[position], &framebuffer[row_offset + (size_t)row * row_stride + x / 2U],
+               row_bytes);
+        position += row_bytes;
+    }
+    return transfer_locked(display, transmit, NULL, position, false);
 }
 
 esp_err_t m5paper_it8951_init(const struct m5paper_buses* buses, struct m5paper_it8951* display) {
@@ -128,6 +143,16 @@ esp_err_t m5paper_it8951_init(const struct m5paper_buses* buses, struct m5paper_
     }
     display->device = buses->display;
     display->busy_pin = M5PAPER_DISPLAY_BUSY;
+    /* DMA-capable internal RAM: a stack or PSRAM buffer may not qualify for
+     * DMA, silently forcing the SPI driver back to slower CPU-copied
+     * transfers for every row chunk. */
+    display->row_chunk_buffer =
+        heap_caps_malloc(2U + (size_t)IT8951_ROW_CHUNK_ROWS * (IT8951_MAX_LOGICAL_WIDTH / 2U),
+                         MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    if (display->row_chunk_buffer == NULL) {
+        display->device = NULL;
+        return ESP_ERR_NO_MEM;
+    }
     const gpio_config_t busy_config = {
         .pin_bit_mask = 1ULL << (unsigned)display->busy_pin,
         .mode = GPIO_MODE_INPUT,
@@ -137,6 +162,8 @@ esp_err_t m5paper_it8951_init(const struct m5paper_buses* buses, struct m5paper_
     };
     const esp_err_t status = gpio_config(&busy_config);
     if (status != ESP_OK) {
+        free(display->row_chunk_buffer);
+        display->row_chunk_buffer = NULL;
         display->device = NULL;
     }
     return status;
@@ -144,6 +171,8 @@ esp_err_t m5paper_it8951_init(const struct m5paper_buses* buses, struct m5paper_
 
 void m5paper_it8951_deinit(struct m5paper_it8951* display) {
     if (display != NULL) {
+        free(display->row_chunk_buffer);
+        display->row_chunk_buffer = NULL;
         display->device = NULL;
     }
 }
@@ -312,20 +341,30 @@ esp_err_t m5paper_it8951_present(struct m5paper_it8951* display,
         status = send_arguments(display, IT8951_LOAD_IMAGE_AREA, load_area,
                                 sizeof(load_area) / sizeof(load_area[0]));
     }
-    for (uint16_t row = y; status == ESP_OK && row < y + height; ++row) {
+    const size_t row_stride = logical_width / 2U;
+    /* Acquire the bus once for the whole multi-chunk transfer rather than
+     * once per chunk: spi_device_acquire_bus/release_bus take a FreeRTOS
+     * mutex each call, and with up to ~64 chunks per full-panel refresh that
+     * overhead was measurable. */
+    if (status == ESP_OK) {
+        status = spi_device_acquire_bus(display->device, portMAX_DELAY);
+    }
+    const bool acquired = status == ESP_OK;
+    for (uint16_t row = y; status == ESP_OK && row < y + height;) {
+        const uint16_t remaining = (uint16_t)(y + height - row);
+        const uint16_t chunk_rows =
+            remaining < IT8951_ROW_CHUNK_ROWS ? remaining : IT8951_ROW_CHUNK_ROWS;
         status = wait_ready(display);
         if (status != ESP_OK) {
             break;
         }
-        status = spi_device_acquire_bus(display->device, portMAX_DELAY);
-        const bool acquired = status == ESP_OK;
-        const size_t row_offset = (size_t)row * (logical_width / 2U);
-        if (status == ESP_OK) {
-            status = write_pixel_row(display, framebuffer, row_offset, x, width);
-        }
-        if (acquired) {
-            spi_device_release_bus(display->device);
-        }
+        const size_t row_offset = (size_t)row * row_stride;
+        status =
+            write_pixel_rows(display, framebuffer, row_offset, row_stride, x, width, chunk_rows);
+        row = (uint16_t)(row + chunk_rows);
+    }
+    if (acquired) {
+        spi_device_release_bus(display->device);
     }
     if (status == ESP_OK) {
         status = send_command(display, IT8951_LOAD_IMAGE_END);

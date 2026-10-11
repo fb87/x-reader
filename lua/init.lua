@@ -8,7 +8,7 @@ return {
         app.event(event)
     end,
     update = function(now)
-        app.update(now)
+        return app.update(now)
     end,
     draw = function()
         app.draw()

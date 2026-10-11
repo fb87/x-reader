@@ -13,7 +13,9 @@ function scene.update(stage, now, context)
     end
     if now - stage.started > 600 then
         context.replace("launcher")
+        return true
     end
+    return false
 end
 function scene.draw()
     canvas.clear(theme.color.background)

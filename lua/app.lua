@@ -200,6 +200,7 @@ local function create_application()
 
     function application.update(now)
         local scene, stage = context.active()
+        local redraw_needed = false
         if
             scene.id ~= "sleep"
             and scene.id ~= "loader"
@@ -207,17 +208,20 @@ local function create_application()
         then
             last_activity = now
             context.push("sleep")
+            redraw_needed = true
         end
         scene, stage = context.active()
         for key, held in pairs(held_keys) do
             if not held.long and now - held.started >= 700 then
                 held.long = true
                 activate_key(scene, stage, key, "long")
+                redraw_needed = true
             end
         end
-        if scene.update then
-            scene.update(stage, now, context)
+        if scene.update and scene.update(stage, now, context) then
+            redraw_needed = true
         end
+        return redraw_needed
     end
 
     function application.draw()
@@ -259,7 +263,8 @@ local function create_application()
                 end
             end
         end
-        display.present(false)
+        local dialog_visible = stage.dialog and stage.dialog.visible
+        display.present(false, dialog_visible == true)
     end
 
     function application.snapshot()

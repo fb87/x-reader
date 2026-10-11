@@ -56,7 +56,7 @@ struct platform_display {
                                       int32_t height, uint8_t gray);
     enum platform_status (*text)(void* context, const struct font* font, int32_t x, int32_t y,
                                  const char* text, size_t length, uint8_t scale, uint8_t gray);
-    enum platform_status (*present)(void* context, bool partial);
+    enum platform_status (*present)(void* context, bool partial, bool high_quality);
 };
 
 struct platform {
