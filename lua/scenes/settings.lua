@@ -31,6 +31,12 @@ local page_rows = {
     },
     Display = {
         {
+            "Orientation",
+            function()
+                return settings.orientation == "landscape" and "Landscape" or "Portrait"
+            end,
+        },
+        {
             "Brightness",
             function()
                 return tostring(settings.brightness) .. "%"
@@ -137,17 +143,21 @@ function scene.move(stage, direction)
     if stage.page == "root" then
         stage.selected = ((stage.selected - 1 + direction) % #categories) + 1
         stage.list.selected_id = "settings:" .. categories[stage.selected]
+        stage.list.page = math.floor((stage.selected - 1) / (stage.list.page_size or 1)) + 1
     else
         local rows = page_rows[stage.page] or {}
         if #rows > 0 then
             stage.control_selected = ((stage.control_selected - 1 + direction) % #rows) + 1
+            local page_size = stage.row_page_size or 1
+            stage.row_page = math.floor((stage.control_selected - 1) / page_size) + 1
         end
     end
 end
-function scene.activate_content(stage)
+function scene.activate_content(stage, context)
     if stage.page == "root" then
         stage.page = categories[stage.selected]
         stage.control_selected = 1
+        stage.row_page = 1
     elseif stage.page == "Reading" then
         if stage.control_selected == 1 then
             settings.toggle_text_scale()
@@ -160,8 +170,13 @@ function scene.activate_content(stage)
         stage.notice = "Applied"
     elseif stage.page == "Display" then
         if stage.control_selected == 1 then
-            settings.toggle_brightness()
+            settings.toggle_orientation()
+            if context and context.set_orientation then
+                context.set_orientation(settings.orientation == "landscape")
+            end
         elseif stage.control_selected == 2 then
+            settings.toggle_brightness()
+        elseif stage.control_selected == 3 then
             settings.toggle_clock()
         end
         persistence.save()
@@ -195,87 +210,118 @@ function scene.event(stage, event, context)
     if event.kind ~= "touch" or event.phase ~= "up" then
         return
     end
-    if event.y >= layout.standard().dock.y then
-        stage.focus_scope = "dock"
-        stage.dock_selected = math.floor(event.x / 180) + 1
-        if stage.dock_selected == 1 then
-            if stage.page == "root" then
-                context.pop()
-            else
-                stage.page = "root"
-                stage.control_selected = 1
+    -- Dock touches are handled centrally by app.lua for standard-chrome
+    -- scenes; only the row list below is ours to hit-test.
+    if stage.page ~= "root" and stage.row_boxes ~= nil then
+        local page_size = stage.row_page_size or 1
+        for local_index, row_box in ipairs(stage.row_boxes) do
+            if layout.contains(row_box, event.x, event.y) then
                 stage.focus_scope = "content"
+                stage.control_selected = (stage.row_page - 1) * page_size + local_index
+                scene.activate_content(stage, context)
+                return
             end
-        elseif stage.dock_selected == 2 then
-            settings.reset()
-            persistence.save()
-            stage.notice = "Defaults restored"
-        elseif stage.dock_selected == 3 then
-            settings.apply()
-            persistence.save()
-            stage.notice = "Settings applied"
         end
-    elseif
-        stage.page ~= "root"
-        and event.y >= 140
-        and event.y < 140 + #(page_rows[stage.page] or {}) * 84
-    then
+    elseif stage.page == "root" and layout.contains(stage.list.bounds, event.x, event.y) then
+        local page_size = stage.list.page_size or 1
+        local local_index = math.floor((event.y - stage.list.bounds.y) / layout.scale_y(84))
         stage.focus_scope = "content"
-        stage.control_selected = math.floor((event.y - 140) / 84) + 1
-        scene.activate_content(stage)
-    elseif stage.page == "root" and event.y >= 113 and event.y < 113 + #categories * 84 then
-        stage.focus_scope = "content"
-        stage.selected = math.max(1, math.min(#categories, math.floor((event.y - 113) / 84) + 1))
+        stage.selected =
+            math.max(1, math.min(#categories, (stage.list.page - 1) * page_size + local_index + 1))
         stage.list.selected_id = "settings:" .. categories[stage.selected]
         stage.page = categories[stage.selected]
         stage.control_selected = 1
+        stage.row_page = 1
     end
 end
-function scene.draw(stage)
+function scene.draw(stage, bounds)
+    local regions = layout.column(bounds, { padding = 24, gap = 8 }, {
+        { size = 60 },
+        { fill = true },
+        { size = 28 },
+    })
+    local header, content, footer = regions[1], regions[2], regions[3]
     if stage.page == "root" then
         stage.list.selected_id = "settings:" .. categories[stage.selected]
         stage.list.active = stage.focus_scope == "content"
-        canvas.text(24, 60, "Settings", 3, 0)
-        stage.list:layout({ x = 24, y = 113, width = 492, height = layout.content_height(113, 40) })
+        canvas.text(header.x, layout.text_y(header, "Settings", 3), "Settings", 3, 0)
+        stage.list:layout(content)
         stage.list:draw()
+        stage.row_boxes = nil
     else
-        canvas.text(24, 92, stage.page .. " Settings", 2, 0)
-        for index, row in ipairs(page_rows[stage.page] or {}) do
-            local y = 140 + (index - 1) * 84
-            local bounds = { x = 24, y = y, width = 492, height = 84 }
+        canvas.text(
+            header.x,
+            layout.text_y(header, stage.page .. " Settings", 2),
+            stage.page .. " Settings",
+            2,
+            0
+        )
+        local rows = page_rows[stage.page] or {}
+        local page_size = math.max(1, math.floor(content.height / layout.scale_y(84)))
+        stage.row_page_size = page_size
+        local page_count = math.max(1, math.ceil(#rows / page_size))
+        stage.row_page = math.max(1, math.min(page_count, stage.row_page or 1))
+        local first = (stage.row_page - 1) * page_size + 1
+        local last = math.min(#rows, first + page_size - 1)
+        local row_items = {}
+        for _ = first, last do
+            row_items[#row_items + 1] = { size = 84 }
+        end
+        stage.row_boxes = #row_items > 0 and layout.stack(content, "column", {}, row_items) or {}
+        for local_index = 1, #stage.row_boxes do
+            local index = first + local_index - 1
+            local row = rows[index]
+            local row_bounds = stage.row_boxes[local_index]
             local selected = stage.focus_scope == "content" and stage.control_selected == index
             if selected then
                 canvas.rectangle(
-                    bounds.x,
-                    bounds.y - 1,
-                    bounds.width,
-                    bounds.height + 1,
+                    row_bounds.x,
+                    row_bounds.y - 1,
+                    row_bounds.width,
+                    row_bounds.height + 1,
                     theme.color.selected
                 )
             end
             local text_color = selected and theme.color.selected_text or theme.color.text
-            canvas.text(40, layout.text_y(bounds, row[1], 1), row[1], 1, text_color)
+            canvas.text(
+                row_bounds.x + layout.scale_x(16),
+                layout.text_y(row_bounds, row[1], 1),
+                row[1],
+                1,
+                text_color
+            )
             local value = row[2]()
             canvas.text(
-                496 - canvas.measure(value, 1),
-                layout.text_y(bounds, value, 1),
+                row_bounds.x + row_bounds.width - layout.scale_x(16) - canvas.measure(value, 1),
+                layout.text_y(row_bounds, value, 1),
                 value,
                 1,
                 text_color
             )
-            if index < #page_rows[stage.page] and not selected then
+            if local_index < #stage.row_boxes and not selected then
                 canvas.rectangle(
-                    bounds.x + 12,
-                    y + bounds.height - 1,
-                    bounds.width - 24,
+                    row_bounds.x + layout.scale_x(12),
+                    row_bounds.y + row_bounds.height - 1,
+                    row_bounds.width - layout.scale_x(24),
                     1,
                     theme.color.divider
                 )
             end
         end
+        if stage.notice == nil and page_count > 1 then
+            local page_label = "Page " .. tostring(stage.row_page) .. " / " .. tostring(page_count)
+            local label_width = canvas.measure(page_label, 1)
+            canvas.text(
+                footer.x + math.floor((footer.width - label_width) / 2),
+                layout.text_y(footer, page_label, 1),
+                page_label,
+                1,
+                5
+            )
+        end
     end
     if stage.notice ~= nil then
-        canvas.text(24, 850, stage.notice, 1, 5)
+        canvas.text(footer.x, layout.text_y(footer, stage.notice, 1), stage.notice, 1, 5)
     end
 end
 return scene

@@ -40,15 +40,25 @@ return function(properties)
             return
         end
         local bounds = self.bounds
-        canvas.rectangle(0, 0, 540, 960, 8)
+        canvas.rectangle(0, 0, layout.width, layout.height, 8)
         canvas.rectangle(bounds.x, bounds.y, bounds.width, bounds.height, theme.color.background)
-        canvas.text(bounds.x + 24, bounds.y + 24, self.title, 2, theme.color.text)
+        canvas.text(
+            bounds.x + layout.scale_x(24),
+            bounds.y + layout.scale_y(24),
+            self.title,
+            2,
+            theme.color.text
+        )
         if self.cover ~= nil then
-            canvas.rectangle(bounds.x + 24, bounds.y + 72, 96, 136, theme.color.divider)
+            local cover_x = bounds.x + layout.scale_x(24)
+            local cover_y = bounds.y + layout.scale_y(72)
+            local cover_width = layout.scale_x(96)
+            local cover_height = layout.scale_y(136)
+            canvas.rectangle(cover_x, cover_y, cover_width, cover_height, theme.color.divider)
             canvas.text(
-                bounds.x + 48,
+                bounds.x + layout.scale_x(48),
                 layout.text_y(
-                    { x = bounds.x + 24, y = bounds.y + 72, width = 96, height = 136 },
+                    { x = cover_x, y = cover_y, width = cover_width, height = cover_height },
                     self.cover,
                     6
                 ),
@@ -57,17 +67,20 @@ return function(properties)
                 theme.color.text
             )
         end
-        local message_x = self.cover ~= nil and bounds.x + 144 or bounds.x + 24
-        local message_width = self.cover ~= nil and bounds.width - 168 or bounds.width - 48
+        local message_x = self.cover ~= nil and bounds.x + layout.scale_x(144)
+            or bounds.x + layout.scale_x(24)
+        local message_width = self.cover ~= nil and bounds.width - layout.scale_x(168)
+            or bounds.width - layout.scale_x(48)
         local _, _, message_top = canvas.measure("Ag", 1)
-        local message_y = bounds.y + 72 - message_top
+        local message_y = bounds.y + layout.scale_y(72) - message_top
+        local line_height = layout.scale_y(24)
         for paragraph in self.message:gmatch("[^\n]+") do
             local line = ""
             for word in paragraph:gmatch("%S+") do
                 local candidate = line == "" and word or line .. " " .. word
                 if line ~= "" and canvas.measure(candidate, 1) > message_width then
                     canvas.text(message_x, message_y, line, 1, theme.color.text)
-                    message_y = message_y + 24
+                    message_y = message_y + line_height
                     line = word
                 else
                     line = candidate
@@ -75,20 +88,26 @@ return function(properties)
             end
             if line ~= "" then
                 canvas.text(message_x, message_y, line, 1, theme.color.text)
-                message_y = message_y + 24
+                message_y = message_y + line_height
             end
         end
         local width = math.floor(bounds.width / #self.actions)
-        local button_y = bounds.y + bounds.height - 64
-        local button_height = 48
+        local button_y = bounds.y + bounds.height - layout.scale_y(64)
+        local button_height = layout.scale_y(48)
         for index, action in ipairs(self.actions) do
             local x = bounds.x + (index - 1) * width
             if index == self.selected then
-                canvas.rectangle(x + 12, button_y, width - 24, button_height, theme.color.selected)
+                canvas.rectangle(
+                    x + layout.scale_x(12),
+                    button_y,
+                    width - layout.scale_x(24),
+                    button_height,
+                    theme.color.selected
+                )
             end
             local icon_width = action.icon and canvas.measure(action.icon, 6) or 0
             local label_width = canvas.measure(action.label, 1)
-            local gap = action.icon and 8 or 0
+            local gap = action.icon and layout.scale_x(8) or 0
             local group_width = icon_width + gap + label_width
             local group_x = x + math.floor((width - group_width) / 2)
             if action.icon ~= nil then
@@ -119,7 +138,18 @@ return function(properties)
     end
 
     function dialog:layout(bounds)
-        self.bounds = bounds or layout.rect(24, 300, 492, 307)
+        if bounds ~= nil then
+            self.bounds = bounds
+            return
+        end
+        local width = layout.scale_x(492)
+        local height = layout.scale_y(307)
+        self.bounds = {
+            x = math.floor((layout.width - width) / 2),
+            y = math.floor((layout.height - height) / 2),
+            width = width,
+            height = height,
+        }
     end
 
     dialog:layout()

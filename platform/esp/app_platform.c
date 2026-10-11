@@ -61,27 +61,59 @@ struct app_platform {
     bool bottom_band_primed;
     QueueHandle_t input_queue;
     TaskHandle_t input_task;
+    /* When true, canvas.* draws into a logical FRAMEBUFFER_HEIGHT x
+     * FRAMEBUFFER_WIDTH canvas that gets rotated 90 degrees into the
+     * physical (native-orientation) framebuffer -- the IT8951 panel itself
+     * is wired at a single fixed native resolution and cannot be resized,
+     * so landscape support has to happen as a per-pixel rotation here
+     * rather than by reallocating anything. */
+    bool landscape;
 };
 
 static const char* const TAG = "x-reader-app";
 static struct app_platform app_context;
 
-static uint8_t* pixel(struct app_platform* context, int32_t x, int32_t y) {
-    return &context->framebuffer[(size_t)y * (FRAMEBUFFER_WIDTH / 2U) + (size_t)x / 2U];
+struct pixel_ref {
+    uint8_t* byte;
+    bool high_nibble;
+};
+
+static struct pixel_ref pixel_ref(struct app_platform* context, int32_t x, int32_t y) {
+    int32_t physical_x = x;
+    int32_t physical_y = y;
+    if (context->landscape) {
+        physical_x = FRAMEBUFFER_WIDTH - 1 - y;
+        physical_y = x;
+    }
+    struct pixel_ref ref = {
+        .byte = &context->framebuffer[(size_t)physical_y * (FRAMEBUFFER_WIDTH / 2U) +
+                                      (size_t)physical_x / 2U],
+        .high_nibble = (physical_x & 1) == 0,
+    };
+    return ref;
+}
+
+static int32_t logical_width(const struct app_platform* context) {
+    return context->landscape ? FRAMEBUFFER_HEIGHT : FRAMEBUFFER_WIDTH;
+}
+
+static int32_t logical_height(const struct app_platform* context) {
+    return context->landscape ? FRAMEBUFFER_WIDTH : FRAMEBUFFER_HEIGHT;
 }
 
 static void blend_pixel(struct app_platform* context, int32_t x, int32_t y, uint8_t gray,
                         uint8_t alpha) {
-    if (x < 0 || x >= FRAMEBUFFER_WIDTH || y < 0 || y >= FRAMEBUFFER_HEIGHT || alpha == 0U) {
+    if (x < 0 || x >= logical_width(context) || y < 0 || y >= logical_height(context) ||
+        alpha == 0U) {
         return;
     }
-    uint8_t* value = pixel(context, x, y);
-    const uint8_t current = (x & 1) == 0 ? *value >> 4U : *value & 0x0fU;
+    struct pixel_ref ref = pixel_ref(context, x, y);
+    const uint8_t current = ref.high_nibble ? *ref.byte >> 4U : *ref.byte & 0x0fU;
     const uint16_t blended = ((uint16_t)current * (255U - alpha) + (uint16_t)gray * alpha) / 255U;
-    if ((x & 1) == 0) {
-        *value = (uint8_t)((*value & 0x0fU) | ((uint8_t)blended << 4U));
+    if (ref.high_nibble) {
+        *ref.byte = (uint8_t)((*ref.byte & 0x0fU) | ((uint8_t)blended << 4U));
     } else {
-        *value = (uint8_t)((*value & 0xf0U) | (uint8_t)blended);
+        *ref.byte = (uint8_t)((*ref.byte & 0xf0U) | (uint8_t)blended);
     }
 }
 
@@ -113,20 +145,40 @@ static enum platform_status clear_display(void* opaque, uint8_t gray) {
     return PLATFORM_OK;
 }
 
+static enum platform_status set_orientation_display(void* opaque, bool landscape,
+                                                    int32_t* out_width, int32_t* out_height) {
+    struct app_platform* context = opaque;
+    if (context->landscape != landscape) {
+        context->landscape = landscape;
+        /* The physical panel keeps whatever was last presented in the old
+         * orientation; nothing in the new logical framebuffer has actually
+         * changed relative to it, so the dirty-rect diff in present_display
+         * would think most of the screen is still correct. Force the next
+         * present to redraw everything. */
+        context->presented = false;
+        context->top_band_primed = false;
+        context->bottom_band_primed = false;
+    }
+    *out_width = logical_width(context);
+    *out_height = logical_height(context);
+    return PLATFORM_OK;
+}
+
 static enum platform_status rectangle_display(void* opaque, int32_t x, int32_t y, int32_t width,
                                               int32_t height, uint8_t gray) {
     struct app_platform* context = opaque;
     if (width < 0 || height < 0) {
         return PLATFORM_INVALID_ARGUMENT;
     }
-    for (int32_t row = y < 0 ? 0 : y; row < y + height && row < FRAMEBUFFER_HEIGHT; ++row) {
-        for (int32_t column = x < 0 ? 0 : x; column < x + width && column < FRAMEBUFFER_WIDTH;
-             ++column) {
-            uint8_t* value = pixel(context, column, row);
-            if ((column & 1) == 0) {
-                *value = (uint8_t)((*value & 0x0fU) | (gray << 4U));
+    const int32_t limit_width = logical_width(context);
+    const int32_t limit_height = logical_height(context);
+    for (int32_t row = y < 0 ? 0 : y; row < y + height && row < limit_height; ++row) {
+        for (int32_t column = x < 0 ? 0 : x; column < x + width && column < limit_width; ++column) {
+            struct pixel_ref ref = pixel_ref(context, column, row);
+            if (ref.high_nibble) {
+                *ref.byte = (uint8_t)((*ref.byte & 0x0fU) | (gray << 4U));
             } else {
-                *value = (uint8_t)((*value & 0xf0U) | gray);
+                *ref.byte = (uint8_t)((*ref.byte & 0xf0U) | gray);
             }
         }
     }
@@ -135,10 +187,43 @@ static enum platform_status rectangle_display(void* opaque, int32_t x, int32_t y
 
 static enum platform_status text_display(void* opaque, const struct font* font, int32_t x,
                                          int32_t y, const char* text, size_t length, uint8_t scale,
-                                         uint8_t gray) {
+                                         uint8_t gray, bool rotated) {
     struct app_platform* context = opaque;
-    int32_t origin = x;
     size_t position = 0U;
+    if (!rotated) {
+        int32_t origin = x;
+        while (position < length) {
+            const struct font_glyph* glyph =
+                font_lookup(font, next_codepoint(text, length, &position));
+            if (glyph == NULL) {
+                glyph = font_lookup(font, '?');
+            }
+            if (glyph == NULL) {
+                continue;
+            }
+            const uint8_t* bitmap = &font->bitmap[glyph->bitmap_offset];
+            const int32_t glyph_x = origin + (int32_t)glyph->bearing_x * scale;
+            const int32_t glyph_y = y + ((int32_t)glyph->bearing_y + font->baseline) * scale;
+            for (uint16_t row = 0U; row < glyph->height; ++row) {
+                for (uint16_t column = 0U; column < glyph->width; ++column) {
+                    const uint8_t alpha = bitmap[(size_t)row * glyph->width + column];
+                    for (uint8_t y_offset = 0U; y_offset < scale; ++y_offset) {
+                        for (uint8_t x_offset = 0U; x_offset < scale; ++x_offset) {
+                            blend_pixel(context, glyph_x + (int32_t)column * scale + x_offset,
+                                        glyph_y + (int32_t)row * scale + y_offset, gray, alpha);
+                        }
+                    }
+                }
+            }
+            origin += (int32_t)glyph->advance * scale;
+        }
+        return PLATFORM_OK;
+    }
+    /* Vertical layout: characters stack downward from y, each glyph rotated
+     * 90 degrees clockwise as a rigid block and centered horizontally on
+     * x. Per-glyph bearings are ignored here -- they only matter for tight
+     * horizontal typesetting, not short rail labels. */
+    int32_t origin = y;
     while (position < length) {
         const struct font_glyph* glyph = font_lookup(font, next_codepoint(text, length, &position));
         if (glyph == NULL) {
@@ -148,15 +233,16 @@ static enum platform_status text_display(void* opaque, const struct font* font, 
             continue;
         }
         const uint8_t* bitmap = &font->bitmap[glyph->bitmap_offset];
-        const int32_t glyph_x = origin + (int32_t)glyph->bearing_x * scale;
-        const int32_t glyph_y = y + ((int32_t)glyph->bearing_y + font->baseline) * scale;
+        const int32_t block_left = x - ((int32_t)glyph->height * scale) / 2;
         for (uint16_t row = 0U; row < glyph->height; ++row) {
             for (uint16_t column = 0U; column < glyph->width; ++column) {
                 const uint8_t alpha = bitmap[(size_t)row * glyph->width + column];
+                const int32_t rotated_x = block_left + (int32_t)(glyph->height - 1U - row) * scale;
+                const int32_t rotated_y = origin + (int32_t)column * scale;
                 for (uint8_t y_offset = 0U; y_offset < scale; ++y_offset) {
                     for (uint8_t x_offset = 0U; x_offset < scale; ++x_offset) {
-                        blend_pixel(context, glyph_x + (int32_t)column * scale + x_offset,
-                                    glyph_y + (int32_t)row * scale + y_offset, gray, alpha);
+                        blend_pixel(context, rotated_x + x_offset, rotated_y + y_offset, gray,
+                                    alpha);
                     }
                 }
             }
@@ -341,8 +427,16 @@ static enum platform_status poll_input(struct app_platform* context, struct plat
     uint8_t count = 0U;
     if (m5paper_gt911_read(&context->touch, points, &count) == ESP_OK && count > 0U) {
         event->type = PLATFORM_EVENT_TOUCH_DOWN;
-        event->x = points[0].x;
-        event->y = points[0].y;
+        /* The GT911 reports raw physical panel coordinates; invert the
+         * drawing rotation (see pixel_ref) so Lua always sees touches in
+         * the same logical space it draws into. */
+        if (context->landscape) {
+            event->x = points[0].y;
+            event->y = FRAMEBUFFER_WIDTH - 1 - points[0].x;
+        } else {
+            event->x = points[0].x;
+            event->y = points[0].y;
+        }
         return PLATFORM_OK;
     }
     return PLATFORM_OK;
@@ -516,7 +610,8 @@ esp_err_t esp_platform_create(struct platform* platform) {
                     .clear = clear_display,
                     .rectangle = rectangle_display,
                     .text = text_display,
-                    .present = present_display},
+                    .present = present_display,
+                    .set_orientation = set_orientation_display},
         .next_event = next_event,
         .monotonic_ms = monotonic_ms,
         .sleep_ms = sleep_ms,

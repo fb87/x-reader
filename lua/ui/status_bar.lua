@@ -5,7 +5,7 @@ return function(properties)
     local bar = widget.base(properties)
     bar.title = properties.title or ""
     function bar:draw()
-        chrome.status(self.title, false)
+        chrome.status(self.bounds, self.title, false)
     end
     return bar
 end

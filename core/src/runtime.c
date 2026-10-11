@@ -128,6 +128,7 @@ static int display_text(lua_State* state) {
     const char* text = luaL_checklstring(state, 3, &length);
     const lua_Integer scale = luaL_optinteger(state, 4, 1);
     const lua_Integer gray = luaL_optinteger(state, 5, 0);
+    const bool rotated = lua_toboolean(state, 6);
     if (length > 1024U || scale < 1 || scale > 8 || gray < 0 || gray > 15) {
         return luaL_error(state, "invalid canvas.text arguments");
     }
@@ -135,9 +136,9 @@ static int display_text(lua_State* state) {
     const struct font* font =
         icon_scale ? font_for_size((unsigned)scale - 3U) : font_for_size((unsigned)scale);
     const uint8_t render_scale = 1U;
-    const enum platform_status status =
-        runtime->platform.display.text(runtime->platform.display.context, font, (int32_t)x,
-                                       (int32_t)y, text, length, render_scale, (uint8_t)gray);
+    const enum platform_status status = runtime->platform.display.text(
+        runtime->platform.display.context, font, (int32_t)x, (int32_t)y, text, length, render_scale,
+        (uint8_t)gray, rotated);
     return status == PLATFORM_OK ? 0 : luaL_error(state, "canvas.text failed");
 }
 
@@ -401,6 +402,27 @@ static int display_size(lua_State* state) {
     return 2;
 }
 
+static int display_set_orientation(lua_State* state) {
+    struct runtime* runtime = runtime_from_upvalue(state);
+    const bool landscape = lua_toboolean(state, 1);
+    if (runtime->platform.display.set_orientation == NULL) {
+        lua_pushinteger(state, runtime->platform.display.width);
+        lua_pushinteger(state, runtime->platform.display.height);
+        return 2;
+    }
+    int32_t width = 0;
+    int32_t height = 0;
+    if (runtime->platform.display.set_orientation(runtime->platform.display.context, landscape,
+                                                  &width, &height) != PLATFORM_OK) {
+        return luaL_error(state, "display.set_orientation failed");
+    }
+    runtime->platform.display.width = width;
+    runtime->platform.display.height = height;
+    lua_pushinteger(state, width);
+    lua_pushinteger(state, height);
+    return 2;
+}
+
 static void push_runtime_userdata(lua_State* state, struct runtime* runtime) {
     struct runtime** value = lua_newuserdatauv(state, sizeof(*value), 0);
     *value = runtime;
@@ -430,6 +452,9 @@ static void register_services(struct runtime* runtime) {
     push_runtime_userdata(state, runtime);
     lua_pushcclosure(state, display_size, 1);
     lua_setfield(state, -2, "size");
+    push_runtime_userdata(state, runtime);
+    lua_pushcclosure(state, display_set_orientation, 1);
+    lua_setfield(state, -2, "set_orientation");
     lua_setglobal(state, "display");
 
     lua_newtable(state);

@@ -5,6 +5,7 @@ local settings = {
     show_page_number = true,
     show_clock = true,
     auto_sleep_minutes = 10,
+    orientation = "portrait",
 }
 
 local defaults = {
@@ -14,6 +15,7 @@ local defaults = {
     show_page_number = true,
     show_clock = true,
     auto_sleep_minutes = 10,
+    orientation = "portrait",
 }
 
 function settings.reset()
@@ -34,6 +36,7 @@ function settings.serialize()
         "show_page_number=" .. tostring(settings.show_page_number),
         "show_clock=" .. tostring(settings.show_clock),
         "auto_sleep_minutes=" .. tostring(settings.auto_sleep_minutes),
+        "orientation=" .. settings.orientation,
     }, "\n")
 end
 
@@ -58,6 +61,9 @@ function settings.restore(values)
         or auto_sleep == 60
     then
         settings.auto_sleep_minutes = auto_sleep
+    end
+    if values.orientation == "landscape" or values.orientation == "portrait" then
+        settings.orientation = values.orientation
     end
 end
 
@@ -121,6 +127,10 @@ end
 
 function settings.toggle_clock()
     settings.show_clock = not settings.show_clock
+end
+
+function settings.toggle_orientation()
+    settings.orientation = settings.orientation == "portrait" and "landscape" or "portrait"
 end
 
 return settings

@@ -27,6 +27,8 @@ function scene.move(stage, direction)
     stage.selected = ((stage.selected + direction - 1) % (#items + 1)) + 1
     if stage.selected > 1 then
         stage.list.selected_id = items[stage.selected - 1]:lower()
+        local page_size = stage.list.page_size or 1
+        stage.list.page = math.floor((stage.selected - 2) / page_size) + 1
     end
     stage.list.active = stage.focus_scope == "content"
 end
@@ -51,14 +53,17 @@ function scene.activate_dock(stage, context)
     end
 end
 function scene.event(stage, event, context)
-    if event.kind == "touch" and event.phase == "up" then
-        if event.y >= 96 and event.y < 300 then
-            stage.selected = 1
-            stage.focus_scope = "content"
-            scene.activate_content(stage, context)
-            return
-        end
-        local index = math.floor((event.y - 340) / 84) + 2
+    if event.kind ~= "touch" or event.phase ~= "up" then
+        return
+    end
+    if stage.card_bounds and layout.contains(stage.card_bounds, event.x, event.y) then
+        stage.selected = 1
+        stage.focus_scope = "content"
+        scene.activate_content(stage, context)
+    elseif layout.contains(stage.list.bounds, event.x, event.y) then
+        local page_size = stage.list.page_size or 1
+        local local_index = math.floor((event.y - stage.list.bounds.y) / layout.scale_y(84))
+        local index = (stage.list.page - 1) * page_size + local_index + 2
         if index >= 2 and index <= #items + 1 then
             stage.focus_scope = "content"
             stage.selected = index
@@ -66,25 +71,74 @@ function scene.event(stage, event, context)
         end
     end
 end
-function scene.draw(stage)
+function scene.draw(stage, bounds)
     local book = reader.last_book
     local card_selected = stage.selected == 1 and stage.focus_scope == "content"
-    canvas.text(24, 60, "Home", 3, 0)
-    canvas.rectangle(24, 96, 492, 216, card_selected and 12 or 14)
+    local regions = layout.column(bounds, { padding = 24, gap = 12 }, {
+        { size = 60 },
+        { size = 216 },
+        { fill = true },
+    })
+    local header, card, list_area = regions[1], regions[2], regions[3]
+    canvas.text(header.x, layout.text_y(header, "Home", 3), "Home", 3, 0)
+    canvas.rectangle(card.x, card.y, card.width, card.height, card_selected and 12 or 14)
+    stage.card_bounds = card
     if book ~= nil then
-        canvas.text(48, 124, "Continue Reading", 3, 0)
-        canvas.text(48, 164, book.title or "Unknown title", 2, 0)
-        canvas.text(48, 196, book.author ~= "" and book.author or "Unknown author", 1, 5)
+        local inner = layout.column(card, { padding = 24, gap = 6 }, {
+            { size = 34 },
+            { size = 34 },
+            { size = 28 },
+            { fill = true },
+            { size = 20 },
+            { size = 6 },
+        })
+        local label_box, title_box, author_box, page_box, bar_box =
+            inner[1], inner[2], inner[3], inner[5], inner[6]
+        canvas.text(
+            label_box.x,
+            layout.text_y(label_box, "Continue Reading", 3),
+            "Continue Reading",
+            3,
+            0
+        )
+        local title = book.title or "Unknown title"
+        canvas.text(title_box.x, layout.text_y(title_box, title, 2), title, 2, 0)
+        local author = book.author ~= "" and book.author or "Unknown author"
+        canvas.text(author_box.x, layout.text_y(author_box, author, 1), author, 1, 5)
         local page_label = string.format("%d / %d", reader.page, reader.page_count)
-        canvas.text(496 - canvas.measure(page_label, 1), 258, page_label, 1, 5)
-        canvas.rectangle(48, 278, 444, 6, 10)
-        canvas.rectangle(48, 278, reader.progress_width(444), 6, 5)
+        local page_width = canvas.measure(page_label, 1)
+        canvas.text(
+            page_box.x + page_box.width - page_width,
+            layout.text_y(page_box, page_label, 1),
+            page_label,
+            1,
+            5
+        )
+        canvas.rectangle(bar_box.x, bar_box.y, bar_box.width, bar_box.height, 10)
+        canvas.rectangle(
+            bar_box.x,
+            bar_box.y,
+            reader.progress_width(bar_box.width),
+            bar_box.height,
+            5
+        )
     else
-        canvas.text(48, 164, "No book to resume", 2, 5)
+        local inner = layout.column(
+            card,
+            { padding = 24, gap = 6 },
+            { { size = 34 }, { fill = true } }
+        )
+        canvas.text(
+            inner[1].x,
+            layout.text_y(inner[1], "No book to resume", 2),
+            "No book to resume",
+            2,
+            5
+        )
     end
     stage.list.selected_id = stage.selected > 1 and items[stage.selected - 1]:lower() or nil
     stage.list.active = stage.focus_scope == "content" and stage.selected > 1
-    stage.list:layout({ x = 24, y = 340, width = 492, height = layout.content_height(340, 40) })
+    stage.list:layout(list_area)
     stage.list:draw()
 end
 return scene

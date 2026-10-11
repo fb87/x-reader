@@ -134,24 +134,38 @@ local function create_application()
     local function configure_layout()
         local width, height = display.size()
         layout.configure(width, height)
-        chrome.content = layout.standard().content
     end
 
-    local function prepare_chrome(scene, stage)
+    local function prepare_chrome(scene, stage, regions)
         if stage.status_bar == nil then
             stage.status_bar = StatusBar({ title = scene.id })
         end
         if stage.action_bar == nil then
             stage.action_bar = ActionBar({ actions = {} })
         end
+        stage.status_bar:layout(regions.status)
         stage.status_bar.title = scene.title and scene.title(stage) or scene.id
+        stage.action_bar:layout(regions.dock)
         stage.action_bar.actions = scene.dock(stage)
         stage.action_bar.selected = stage.dock_selected or 1
     end
 
+    -- Settings calls this when the user flips Display > Orientation. The
+    -- platform may resize a window (simulator) or rotate pixels into a
+    -- fixed panel (ESP firmware) -- either way, layout.lua just needs the
+    -- resulting logical width/height, recomputed fresh everywhere else.
+    function application.set_orientation(landscape)
+        local width, height = display.set_orientation(landscape)
+        layout.configure(width, height)
+    end
+    context.set_orientation = application.set_orientation
+
     function application.start(snapshot)
         configure_layout()
         persistence.load()
+        if settings.orientation == "landscape" then
+            application.set_orientation(true)
+        end
         last_activity = system.monotonic_ms()
         if snapshot and snapshot.screen and scenes[snapshot.screen] then
             context.replace(snapshot.screen)
@@ -184,12 +198,13 @@ local function create_application()
             event.kind == "touch"
             and event.phase == "up"
             and (scene.chrome == "standard" or stage.dock_visible)
-            and event.y >= layout.standard().dock.y
+            and layout.contains(layout.regions().dock, event.x, event.y)
         then
+            local dock = layout.regions().dock
             local actions = scene.dock(stage)
             stage.focus_scope = "dock"
-            stage.dock_selected =
-                math.max(1, math.min(#actions, math.floor(event.x / (540 / #actions)) + 1))
+            stage.dock_selected = layout.slot_index(dock, event.x, event.y, #actions)
+                or stage.dock_selected
             if scene.activate_dock then
                 scene.activate_dock(stage, context)
             end
@@ -226,10 +241,11 @@ local function create_application()
 
     function application.draw()
         local scene, stage = context.active()
+        local regions = layout.regions()
         canvas.clear(theme.color.background)
         if scene.chrome == "standard" then
-            prepare_chrome(scene, stage)
-            scene.draw(stage, chrome.content)
+            prepare_chrome(scene, stage, regions)
+            scene.draw(stage, regions.content)
             if stage.dialog and stage.dialog.visible then
                 stage.dialog:draw()
             end
@@ -239,23 +255,33 @@ local function create_application()
             stage.status_bar:draw()
             stage.action_bar:draw(stage.focus_scope == "dock")
         else
+            local full_bounds
             if stage.dock_visible then
-                scene.draw(stage, chrome.content)
+                full_bounds = regions.content
+            elseif scene.status then
+                full_bounds = layout.below_status()
             else
-                scene.draw(stage, { x = 0, y = 0, width = 540, height = 960 })
+                full_bounds = layout.fullscreen()
             end
+            scene.draw(stage, full_bounds)
             if stage.dialog and stage.dialog.visible then
                 stage.dialog:draw()
             end
             if scene.status then
-                chrome.status(scene.title and scene.title(stage) or scene.id, scene.status_title)
+                chrome.status(
+                    regions.status,
+                    scene.title and scene.title(stage) or scene.id,
+                    scene.status_title
+                )
             end
             if stage.dock_visible then
                 if stage.action_bar then
+                    stage.action_bar:layout(regions.dock)
                     stage.action_bar.selected = stage.dock_selected or 1
                     stage.action_bar:draw()
                 else
                     chrome.dock(
+                        regions.dock,
                         scene.dock(stage),
                         stage.dock_selected or 1,
                         stage.focus_scope == "dock"

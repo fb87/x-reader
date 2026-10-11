@@ -18,9 +18,8 @@
 #include <unistd.h>
 
 enum {
-    DISPLAY_WIDTH = 540,
-    DISPLAY_HEIGHT = 960,
-    DISPLAY_ROW_BYTES = DISPLAY_WIDTH / 2,
+    NATIVE_WIDTH = 480,
+    NATIVE_HEIGHT = 800,
 };
 
 struct sdl_context {
@@ -30,6 +29,12 @@ struct sdl_context {
     uint8_t* framebuffer;
     uint32_t* pixels;
     uint64_t started;
+    /* The simulator has no fixed physical panel to rotate pixels into, so
+     * unlike the ESP backend it just reallocates everything at the swapped
+     * size on orientation change instead of rotating draws in place. */
+    int32_t width;
+    int32_t height;
+    int32_t row_bytes;
 };
 
 struct host_archive {
@@ -38,12 +43,12 @@ struct host_archive {
 };
 
 static uint8_t* pixel_at(struct sdl_context* context, int32_t x, int32_t y) {
-    return &context->framebuffer[(size_t)y * DISPLAY_ROW_BYTES + (size_t)x / 2U];
+    return &context->framebuffer[(size_t)y * (size_t)context->row_bytes + (size_t)x / 2U];
 }
 
 static void blend_pixel(struct sdl_context* context, int32_t x, int32_t y, uint8_t gray,
                         uint8_t alpha) {
-    if (x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT || alpha == 0U) {
+    if (x < 0 || x >= context->width || y < 0 || y >= context->height || alpha == 0U) {
         return;
     }
     uint8_t* pixel = pixel_at(context, x, y);
@@ -61,7 +66,8 @@ static void blend_pixel(struct sdl_context* context, int32_t x, int32_t y, uint8
 
 static enum platform_status clear_display(void* opaque, uint8_t gray) {
     struct sdl_context* context = opaque;
-    memset(context->framebuffer, (int)((gray << 4U) | gray), DISPLAY_ROW_BYTES * DISPLAY_HEIGHT);
+    memset(context->framebuffer, (int)((gray << 4U) | gray),
+           (size_t)context->row_bytes * (size_t)context->height);
     return PLATFORM_OK;
 }
 
@@ -73,8 +79,8 @@ static enum platform_status draw_rectangle(void* opaque, int32_t x, int32_t y, i
     }
     const int32_t right = x + width;
     const int32_t bottom = y + height;
-    for (int32_t row = y < 0 ? 0 : y; row < bottom && row < DISPLAY_HEIGHT; ++row) {
-        for (int32_t column = x < 0 ? 0 : x; column < right && column < DISPLAY_WIDTH; ++column) {
+    for (int32_t row = y < 0 ? 0 : y; row < bottom && row < context->height; ++row) {
+        for (int32_t column = x < 0 ? 0 : x; column < right && column < context->width; ++column) {
             uint8_t* pixel = pixel_at(context, column, row);
             if ((column & 1) == 0) {
                 *pixel = (uint8_t)((*pixel & 0x0fU) | (gray << 4U));
@@ -109,11 +115,44 @@ static uint32_t next_codepoint(const char* text, size_t length, size_t* position
 }
 
 static enum platform_status draw_text(void* opaque, const struct font* font, int32_t x, int32_t y,
-                                      const char* text, size_t length, uint8_t scale,
-                                      uint8_t gray) {
+                                      const char* text, size_t length, uint8_t scale, uint8_t gray,
+                                      bool rotated) {
     struct sdl_context* context = opaque;
     size_t position = 0U;
-    int32_t origin_x = x;
+    if (!rotated) {
+        int32_t origin_x = x;
+        while (position < length) {
+            const struct font_glyph* glyph =
+                font_lookup(font, next_codepoint(text, length, &position));
+            if (glyph == NULL) {
+                glyph = font_lookup(font, 0xfffdU);
+            }
+            if (glyph == NULL) {
+                continue;
+            }
+            const uint8_t* bitmap = &font->bitmap[glyph->bitmap_offset];
+            const int32_t glyph_x = origin_x + (int32_t)glyph->bearing_x * scale;
+            const int32_t glyph_y = y + ((int32_t)glyph->bearing_y + font->baseline) * scale;
+            for (uint16_t row = 0U; row < glyph->height; ++row) {
+                for (uint16_t column = 0U; column < glyph->width; ++column) {
+                    const uint8_t alpha = bitmap[(size_t)row * glyph->width + column];
+                    for (uint8_t y_offset = 0U; y_offset < scale; ++y_offset) {
+                        for (uint8_t x_offset = 0U; x_offset < scale; ++x_offset) {
+                            blend_pixel(context, glyph_x + (int32_t)column * scale + x_offset,
+                                        glyph_y + (int32_t)row * scale + y_offset, gray, alpha);
+                        }
+                    }
+                }
+            }
+            origin_x += (int32_t)glyph->advance * scale;
+        }
+        return PLATFORM_OK;
+    }
+    /* Vertical layout: characters stack downward from y, each glyph rotated
+     * 90 degrees clockwise as a rigid block and centered horizontally on
+     * x. Per-glyph bearings are ignored here -- they only matter for tight
+     * horizontal typesetting, not short rail labels. */
+    int32_t origin_y = y;
     while (position < length) {
         const struct font_glyph* glyph = font_lookup(font, next_codepoint(text, length, &position));
         if (glyph == NULL) {
@@ -123,20 +162,21 @@ static enum platform_status draw_text(void* opaque, const struct font* font, int
             continue;
         }
         const uint8_t* bitmap = &font->bitmap[glyph->bitmap_offset];
-        const int32_t glyph_x = origin_x + (int32_t)glyph->bearing_x * scale;
-        const int32_t glyph_y = y + ((int32_t)glyph->bearing_y + font->baseline) * scale;
+        const int32_t block_left = x - ((int32_t)glyph->height * scale) / 2;
         for (uint16_t row = 0U; row < glyph->height; ++row) {
             for (uint16_t column = 0U; column < glyph->width; ++column) {
                 const uint8_t alpha = bitmap[(size_t)row * glyph->width + column];
+                const int32_t rotated_x = block_left + (int32_t)(glyph->height - 1U - row) * scale;
+                const int32_t rotated_y = origin_y + (int32_t)column * scale;
                 for (uint8_t y_offset = 0U; y_offset < scale; ++y_offset) {
                     for (uint8_t x_offset = 0U; x_offset < scale; ++x_offset) {
-                        blend_pixel(context, glyph_x + (int32_t)column * scale + x_offset,
-                                    glyph_y + (int32_t)row * scale + y_offset, gray, alpha);
+                        blend_pixel(context, rotated_x + x_offset, rotated_y + y_offset, gray,
+                                    alpha);
                     }
                 }
             }
         }
-        origin_x += (int32_t)glyph->advance * scale;
+        origin_y += (int32_t)glyph->advance * scale;
     }
     return PLATFORM_OK;
 }
@@ -145,17 +185,17 @@ static enum platform_status present_display(void* opaque, bool partial, bool hig
     (void)partial;
     (void)high_quality;
     struct sdl_context* context = opaque;
-    for (int32_t y = 0; y < DISPLAY_HEIGHT; ++y) {
-        for (int32_t x = 0; x < DISPLAY_WIDTH; ++x) {
+    for (int32_t y = 0; y < context->height; ++y) {
+        for (int32_t x = 0; x < context->width; ++x) {
             const uint8_t packed = *pixel_at(context, x, y);
             const uint8_t gray = (x & 1) == 0 ? packed >> 4U : packed & 0x0fU;
             const uint8_t value = (uint8_t)(gray * 17U);
-            context->pixels[(size_t)y * DISPLAY_WIDTH + (size_t)x] =
+            context->pixels[(size_t)y * (size_t)context->width + (size_t)x] =
                 0xff000000U | ((uint32_t)value << 16U) | ((uint32_t)value << 8U) | value;
         }
     }
     if (SDL_UpdateTexture(context->texture, NULL, context->pixels,
-                          DISPLAY_WIDTH * (int)sizeof(*context->pixels)) != 0) {
+                          context->width * (int)sizeof(*context->pixels)) != 0) {
         return PLATFORM_ERROR;
     }
     if (SDL_RenderClear(context->renderer) != 0 ||
@@ -434,6 +474,41 @@ static enum platform_status state_write(void* opaque, const char* root, const ch
     return PLATFORM_OK;
 }
 
+static enum platform_status set_orientation_sdl(void* opaque, bool landscape, int32_t* out_width,
+                                                int32_t* out_height) {
+    struct sdl_context* context = opaque;
+    const int32_t width = landscape ? NATIVE_HEIGHT : NATIVE_WIDTH;
+    const int32_t height = landscape ? NATIVE_WIDTH : NATIVE_HEIGHT;
+    if (width != context->width || height != context->height) {
+        uint8_t* framebuffer = calloc((size_t)(width / 2) * (size_t)height, sizeof(*framebuffer));
+        uint32_t* pixels = calloc((size_t)width * (size_t)height, sizeof(*pixels));
+        SDL_Texture* texture = SDL_CreateTexture(context->renderer, SDL_PIXELFORMAT_ARGB8888,
+                                                 SDL_TEXTUREACCESS_STREAMING, width, height);
+        if (framebuffer == NULL || pixels == NULL || texture == NULL) {
+            free(framebuffer);
+            free(pixels);
+            if (texture != NULL) {
+                SDL_DestroyTexture(texture);
+            }
+            return PLATFORM_ERROR;
+        }
+        free(context->framebuffer);
+        free(context->pixels);
+        SDL_DestroyTexture(context->texture);
+        context->framebuffer = framebuffer;
+        context->pixels = pixels;
+        context->texture = texture;
+        context->width = width;
+        context->height = height;
+        context->row_bytes = width / 2;
+        SDL_SetWindowSize(context->window, width, height);
+        (void)SDL_RenderSetLogicalSize(context->renderer, width, height);
+    }
+    *out_width = context->width;
+    *out_height = context->height;
+    return PLATFORM_OK;
+}
+
 enum platform_status sdl_platform_create(struct platform* platform, const char* title) {
     if (platform == NULL || title == NULL) {
         return PLATFORM_INVALID_ARGUMENT;
@@ -446,8 +521,12 @@ enum platform_status sdl_platform_create(struct platform* platform, const char* 
         SDL_Quit();
         return PLATFORM_ERROR;
     }
-    context->window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                       DISPLAY_WIDTH, DISPLAY_HEIGHT, SDL_WINDOW_ALLOW_HIGHDPI);
+    context->width = NATIVE_WIDTH;
+    context->height = NATIVE_HEIGHT;
+    context->row_bytes = NATIVE_WIDTH / 2;
+    context->window =
+        SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, NATIVE_WIDTH,
+                         NATIVE_HEIGHT, SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
     context->renderer = context->window == NULL
                             ? NULL
                             : SDL_CreateRenderer(context->window, -1, SDL_RENDERER_ACCELERATED);
@@ -456,16 +535,17 @@ enum platform_status sdl_platform_create(struct platform* platform, const char* 
     }
     if (context->renderer != NULL) {
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-        (void)SDL_RenderSetLogicalSize(context->renderer, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+        (void)SDL_RenderSetLogicalSize(context->renderer, NATIVE_WIDTH, NATIVE_HEIGHT);
     }
     context->texture =
         context->renderer == NULL
             ? NULL
             : SDL_CreateTexture(context->renderer, SDL_PIXELFORMAT_ARGB8888,
-                                SDL_TEXTUREACCESS_STREAMING, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+                                SDL_TEXTUREACCESS_STREAMING, NATIVE_WIDTH, NATIVE_HEIGHT);
     context->framebuffer =
-        calloc(DISPLAY_ROW_BYTES * DISPLAY_HEIGHT, sizeof(*context->framebuffer));
-    context->pixels = calloc(DISPLAY_WIDTH * DISPLAY_HEIGHT, sizeof(*context->pixels));
+        calloc((size_t)context->row_bytes * (size_t)NATIVE_HEIGHT, sizeof(*context->framebuffer));
+    context->pixels =
+        calloc((size_t)NATIVE_WIDTH * (size_t)NATIVE_HEIGHT, sizeof(*context->pixels));
     if (context->window == NULL || context->renderer == NULL || context->texture == NULL ||
         context->framebuffer == NULL || context->pixels == NULL) {
         sdl_platform_destroy(&(struct platform){.context = context});
@@ -475,12 +555,13 @@ enum platform_status sdl_platform_create(struct platform* platform, const char* 
     platform->context = context;
     platform->display = (struct platform_display){
         .context = context,
-        .width = DISPLAY_WIDTH,
-        .height = DISPLAY_HEIGHT,
+        .width = NATIVE_WIDTH,
+        .height = NATIVE_HEIGHT,
         .clear = clear_display,
         .rectangle = draw_rectangle,
         .text = draw_text,
         .present = present_display,
+        .set_orientation = set_orientation_sdl,
     };
     platform->next_event = next_event;
     platform->monotonic_ms = monotonic_ms;

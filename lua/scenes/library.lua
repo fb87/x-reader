@@ -89,7 +89,10 @@ function scene.move(stage, direction)
     stage.list.selected_id = "book:" .. tostring(stage.selected)
     stage.list.page = math.floor(
         (stage.selected - 1)
-            / math.max(1, math.floor(stage.list.bounds.height / stage.list.row_height))
+            / math.max(
+                1,
+                math.floor(stage.list.bounds.height / layout.scale_y(stage.list.row_height))
+            )
     ) + 1
     stage.list.active = stage.focus_scope == "content"
 end
@@ -118,7 +121,7 @@ function scene.event(stage, event, context)
         if
             event.x >= bounds.x
             and event.x < bounds.x + bounds.width
-            and event.y >= bounds.y + bounds.height - 64
+            and event.y >= bounds.y + bounds.height - layout.scale_y(64)
         then
             stage.dialog.selected = math.min(
                 #stage.dialog.actions,
@@ -131,49 +134,58 @@ function scene.event(stage, event, context)
         end
         return
     end
-    if event.y >= layout.standard().dock.y then
-        stage.focus_scope = "dock"
-        stage.dock_selected = math.floor(event.x / 180) + 1
-        if stage.dock_selected == 1 then
-            context.push("reading", { book = bookshelf.books[stage.selected] })
-        elseif stage.dock_selected == 2 then
-            scene.show_info(stage, context)
-        end
-        if stage.dock_selected == 3 then
-            context.pop()
-        end
-    elseif event.y >= 820 and event.x >= 360 then
-        context.pop()
-    elseif event.y >= 700 then
+    -- Dock touches are handled centrally by app.lua for standard-chrome
+    -- scenes; only the list and the prev/next footer zones are ours.
+    if stage.footer_prev and layout.contains(stage.footer_prev, event.x, event.y) then
         local page_size = stage.list.page_size or 1
-        if event.x < 270 then
-            stage.selected = math.max(1, stage.selected - page_size)
-        else
-            stage.selected = math.min(#bookshelf.books, stage.selected + page_size)
-        end
+        stage.selected = math.max(1, stage.selected - page_size)
         stage.list.page = math.floor((stage.selected - 1) / page_size) + 1
-    elseif event.y >= 119 and event.y < 119 + #bookshelf.books * stage.list.row_height then
+    elseif stage.footer_next and layout.contains(stage.footer_next, event.x, event.y) then
+        local page_size = stage.list.page_size or 1
+        stage.selected = math.min(#bookshelf.books, stage.selected + page_size)
+        stage.list.page = math.floor((stage.selected - 1) / page_size) + 1
+    elseif layout.contains(stage.list.bounds, event.x, event.y) then
         stage.focus_scope = "content"
         stage.selected = math.max(
             1,
-            math.min(#bookshelf.books, math.floor((event.y - 119) / stage.list.row_height) + 1)
+            math.min(
+                #bookshelf.books,
+                math.floor((event.y - stage.list.bounds.y) / layout.scale_y(stage.list.row_height))
+                    + 1
+            )
         )
         stage.list.page = math.floor((stage.selected - 1) / (stage.list.page_size or 1)) + 1
     end
 end
-function scene.draw(stage)
+function scene.draw(stage, bounds)
     stage.list.selected_id = "book:" .. tostring(stage.selected)
-    canvas.text(24, 60, "Library", 3, 0)
-    stage.list:layout({ x = 20, y = 119, width = 500, height = layout.content_height(119, 24) })
+    local regions = layout.column(bounds, { padding = 20, gap = 8 }, {
+        { size = 60 },
+        { fill = true },
+        { size = 28 },
+    })
+    local header, list_area, footer = regions[1], regions[2], regions[3]
+    canvas.text(header.x, layout.text_y(header, "Library", 3), "Library", 3, 0)
+    stage.list:layout(list_area)
     stage.list.page = math.floor(
         (stage.selected - 1)
-            / math.max(1, math.floor(stage.list.bounds.height / stage.list.row_height))
+            / math.max(
+                1,
+                math.floor(stage.list.bounds.height / layout.scale_y(stage.list.row_height))
+            )
     ) + 1
     stage.list:draw()
+    local halves = layout.row(footer, {}, { { fill = true }, { fill = true } })
+    stage.footer_prev, stage.footer_next = halves[1], halves[2]
+    local page_label = "Page "
+        .. tostring(stage.list.page)
+        .. " / "
+        .. tostring(stage.list.page_count)
+    local label_width = canvas.measure(page_label, 1)
     canvas.text(
-        210,
-        layout.standard().dock.y - 28,
-        "Page " .. tostring(stage.list.page) .. " / " .. tostring(stage.list.page_count),
+        footer.x + math.floor((footer.width - label_width) / 2),
+        layout.text_y(footer, page_label, 1),
+        page_label,
         1,
         5
     )

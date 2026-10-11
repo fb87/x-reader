@@ -5,8 +5,6 @@ local theme = require("theme")
 local chrome = {}
 -- The simulator watcher reloads this module after every Lua edit.
 
-chrome.content = layout.standard().content
-
 local function truncate_title(title, width)
     local suffix = "..."
     if canvas.measure(title, 1) <= width then
@@ -26,8 +24,7 @@ local function truncate_title(title, width)
     return title:sub(1, length) .. suffix
 end
 
-function chrome.status(title, show_title)
-    local area = layout.standard().status
+function chrome.status(area, title, show_title)
     canvas.rectangle(area.x, area.y, area.width, area.height, theme.color.background)
     canvas.rectangle(area.x, area.y + area.height - 1, area.width, 1, theme.color.divider)
     if settings.show_clock then
@@ -70,19 +67,20 @@ function chrome.status(title, show_title)
     )
 end
 
-function chrome.dock(actions, selected, active)
-    -- Keep the active dock action unmistakable on grayscale displays.
-    local area = layout.standard().dock
-    canvas.rectangle(area.x, area.y, area.width, area.height, theme.color.background)
-    canvas.rectangle(area.x, area.y, area.width, 1, theme.color.selected)
-    local width = math.floor(area.width / math.max(1, #actions))
-    for index, action in ipairs(actions) do
-        local slot =
-            { x = area.x + (index - 1) * width, y = area.y, width = width, height = area.height }
-        local highlighted = active and index == selected
-        if highlighted then
-            canvas.rectangle(slot.x, slot.y, slot.width, slot.height, theme.color.selected)
-        end
+local function fill_slots(count)
+    local items = {}
+    for _ = 1, math.max(1, count) do
+        items[#items + 1] = { fill = true }
+    end
+    return items
+end
+
+-- A slot wider than it is tall (bottom dock, portrait) lays its icon and
+-- label side by side; a slot taller than it is wide (side rail, landscape)
+-- stacks them instead. Either way the slot decides for itself from its own
+-- shape, so chrome.dock() never needs to know the display's orientation.
+local function draw_slot_contents(slot, action)
+    if slot.width >= slot.height then
         local icon_width = action.icon and canvas.measure(action.icon, 6) or 0
         local label_width = canvas.measure(action.label, 1)
         local gap = action.icon and layout.scale_x(8) or 0
@@ -104,6 +102,63 @@ function chrome.dock(actions, selected, active)
                 theme.color.text
             )
         end
+        return
+    end
+    -- The icon stays upright near the top of the rail slot; the label
+    -- rotates 90 degrees to read down the slot instead of being squeezed
+    -- sideways into a column far narrower than the text itself.
+    local label_top = slot.y + layout.scale_y(8)
+    if action.icon ~= nil then
+        local icon_width, icon_height = canvas.measure(action.icon, 6)
+        canvas.text(
+            slot.x + math.floor((slot.width - icon_width) / 2),
+            label_top,
+            action.icon,
+            6,
+            theme.color.text
+        )
+        label_top = label_top + icon_height + layout.scale_y(8)
+    end
+    local label_length = canvas.measure(action.label, 1)
+    local available = slot.y + slot.height - label_top
+    local label_y = label_top + math.floor((available - label_length) / 2)
+    canvas.text(
+        slot.x + math.floor(slot.width / 2),
+        label_y,
+        action.label,
+        1,
+        theme.color.text,
+        true
+    )
+end
+
+function chrome.dock(area, actions, selected, active)
+    -- Keep the active dock action unmistakable on grayscale displays.
+    canvas.rectangle(area.x, area.y, area.width, area.height, theme.color.background)
+    local horizontal = area.width >= area.height
+    -- The divider belongs on whichever edge of the dock touches content,
+    -- not a fixed side -- a bottom-anchored dock borders content above it,
+    -- a left-anchored rail borders content to its right, and so on.
+    if horizontal then
+        if area.y == 0 then
+            canvas.rectangle(area.x, area.y + area.height - 1, area.width, 1, theme.color.selected)
+        else
+            canvas.rectangle(area.x, area.y, area.width, 1, theme.color.selected)
+        end
+    else
+        if area.x == 0 then
+            canvas.rectangle(area.x + area.width - 1, area.y, 1, area.height, theme.color.selected)
+        else
+            canvas.rectangle(area.x, area.y, 1, area.height, theme.color.selected)
+        end
+    end
+    local slots = layout.stack(area, horizontal and "row" or "column", {}, fill_slots(#actions))
+    for index, action in ipairs(actions) do
+        local slot = slots[index]
+        if active and index == selected then
+            canvas.rectangle(slot.x, slot.y, slot.width, slot.height, theme.color.selected)
+        end
+        draw_slot_contents(slot, action)
     end
 end
 

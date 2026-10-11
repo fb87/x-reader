@@ -102,37 +102,64 @@ function scene.activate_dock(stage, context)
     end
 end
 function scene.event(stage, event, context)
-    if event.kind == "touch" and event.phase == "up" and event.y >= layout.standard().dock.y then
-        stage.dock_selected = math.floor(event.x / 180) + 1
-        if stage.dock_selected == 3 then
-            context.pop()
-        end
-    elseif event.kind == "touch" and event.phase == "up" and event.y >= 142 then
-        local page_size = stage.list.page_size or 1
-        local local_index = math.floor((event.y - 142) / stage.list.row_height) + 1
-        stage.focus_scope = "content"
-        stage.selected =
-            math.max(1, math.min(#stage.list.rows, (stage.list.page - 1) * page_size + local_index))
-        stage.list.selected_id = stage.list.rows[stage.selected]
-            and stage.list.rows[stage.selected].id
-        scene.open_selected(stage, context)
+    if event.kind ~= "touch" or event.phase ~= "up" then
+        return
     end
+    -- Dock touches are handled centrally by app.lua for standard-chrome
+    -- scenes; only the list area is ours to hit-test.
+    if not layout.contains(stage.list.bounds, event.x, event.y) then
+        return
+    end
+    local page_size = stage.list.page_size or 1
+    local local_index = math.floor(
+        (event.y - stage.list.bounds.y) / layout.scale_y(stage.list.row_height)
+    ) + 1
+    stage.focus_scope = "content"
+    stage.selected =
+        math.max(1, math.min(#stage.list.rows, (stage.list.page - 1) * page_size + local_index))
+    stage.list.selected_id = stage.list.rows[stage.selected] and stage.list.rows[stage.selected].id
+    scene.open_selected(stage, context)
 end
-function scene.draw(stage)
-    local header = { x = 20, y = 70, width = 500, height = 64 }
-    canvas.text(24, layout.text_y(header, icons.folder, 6), icons.folder, 6, 0)
-    canvas.text(76, layout.text_y(header, scene.title(stage), 3), scene.title(stage), 3, 0)
+function scene.draw(stage, bounds)
+    local regions = layout.column(bounds, { padding = 20, gap = 8 }, {
+        { size = 64 },
+        { fill = true },
+        { size = 28 },
+    })
+    local header, list_area, footer = regions[1], regions[2], regions[3]
+    canvas.text(
+        header.x + layout.scale_x(4),
+        layout.text_y(header, icons.folder, 6),
+        icons.folder,
+        6,
+        0
+    )
+    canvas.text(
+        header.x + layout.scale_x(56),
+        layout.text_y(header, scene.title(stage), 3),
+        scene.title(stage),
+        3,
+        0
+    )
     stage.list.active = stage.focus_scope == "content"
-    stage.list:layout({ x = 20, y = 142, width = 500, height = layout.content_height(142, 24) })
+    stage.list:layout(list_area)
     stage.list.page = math.floor(
         (stage.selected - 1)
-            / math.max(1, math.floor(stage.list.bounds.height / stage.list.row_height))
+            / math.max(
+                1,
+                math.floor(stage.list.bounds.height / layout.scale_y(stage.list.row_height))
+            )
     ) + 1
     stage.list:draw()
+    local page_label = "Page "
+        .. tostring(stage.list.page)
+        .. " / "
+        .. tostring(stage.list.page_count)
+    local label_width = canvas.measure(page_label, 1)
     canvas.text(
-        220,
-        layout.standard().dock.y - 28,
-        "Page " .. tostring(stage.list.page) .. " / " .. tostring(stage.list.page_count),
+        footer.x + math.floor((footer.width - label_width) / 2),
+        layout.text_y(footer, page_label, 1),
+        page_label,
         1,
         5
     )

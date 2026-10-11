@@ -98,61 +98,82 @@ function scene.event(stage, event, context)
     if event.kind ~= "touch" or event.phase ~= "up" then
         return
     end
-    if stage.dock_visible then
-        if event.y >= layout.standard().dock.y then
-            if event.x < 180 then
-                stage.dock_visible = false
-                stage.focus_scope = "content"
-                context.pop()
-            elseif event.x < 360 then
-                reader.previous_page()
-            else
-                reader.next_page()
-            end
-        end
-    elseif event.x < 180 then
+    -- The dock overlay's own touches are handled centrally by app.lua
+    -- (scene.activate_dock); this only covers the reading panel itself,
+    -- which is hidden behind the dock while it's open.
+    if stage.dock_visible or stage.panel_bounds == nil then
+        return
+    end
+    local panel = stage.panel_bounds
+    local third = math.floor(panel.width / 3)
+    if event.x < panel.x + third then
         reader.previous_page()
-    elseif event.x > 360 then
+    elseif event.x > panel.x + third * 2 then
         reader.next_page()
-    elseif event.y >= 680 then
+    elseif stage.footer_bounds and event.y >= stage.footer_bounds.y then
         stage.dock_visible = true
         stage.focus_scope = "dock"
     end
 end
-function scene.draw(stage)
+function scene.draw(stage, bounds)
     local scale = settings.font_scale()
-    local side_margin = 8
-    local text_margin = 8
-    local panel_width = 540 - side_margin * 2
-    local text_x = side_margin + text_margin
-    local text_width = panel_width - text_margin * 2
+    local side_margin = layout.scale_x(8)
+    local text_margin = layout.scale_x(8)
+    local regions = layout.column(bounds, { padding = 0 }, {
+        { fill = true },
+        { size = 48 },
+    })
+    local panel, footer = regions[1], regions[2]
+    panel = {
+        x = panel.x + side_margin,
+        y = panel.y,
+        width = panel.width - side_margin * 2,
+        height = panel.height,
+    }
+    footer = {
+        x = footer.x + side_margin,
+        y = footer.y,
+        width = footer.width - side_margin * 2,
+        height = footer.height,
+    }
+    stage.panel_bounds = panel
+    stage.footer_bounds = footer
+    local text_x = panel.x + text_margin
+    local text_width = panel.width - text_margin * 2
     local text_right = text_x + text_width
-    local top = 48
-    local bottom = stage.dock_visible and 880 or 947
-    local footer_height = 48
-    local content_bottom = bottom - footer_height
-    local header_height = 24
+    local header_height = layout.scale_y(24)
     local _, font_height = canvas.measure("Ag", scale)
     local line_height = font_height + 2
-    canvas.rectangle(side_margin, top, panel_width, content_bottom - top, theme.color.surface)
+    canvas.rectangle(panel.x, panel.y, panel.width, panel.height, theme.color.surface)
     if reader.error ~= nil then
-        canvas.text(text_x, top + 90, "EPUB error", 2, 0)
-        canvas.text(text_x, top + 130, reader.error, 1, 0)
+        canvas.text(text_x, panel.y + layout.scale_y(90), "EPUB error", 2, 0)
+        canvas.text(text_x, panel.y + layout.scale_y(130), reader.error, 1, 0)
     else
-        local line_limit = math.floor((content_bottom - top - header_height) / line_height)
+        local line_limit = math.floor((panel.height - header_height) / line_height)
         for index, line in ipairs(reader.page_lines(scale, line_limit, text_width)) do
-            canvas.text(text_x, top + header_height + (index - 1) * line_height, line, scale, 0)
+            canvas.text(text_x, panel.y + header_height + (index - 1) * line_height, line, scale, 0)
         end
     end
-    local footer_top = bottom - footer_height
     local progress_width = reader.progress_width(text_width)
     local page_label = string.format("%d / %d", reader.page, reader.page_count)
-    local chapter = truncate_text(reader.chapter_name(), 1, text_width - 100)
+    local chapter = truncate_text(reader.chapter_name(), 1, text_width - layout.scale_x(100))
     local page_label_x = text_right - canvas.measure(page_label, 1)
-    canvas.rectangle(side_margin, footer_top, panel_width, footer_height, theme.color.surface)
-    canvas.text(text_x, footer_top + 5, chapter, 1, 0)
-    canvas.text(page_label_x, footer_top + 5, page_label, 1, 0)
-    canvas.rectangle(text_x, footer_top + 31, text_width, 6, theme.color.divider)
-    canvas.rectangle(text_x, footer_top + 31, progress_width, 6, theme.color.secondary)
+    canvas.rectangle(footer.x, footer.y, footer.width, footer.height, theme.color.surface)
+    canvas.text(text_x, footer.y + layout.scale_y(5), chapter, 1, 0)
+    canvas.text(page_label_x, footer.y + layout.scale_y(5), page_label, 1, 0)
+    canvas.rectangle(
+        text_x,
+        footer.y + layout.scale_y(31),
+        text_width,
+        layout.scale_y(6),
+        theme.color.divider
+    )
+    canvas.rectangle(
+        text_x,
+        footer.y + layout.scale_y(31),
+        progress_width,
+        layout.scale_y(6),
+        theme.color.secondary
+    )
 end
 return scene

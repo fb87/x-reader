@@ -54,9 +54,23 @@ struct platform_display {
     enum platform_status (*clear)(void* context, uint8_t gray);
     enum platform_status (*rectangle)(void* context, int32_t x, int32_t y, int32_t width,
                                       int32_t height, uint8_t gray);
+    /* rotated draws each glyph turned 90 degrees clockwise, stacking
+     * characters downward from y instead of rightward from x, with x as
+     * the horizontal center of the resulting column. Used for dock labels
+     * when the dock renders as a narrow side rail. */
     enum platform_status (*text)(void* context, const struct font* font, int32_t x, int32_t y,
-                                 const char* text, size_t length, uint8_t scale, uint8_t gray);
+                                 const char* text, size_t length, uint8_t scale, uint8_t gray,
+                                 bool rotated);
     enum platform_status (*present)(void* context, bool partial, bool high_quality);
+    /* Switches the logical coordinate space canvas.* draws into: portrait
+     * (native) or landscape (width/height swapped from native). Reports the
+     * resulting logical width/height so the caller can update display.width
+     * /height. How this is achieved is backend-specific: a backend with no
+     * fixed physical panel (e.g. a desktop window) can simply resize;
+     * one with a fixed physical panel must rotate every pixel it draws
+     * into that panel's native orientation instead. */
+    enum platform_status (*set_orientation)(void* context, bool landscape, int32_t* out_width,
+                                            int32_t* out_height);
 };
 
 struct platform {

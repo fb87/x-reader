@@ -42,7 +42,8 @@ return function(properties)
         end
         selected = ((selected - 1 + direction) % #self.rows) + 1
         self.selected_id = self.rows[selected].id
-        local page_size = math.max(1, math.floor(self.bounds.height / self.row_height))
+        local page_size =
+            math.max(1, math.floor(self.bounds.height / layout.scale_y(self.row_height)))
         self.page_size = page_size
         self.page_count = math.max(1, math.ceil(#self.rows / page_size))
         self.page = math.floor((selected - 1) / page_size) + 1
@@ -55,7 +56,8 @@ return function(properties)
         end
     end
     function list:draw()
-        local page_size = math.max(1, math.floor(self.bounds.height / self.row_height))
+        local row_height = layout.scale_y(self.row_height)
+        local page_size = math.max(1, math.floor(self.bounds.height / row_height))
         self.page_size = page_size
         self.page_count = math.max(1, math.ceil(#self.rows / page_size))
         local first = (self.page - 1) * page_size + 1
@@ -64,9 +66,9 @@ return function(properties)
             local row = self.rows[index]
             local bounds = {
                 x = self.bounds.x,
-                y = self.bounds.y + (index - first) * self.row_height,
+                y = self.bounds.y + (index - first) * row_height,
                 width = self.bounds.width,
-                height = self.row_height,
+                height = row_height,
             }
             local selected = self.active and row.id == self.selected_id
             if selected then
@@ -79,8 +81,10 @@ return function(properties)
                 )
             end
             local text_gray = selected and theme.color.selected_text or theme.color.text
-            local text_x = bounds.x + (row.icon and 88 or 24)
-            local text_width = bounds.width - (text_x - bounds.x) - (row.trailing and 96 or 16)
+            local text_x = bounds.x + layout.scale_x(row.icon and 88 or 24)
+            local text_width = bounds.width
+                - (text_x - bounds.x)
+                - layout.scale_x(row.trailing and 96 or 16)
             local title = truncate_text(row.title, 2, text_width)
             local subtitle = row.subtitle
                     and row.subtitle ~= ""
@@ -105,7 +109,7 @@ return function(properties)
                     local _, icon_height, icon_top = canvas.measure(row.icon, 6)
                     icon_y = math.floor((visual_top + visual_bottom - icon_height) / 2 - icon_top)
                 end
-                canvas.text(bounds.x + 24, icon_y, row.icon, 6, text_gray)
+                canvas.text(bounds.x + layout.scale_x(24), icon_y, row.icon, 6, text_gray)
             end
             if subtitle then
                 canvas.text(text_x, text_y[1], title, 2, text_gray)
@@ -115,7 +119,7 @@ return function(properties)
             end
             if row.trailing then
                 canvas.text(
-                    bounds.x + bounds.width - 72,
+                    bounds.x + bounds.width - layout.scale_x(72),
                     layout.text_y(bounds, row.trailing, 1),
                     row.trailing,
                     1,
@@ -124,9 +128,9 @@ return function(properties)
             end
             if index < last and not selected then
                 canvas.rectangle(
-                    bounds.x + 12,
+                    bounds.x + layout.scale_x(12),
                     bounds.y + bounds.height - 1,
-                    bounds.width - 24,
+                    bounds.width - layout.scale_x(24),
                     1,
                     theme.color.divider
                 )
