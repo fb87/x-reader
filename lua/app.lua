@@ -5,6 +5,7 @@ local ActionBar = require("ui.action_bar")
 local StatusBar = require("ui.status_bar")
 local theme = require("theme")
 local persistence = require("persistence")
+local settings = require("settings")
 
 local scenes = {
     loader = require("scenes.loader"),
@@ -21,6 +22,7 @@ local function create_application()
     local stack = { "loader" }
     local context = {}
     local held_keys = {}
+    local last_activity = 0
 
     local function activate_key(scene, stage, key, kind)
         if stage.dialog and stage.dialog.visible then
@@ -150,6 +152,7 @@ local function create_application()
     function application.start(snapshot)
         configure_layout()
         persistence.load()
+        last_activity = system.monotonic_ms()
         if snapshot and snapshot.screen and scenes[snapshot.screen] then
             context.replace(snapshot.screen)
         else
@@ -161,6 +164,9 @@ local function create_application()
 
     function application.event(raw_event)
         local event = input.normalize(raw_event)
+        if event.kind ~= "none" then
+            last_activity = system.monotonic_ms()
+        end
         local scene, stage = context.active()
         if event.kind == "key" then
             if event.phase == "down" then
@@ -194,6 +200,15 @@ local function create_application()
 
     function application.update(now)
         local scene, stage = context.active()
+        if
+            scene.id ~= "sleep"
+            and scene.id ~= "loader"
+            and now - last_activity >= settings.auto_sleep_minutes * 60 * 1000
+        then
+            last_activity = now
+            context.push("sleep")
+        end
+        scene, stage = context.active()
         for key, held in pairs(held_keys) do
             if not held.long and now - held.started >= 500 then
                 held.long = true

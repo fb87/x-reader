@@ -4,6 +4,7 @@ local settings = {
     brightness = 50,
     show_page_number = true,
     show_clock = true,
+    auto_sleep_minutes = 10,
 }
 
 local defaults = {
@@ -12,6 +13,7 @@ local defaults = {
     brightness = 50,
     show_page_number = true,
     show_clock = true,
+    auto_sleep_minutes = 10,
 }
 
 function settings.reset()
@@ -31,6 +33,7 @@ function settings.serialize()
         "brightness=" .. tostring(settings.brightness),
         "show_page_number=" .. tostring(settings.show_page_number),
         "show_clock=" .. tostring(settings.show_clock),
+        "auto_sleep_minutes=" .. tostring(settings.auto_sleep_minutes),
     }, "\n")
 end
 
@@ -46,6 +49,27 @@ function settings.restore(values)
     settings.brightness = values.brightness == "75" and 75 or 50
     settings.show_page_number = values.show_page_number ~= "false"
     settings.show_clock = values.show_clock ~= "false"
+    local auto_sleep = tonumber(values.auto_sleep_minutes)
+    if
+        auto_sleep == 5
+        or auto_sleep == 10
+        or auto_sleep == 15
+        or auto_sleep == 30
+        or auto_sleep == 60
+    then
+        settings.auto_sleep_minutes = auto_sleep
+    end
+end
+
+function settings.cycle_auto_sleep()
+    local options = { 5, 10, 15, 30, 60 }
+    for index, value in ipairs(options) do
+        if value == settings.auto_sleep_minutes then
+            settings.auto_sleep_minutes = options[index % #options + 1]
+            return
+        end
+    end
+    settings.auto_sleep_minutes = options[1]
 end
 
 function settings.toggle_text_scale()

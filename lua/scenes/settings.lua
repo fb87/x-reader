@@ -65,6 +65,12 @@ local page_rows = {
                 return "XRST v1"
             end,
         },
+        {
+            "Auto sleep",
+            function()
+                return tostring(settings.auto_sleep_minutes) .. "m"
+            end,
+        },
     },
     About = {
         {
@@ -83,6 +89,12 @@ local page_rows = {
             "Version",
             function()
                 return "0.1.0"
+            end,
+        },
+        {
+            "Release date",
+            function()
+                return "2026-10-11"
             end,
         },
         {
@@ -152,6 +164,10 @@ function scene.activate_content(stage)
         elseif stage.control_selected == 2 then
             settings.toggle_clock()
         end
+        persistence.save()
+        stage.notice = "Applied"
+    elseif stage.page == "System" and stage.control_selected == 3 then
+        settings.cycle_auto_sleep()
         persistence.save()
         stage.notice = "Applied"
     end
