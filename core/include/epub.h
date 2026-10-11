@@ -42,4 +42,10 @@ enum epub_status epub_spine_text(const struct epub_book* book, uint32_t index, u
                                  size_t* length);
 void epub_text_free(uint8_t* text);
 
+/* Repairs a buffer in place when it holds UTF-8 text that was previously
+ * misdecoded as Windows-1252/Latin-1 and re-encoded as UTF-8 (a common
+ * mistake made by tools that copy or rename files with non-ASCII names).
+ * Leaves the buffer untouched when it is already correctly encoded. */
+void epub_repair_mojibake(char* buffer, size_t capacity);
+
 #endif

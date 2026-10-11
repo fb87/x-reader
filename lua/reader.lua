@@ -81,6 +81,7 @@ reader.page_count = #pages
 reader.last_book = nil
 reader.resume_page = nil
 reader.resume_spine_index = nil
+reader.wrap_cache = nil
 
 function reader.restore_position(book, page, spine_index)
     reader.last_book = book
@@ -102,6 +103,7 @@ function reader.open(book)
     reader.spine = nil
     reader.spine_index = 1
     reader.page_count = #pages
+    reader.wrap_cache = nil
     if book.path ~= nil then
         local document, error_message = epub.open(book.path)
         if document ~= nil then
@@ -120,6 +122,7 @@ function reader.open(book)
                 reader.content = content
                 reader.error = content == nil and (text_error or "Unable to read EPUB content")
                     or nil
+                reader.wrap_cache = nil
             end
             reader.load_spine(1)
             if same_book and saved_spine_index > 1 then
@@ -200,23 +203,37 @@ end
 
 function reader.page_lines(scale, limit, max_width)
     if reader.content ~= nil then
-        local wrapped = {}
-        local pending_break = false
-        for paragraph in (reader.content .. "\n"):gmatch("(.-)\n") do
-            local normalized = paragraph
-                :gsub("\194\160", " ")
-                :gsub("&nbsp;", " ")
-                :gsub("%s+", " ")
-                :match("^%s*(.-)%s*$")
-            if normalized == "" then
-                pending_break = #wrapped > 0
-            elseif has_supported_text(normalized) then
-                if pending_break and wrapped[#wrapped] ~= "" then
-                    wrapped[#wrapped + 1] = ""
+        local width = max_width or 452
+        local cache = reader.wrap_cache
+        local wrapped
+        if
+            cache ~= nil
+            and cache.content == reader.content
+            and cache.scale == scale
+            and cache.width == width
+        then
+            wrapped = cache.wrapped
+        else
+            wrapped = {}
+            local pending_break = false
+            for paragraph in (reader.content .. "\n"):gmatch("(.-)\n") do
+                local normalized = paragraph
+                    :gsub("\194\160", " ")
+                    :gsub("&nbsp;", " ")
+                    :gsub("%s+", " ")
+                    :match("^%s*(.-)%s*$")
+                if normalized == "" then
+                    pending_break = #wrapped > 0
+                elseif has_supported_text(normalized) then
+                    if pending_break and wrapped[#wrapped] ~= "" then
+                        wrapped[#wrapped + 1] = ""
+                    end
+                    wrap_paragraph(normalized, width, scale, wrapped)
+                    pending_break = false
                 end
-                wrap_paragraph(normalized, max_width or 452, scale, wrapped)
-                pending_break = false
             end
+            reader.wrap_cache =
+                { content = reader.content, scale = scale, width = width, wrapped = wrapped }
         end
         local pages_available = math.max(1, math.ceil(#wrapped / limit))
         reader.page_count = pages_available

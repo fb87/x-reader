@@ -2,7 +2,7 @@ return {
     color = {
         background = 14,
         surface = 14,
-        selected = 12,
+        selected = 6,
         selected_text = 0,
         text = 0,
         secondary = 5,

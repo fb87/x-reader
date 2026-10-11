@@ -1,4 +1,5 @@
 #include "platform/sdl/platform.h"
+#include "epub.h"
 #include "font.h"
 #include "zip.h"
 
@@ -87,20 +88,23 @@ static enum platform_status draw_rectangle(void* opaque, int32_t x, int32_t y, i
 
 static uint32_t next_codepoint(const char* text, size_t length, size_t* position) {
     const uint8_t first = (uint8_t)text[*position];
-    *position += 1U;
-    if (first < 0x80U || *position >= length) {
+    if (first < 0x80U) {
+        *position += 1U;
         return first;
     }
-    if ((first & 0xe0U) == 0xc0U && *position < length) {
-        const uint8_t second = (uint8_t)text[(*position)++];
+    if ((first & 0xe0U) == 0xc0U && *position + 1U < length) {
+        const uint8_t second = (uint8_t)text[*position + 1U];
+        *position += 2U;
         return ((uint32_t)(first & 0x1fU) << 6U) | (second & 0x3fU);
     }
-    if ((first & 0xf0U) == 0xe0U && *position + 1U < length) {
-        const uint8_t second = (uint8_t)text[(*position)++];
-        const uint8_t third = (uint8_t)text[(*position)++];
+    if ((first & 0xf0U) == 0xe0U && *position + 2U < length) {
+        const uint8_t second = (uint8_t)text[*position + 1U];
+        const uint8_t third = (uint8_t)text[*position + 2U];
+        *position += 3U;
         return ((uint32_t)(first & 0x0fU) << 12U) | ((uint32_t)(second & 0x3fU) << 6U) |
                (third & 0x3fU);
     }
+    *position += 1U;
     return 0xfffdU;
 }
 
@@ -258,6 +262,7 @@ static enum platform_status list_storage(void* opaque, const char* root, const c
             continue;
         struct platform_entry* entry = &entries[found++];
         memcpy(entry->name, item->d_name, name_length + 1U);
+        epub_repair_mojibake(entry->name, sizeof(entry->name));
         if (relative[0] == '\0')
             snprintf(entry->path, sizeof(entry->path), "%s", item->d_name);
         else

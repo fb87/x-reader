@@ -210,7 +210,7 @@ local function create_application()
         end
         scene, stage = context.active()
         for key, held in pairs(held_keys) do
-            if not held.long and now - held.started >= 500 then
+            if not held.long and now - held.started >= 700 then
                 held.long = true
                 activate_key(scene, stage, key, "long")
             end
@@ -225,15 +225,28 @@ local function create_application()
         canvas.clear(theme.color.background)
         if scene.chrome == "standard" then
             prepare_chrome(scene, stage)
-            stage.status_bar:draw()
             scene.draw(stage, chrome.content)
+            if stage.dialog and stage.dialog.visible then
+                stage.dialog:draw()
+            end
+            -- Status bar and dock are drawn last and always repaint their own
+            -- background so content never bleeds through and the panel rows
+            -- they cover get freshly redriven on every frame.
+            stage.status_bar:draw()
             stage.action_bar:draw(stage.focus_scope == "dock")
         else
+            if stage.dock_visible then
+                scene.draw(stage, chrome.content)
+            else
+                scene.draw(stage, { x = 0, y = 0, width = 540, height = 960 })
+            end
+            if stage.dialog and stage.dialog.visible then
+                stage.dialog:draw()
+            end
             if scene.status then
                 chrome.status(scene.title and scene.title(stage) or scene.id, scene.status_title)
             end
             if stage.dock_visible then
-                scene.draw(stage, chrome.content)
                 if stage.action_bar then
                     stage.action_bar.selected = stage.dock_selected or 1
                     stage.action_bar:draw()
@@ -244,12 +257,7 @@ local function create_application()
                         stage.focus_scope == "dock"
                     )
                 end
-            else
-                scene.draw(stage, { x = 0, y = 0, width = 540, height = 960 })
             end
-        end
-        if stage.dialog and stage.dialog.visible then
-            stage.dialog:draw()
         end
         display.present(false)
     end

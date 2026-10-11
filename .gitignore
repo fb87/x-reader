@@ -2,3 +2,5 @@
 /result
 /result-*
 /worktree/
+/firmware/build/
+/firmware/sdkconfig

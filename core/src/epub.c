@@ -1,10 +1,103 @@
 #include "epub.h"
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
 enum { DEFAULT_METADATA_BYTES = 64U * 1024U, DEFAULT_ITEMS = 1024U, DEFAULT_TEXT_BYTES = 256U };
+
+static bool mojibake_valid_utf8(const unsigned char* value) {
+    while (*value != 0U) {
+        if (*value < 0x80U) {
+            value++;
+            continue;
+        }
+        int remaining;
+        if ((*value & 0xe0U) == 0xc0U)
+            remaining = 1;
+        else if ((*value & 0xf0U) == 0xe0U)
+            remaining = 2;
+        else if ((*value & 0xf8U) == 0xf0U)
+            remaining = 3;
+        else
+            return false;
+        value++;
+        while (remaining-- > 0) {
+            if ((*value & 0xc0U) != 0x80U)
+                return false;
+            value++;
+        }
+    }
+    return true;
+}
+
+static int mojibake_windows_1252_byte(uint32_t codepoint) {
+    static const struct {
+        uint32_t codepoint;
+        unsigned char byte;
+    } values[] = {
+        {0x20acU, 0x80}, {0x201aU, 0x82}, {0x0192U, 0x83}, {0x201eU, 0x84}, {0x2026U, 0x85},
+        {0x2020U, 0x86}, {0x2021U, 0x87}, {0x02c6U, 0x88}, {0x2030U, 0x89}, {0x0160U, 0x8a},
+        {0x2039U, 0x8b}, {0x0152U, 0x8c}, {0x017dU, 0x8e}, {0x2018U, 0x91}, {0x2019U, 0x92},
+        {0x201cU, 0x93}, {0x201dU, 0x94}, {0x2022U, 0x95}, {0x2013U, 0x96}, {0x2014U, 0x97},
+        {0x02dcU, 0x98}, {0x2122U, 0x99}, {0x0161U, 0x9a}, {0x203aU, 0x9b}, {0x0153U, 0x9c},
+        {0x017eU, 0x9e}, {0x0178U, 0x9f},
+    };
+    for (size_t index = 0U; index < sizeof(values) / sizeof(values[0]); ++index) {
+        if (values[index].codepoint == codepoint)
+            return values[index].byte;
+    }
+    return -1;
+}
+
+void epub_repair_mojibake(char* buffer, size_t capacity) {
+    if (buffer == NULL || capacity == 0U)
+        return;
+    unsigned char recovered[256];
+    const size_t limit = capacity < sizeof(recovered) ? capacity : sizeof(recovered);
+    size_t used = 0U;
+    bool changed = false;
+    const unsigned char* cursor = (const unsigned char*)buffer;
+    while (*cursor != 0U && used + 1U < limit) {
+        uint32_t codepoint;
+        if (*cursor < 0x80U) {
+            codepoint = *cursor++;
+        } else {
+            const unsigned char first = *cursor++;
+            int continuation;
+            if ((first & 0xe0U) == 0xc0U)
+                continuation = 1;
+            else if ((first & 0xf0U) == 0xe0U)
+                continuation = 2;
+            else if ((first & 0xf8U) == 0xf0U)
+                continuation = 3;
+            else
+                return;
+            codepoint = first & (uint32_t)(continuation == 1   ? 0x1fU
+                                           : continuation == 2 ? 0x0fU
+                                                               : 0x07U);
+            while (continuation-- > 0) {
+                if ((*cursor & 0xc0U) != 0x80U)
+                    return;
+                codepoint = (codepoint << 6U) | (*cursor++ & 0x3fU);
+            }
+        }
+        if (codepoint > 0xffU) {
+            const int mapped = mojibake_windows_1252_byte(codepoint);
+            if (mapped < 0)
+                return;
+            codepoint = (uint32_t)mapped;
+        }
+        recovered[used++] = (unsigned char)codepoint;
+        if (codepoint >= 0x80U)
+            changed = true;
+    }
+    recovered[used] = 0U;
+    if (!changed || !mojibake_valid_utf8(recovered))
+        return;
+    memcpy(buffer, recovered, used + 1U);
+}
 
 struct manifest_item {
     char* id;
@@ -290,6 +383,10 @@ static enum epub_status parse_opf(struct epub_book* book, const struct epub_limi
         if (book->spine[book->spine_count++].idref == NULL)
             return EPUB_OUT_OF_MEMORY;
     }
+    if (book->title != NULL)
+        epub_repair_mojibake(book->title, strlen(book->title) + 1U);
+    if (book->creator != NULL)
+        epub_repair_mojibake(book->creator, strlen(book->creator) + 1U);
     return EPUB_OK;
 }
 
