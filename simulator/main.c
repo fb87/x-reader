@@ -81,7 +81,6 @@ int main(int argc, char** argv) {
 
     char default_library[512];
     char default_state[512];
-    const char* home = getenv("HOME");
     const char* sdcard_root = getenv("SDCARD_ROOT");
     if (library_directory == NULL) {
         const int written = snprintf(default_library, sizeof(default_library), "%s",
@@ -90,8 +89,8 @@ int main(int argc, char** argv) {
             written >= 0 && (size_t)written < sizeof(default_library) ? default_library : ".";
     }
     if (state_directory == NULL) {
-        const int written = snprintf(default_state, sizeof(default_state),
-                                     "%s/.local/state/x-reader", home == NULL ? "." : home);
+        const int written =
+            snprintf(default_state, sizeof(default_state), "%s/.x-reader", library_directory);
         state_directory =
             written >= 0 && (size_t)written < sizeof(default_state) ? default_state : ".";
     }
@@ -117,6 +116,7 @@ int main(int argc, char** argv) {
 
     if (self_test) {
         const enum platform_status status = runtime_draw(runtime);
+        (void)runtime_stop(runtime);
         runtime_destroy(runtime);
         sdl_platform_destroy(&platform);
         return status == PLATFORM_OK ? 0 : 1;
@@ -162,6 +162,7 @@ int main(int argc, char** argv) {
             break;
         }
     }
+    (void)runtime_stop(runtime);
     runtime_destroy(runtime);
     sdl_platform_destroy(&platform);
     return running ? 1 : 0;

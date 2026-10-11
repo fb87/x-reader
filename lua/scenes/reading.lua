@@ -33,14 +33,14 @@ function scene.create(context)
     local actions = {
         {
             label = "Close",
-            icon = icons.arrow,
+            icon = icons.close,
             invoke = function()
                 context.pop()
             end,
         },
         {
             label = "A-",
-            icon = icons.circle,
+            icon = icons.remove,
             invoke = function()
                 settings.decrease_font_size()
             end,

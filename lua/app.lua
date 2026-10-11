@@ -4,6 +4,7 @@ local layout = require("layout")
 local ActionBar = require("ui.action_bar")
 local StatusBar = require("ui.status_bar")
 local theme = require("theme")
+local persistence = require("persistence")
 
 local scenes = {
     loader = require("scenes.loader"),
@@ -22,6 +23,16 @@ local function create_application()
     local held_keys = {}
 
     local function activate_key(scene, stage, key, kind)
+        if stage.dialog and stage.dialog.visible then
+            if kind == "long" then
+                return
+            elseif key == "up" or key == "down" then
+                stage.dialog:move(key == "up" and -1 or 1)
+            elseif key == "push" then
+                stage.dialog:activate()
+            end
+            return
+        end
         if kind == "long" then
             if key == "push" then
                 if scene.id == "sleep" then
@@ -138,6 +149,7 @@ local function create_application()
 
     function application.start(snapshot)
         configure_layout()
+        persistence.load()
         if snapshot and snapshot.screen and scenes[snapshot.screen] then
             context.replace(snapshot.screen)
         else
@@ -152,7 +164,9 @@ local function create_application()
         local scene, stage = context.active()
         if event.kind == "key" then
             if event.phase == "down" then
-                held_keys[event.key] = { started = event.time or 0, long = false }
+                if held_keys[event.key] == nil then
+                    held_keys[event.key] = { started = event.time or 0, long = false }
+                end
             elseif event.phase == "up" then
                 local held = held_keys[event.key]
                 if held ~= nil and not held.long then
@@ -219,12 +233,20 @@ local function create_application()
                 scene.draw(stage, { x = 0, y = 0, width = 540, height = 960 })
             end
         end
+        if stage.dialog and stage.dialog.visible then
+            stage.dialog:draw()
+        end
         display.present(false)
     end
 
     function application.snapshot()
+        persistence.save()
         local scene = context.active()
         return { screen = scene.id }
+    end
+
+    function application.stop()
+        persistence.save()
     end
 
     function application.stop(_) end

@@ -71,6 +71,10 @@ struct platform {
     enum platform_status (*open_archive)(void* context, const char* root, const char* path,
                                          struct platform_archive* archive);
     void (*close_archive)(void* context, struct platform_archive* archive);
+    enum platform_status (*state_read)(void* context, const char* root, const char* name,
+                                       uint8_t* buffer, size_t capacity, size_t* length);
+    enum platform_status (*state_write)(void* context, const char* root, const char* name,
+                                        const uint8_t* data, size_t length);
 };
 
 #endif

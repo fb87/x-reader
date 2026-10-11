@@ -425,14 +425,24 @@ enum epub_status epub_spine_text(const struct epub_book* book, uint32_t index, u
                     skip_content = false;
                 if (source[position + 2U] == 'p' || source[position + 2U] == 'h' ||
                     source[position + 2U] == 'l') {
+                    while (output_length > 0U && output[output_length - 1U] == ' ')
+                        output_length--;
                     if (output_length > 0U && output[output_length - 1U] != '\n')
+                        output[output_length++] = '\n';
+                    if (output_length > 1U && output[output_length - 2U] != '\n')
                         output[output_length++] = '\n';
                 }
             }
         } else if (character == '>') {
             in_tag = false;
         } else if (!in_tag && !skip_content && output_length < source_length) {
-            output[output_length++] = character;
+            if (isspace(character) != 0) {
+                if (output_length > 0U && output[output_length - 1U] != ' ' &&
+                    output[output_length - 1U] != '\n')
+                    output[output_length++] = ' ';
+            } else {
+                output[output_length++] = character;
+            }
         }
     }
     size_t compact_length = 0U;

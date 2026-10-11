@@ -2,6 +2,7 @@ local bookshelf = require("bookshelf")
 local icons = require("icons")
 local layout = require("layout")
 local List = require("ui.list")
+local Dialog = require("ui.dialog")
 local scene = { id = "library", chrome = "standard" }
 function scene.title()
     return "Library"
@@ -22,13 +23,62 @@ function scene.create()
         scroll = 0,
         focus_scope = "content",
         list = List({ rows = rows, selected_id = "book:1", row_height = 84 }),
+        dialog = Dialog({ title = "Book Info" }),
     }
+end
+
+local function book_size(bytes)
+    if bytes == nil or bytes == 0 then
+        return "Unknown size"
+    elseif bytes >= 1024 * 1024 then
+        return string.format("%.1f MB", bytes / (1024 * 1024))
+    elseif bytes >= 1024 then
+        return string.format("%.1f KB", bytes / 1024)
+    end
+    return tostring(bytes) .. " B"
+end
+
+function scene.show_info(stage, context)
+    local book = bookshelf.books[stage.selected]
+    if book == nil then
+        return
+    end
+    stage.dialog:show(
+        "Book Info",
+        table.concat({
+            book.title or "Unknown title",
+            book.author ~= "" and book.author or "Unknown author",
+            "EPUB  " .. book_size(book.size),
+            book.path or "Unknown path",
+        }, "\n"),
+        {
+            {
+                label = "Open",
+                icon = icons.book,
+                invoke = function(dialog)
+                    dialog:hide()
+                    stage.focus_scope = "content"
+                    context.push("reading", { book = book })
+                end,
+            },
+            {
+                label = "Close",
+                icon = icons.close,
+                invoke = function(dialog)
+                    dialog:hide()
+                    stage.focus_scope = "content"
+                end,
+            },
+        },
+        icons.book
+    )
+    stage.focus_scope = "dialog"
 end
 function scene.dock()
     return {
         { label = "Open", icon = icons.book },
-        { label = "Info", icon = icons.circle },
-        { label = "Back", icon = icons.arrow },
+        { label = "Info", icon = icons.info },
+        { label = "Back", icon = icons.arrow_back },
     }
 end
 function scene.move(stage, direction)
@@ -53,6 +103,8 @@ function scene.activate_dock(stage, context)
         if #bookshelf.books > 0 then
             context.push("reading", { book = bookshelf.books[stage.selected] })
         end
+    elseif stage.dock_selected == 2 then
+        scene.show_info(stage, context)
     elseif stage.dock_selected == 3 then
         context.pop()
     end
@@ -61,11 +113,31 @@ function scene.event(stage, event, context)
     if event.kind ~= "touch" or event.phase ~= "up" then
         return
     end
+    if stage.dialog.visible then
+        local bounds = stage.dialog.bounds
+        if
+            event.x >= bounds.x
+            and event.x < bounds.x + bounds.width
+            and event.y >= bounds.y + bounds.height - 64
+        then
+            stage.dialog.selected = math.min(
+                #stage.dialog.actions,
+                math.floor((event.x - bounds.x) / (bounds.width / #stage.dialog.actions)) + 1
+            )
+            stage.dialog:activate()
+        elseif event.x < bounds.x or event.x >= bounds.x + bounds.width or event.y < bounds.y then
+            stage.dialog:hide()
+            stage.focus_scope = "content"
+        end
+        return
+    end
     if event.y >= layout.standard().dock.y then
         stage.focus_scope = "dock"
         stage.dock_selected = math.floor(event.x / 180) + 1
         if stage.dock_selected == 1 then
             context.push("reading", { book = bookshelf.books[stage.selected] })
+        elseif stage.dock_selected == 2 then
+            scene.show_info(stage, context)
         end
         if stage.dock_selected == 3 then
             context.pop()

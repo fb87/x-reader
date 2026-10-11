@@ -33,9 +33,12 @@ function bookshelf.refresh()
     scan("", 0)
 end
 
+function bookshelf.restore(cached)
+    bookshelf.books = cached or {}
+end
+
 function bookshelf.start()
     bookshelf.refresh()
 end
 
-bookshelf.start()
 return bookshelf

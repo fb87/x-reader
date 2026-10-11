@@ -1,5 +1,6 @@
 local layout = require("layout")
 local icons = require("icons")
+local settings = require("settings")
 local theme = require("theme")
 local chrome = {}
 -- The simulator watcher reloads this module after every Lua edit.
@@ -29,7 +30,9 @@ function chrome.status(title, show_title)
     local area = layout.standard().status
     canvas.rectangle(area.x, area.y, area.width, area.height, theme.color.background)
     canvas.rectangle(area.x, area.y + area.height - 1, area.width, 1, theme.color.divider)
-    canvas.text(layout.scale_x(18), layout.text_y(area, "10:27", 1), "10:27", 1, 0)
+    if settings.show_clock then
+        canvas.text(layout.scale_x(18), layout.text_y(area, "10:27", 1), "10:27", 1, 0)
+    end
     if show_title and title ~= nil and title ~= "" then
         local title_x = layout.scale_x(96)
         local title_right = area.x + area.width - layout.scale_x(126)

@@ -78,9 +78,22 @@ reader.error = nil
 reader.spine = nil
 reader.spine_index = 1
 reader.page_count = #pages
+reader.last_book = nil
+reader.resume_page = nil
+reader.resume_spine_index = nil
+
+function reader.restore_position(book, page, spine_index)
+    reader.last_book = book
+    reader.resume_page = page
+    reader.resume_spine_index = spine_index
+end
 
 function reader.open(book)
+    local same_book = reader.last_book == book
+    local saved_page = same_book and (reader.resume_page or reader.page) or 1
+    local saved_spine_index = same_book and (reader.resume_spine_index or reader.spine_index) or 1
     reader.book = book
+    reader.last_book = book
     reader.page = 1
     reader.bookmarks = {}
     reader.document = nil
@@ -109,6 +122,14 @@ function reader.open(book)
                     or nil
             end
             reader.load_spine(1)
+            if same_book and saved_spine_index > 1 then
+                reader.load_spine(saved_spine_index)
+                reader.page = saved_page
+            elseif same_book then
+                reader.page = saved_page
+            end
+            reader.resume_page = nil
+            reader.resume_spine_index = nil
         else
             reader.error = error_message or "Unable to open EPUB"
         end
@@ -149,7 +170,7 @@ function reader.go_to_page(page)
 end
 
 function reader.progress_width(width)
-    if reader.book == nil or reader.page_count == 0 then
+    if reader.last_book == nil or reader.page_count == 0 then
         return 0
     end
     return math.floor(width * reader.page / reader.page_count)

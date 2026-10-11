@@ -16,7 +16,7 @@ local function rows_for(path)
             id = entry.path,
             title = entry.name,
             subtitle = entry.directory and "Folder" or tostring(entry.size) .. " bytes",
-            icon = entry.directory and icons.folder or icons.book,
+            icon = entry.directory and icons.folder or icons.file,
         }
     end
     return rows
@@ -55,9 +55,9 @@ function scene.create()
 end
 function scene.dock()
     return {
-        { label = "Open", icon = icons.book },
-        { label = "Up", icon = icons.arrow },
-        { label = "Back", icon = icons.arrow },
+        { label = "Open", icon = icons.folder_open },
+        { label = "Up", icon = icons.arrow_up },
+        { label = "Back", icon = icons.arrow_back },
     }
 end
 function scene.move(stage, direction)

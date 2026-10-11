@@ -16,6 +16,7 @@ struct runtime_config {
 enum platform_status runtime_create(struct runtime** runtime, const struct runtime_config* config,
                                     const struct platform* platform);
 enum platform_status runtime_reload(struct runtime** runtime, const struct runtime_config* config);
+enum platform_status runtime_stop(struct runtime* runtime);
 void runtime_destroy(struct runtime* runtime);
 enum platform_status runtime_step(struct runtime* runtime, const struct platform_event* event);
 enum platform_status runtime_update(struct runtime* runtime, uint64_t monotonic_ms);

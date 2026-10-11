@@ -7,11 +7,14 @@
 #include <zlib.h>
 
 #include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 enum {
     DISPLAY_WIDTH = 540,
@@ -360,6 +363,71 @@ static void close_archive(void* opaque, struct platform_archive* archive) {
     archive->context = NULL;
 }
 
+static enum platform_status state_read(void* opaque, const char* root, const char* name,
+                                       uint8_t* buffer, size_t capacity, size_t* length) {
+    (void)opaque;
+    if (root == NULL || name == NULL || buffer == NULL || length == NULL)
+        return PLATFORM_INVALID_ARGUMENT;
+    char path[PLATFORM_PATH_MAX];
+    const int written = snprintf(path, sizeof(path), "%s/%s", root, name);
+    if (written < 0 || (size_t)written >= sizeof(path))
+        return PLATFORM_INVALID_ARGUMENT;
+    FILE* file = fopen(path, "rb");
+    if (file == NULL)
+        return PLATFORM_ERROR;
+    if (fseek(file, 0, SEEK_END) != 0) {
+        fclose(file);
+        return PLATFORM_ERROR;
+    }
+    const long end = ftell(file);
+    if (end < 0 || (unsigned long)end > capacity) {
+        fclose(file);
+        return PLATFORM_ERROR;
+    }
+    rewind(file);
+    const size_t expected = (size_t)end;
+    const bool valid = fread(buffer, 1U, expected, file) == expected;
+    fclose(file);
+    if (!valid)
+        return PLATFORM_ERROR;
+    *length = expected;
+    return PLATFORM_OK;
+}
+
+static enum platform_status state_write(void* opaque, const char* root, const char* name,
+                                        const uint8_t* data, size_t length) {
+    (void)opaque;
+    if (root == NULL || name == NULL || data == NULL)
+        return PLATFORM_INVALID_ARGUMENT;
+    if (mkdir(root, 0755) != 0 && errno != EEXIST)
+        return PLATFORM_ERROR;
+    char temporary[PLATFORM_PATH_MAX];
+    char destination[PLATFORM_PATH_MAX];
+    const int temporary_written = snprintf(temporary, sizeof(temporary), "%s/%s.tmp", root, name);
+    const int destination_written = snprintf(destination, sizeof(destination), "%s/%s", root, name);
+    if (temporary_written < 0 || destination_written < 0 ||
+        (size_t)temporary_written >= sizeof(temporary) ||
+        (size_t)destination_written >= sizeof(destination))
+        return PLATFORM_INVALID_ARGUMENT;
+    FILE* file = fopen(temporary, "wb");
+    if (file == NULL)
+        return PLATFORM_ERROR;
+    const bool written = fwrite(data, 1U, length, file) == length && fflush(file) == 0;
+    const int descriptor = written ? open(temporary, O_RDONLY) : -1;
+    const bool synced = !written || (descriptor >= 0 && fsync(descriptor) == 0);
+    if (descriptor >= 0)
+        close(descriptor);
+    if (fclose(file) != 0 || !written || !synced) {
+        remove(temporary);
+        return PLATFORM_ERROR;
+    }
+    if (rename(temporary, destination) != 0) {
+        remove(temporary);
+        return PLATFORM_ERROR;
+    }
+    return PLATFORM_OK;
+}
+
 enum platform_status sdl_platform_create(struct platform* platform, const char* title) {
     if (platform == NULL || title == NULL) {
         return PLATFORM_INVALID_ARGUMENT;
@@ -414,7 +482,8 @@ enum platform_status sdl_platform_create(struct platform* platform, const char* 
     platform->list_storage = list_storage;
     platform->open_archive = open_archive;
     platform->close_archive = close_archive;
-    platform->list_storage = list_storage;
+    platform->state_read = state_read;
+    platform->state_write = state_write;
     return PLATFORM_OK;
 }
 

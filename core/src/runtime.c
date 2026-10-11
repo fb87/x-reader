@@ -27,6 +27,30 @@ struct runtime {
     uint32_t instructions;
 };
 
+enum { STATE_MAX_BYTES = 16U * 1024U, STATE_HEADER_BYTES = 16U };
+
+static uint32_t state_crc32(const uint8_t* data, size_t length) {
+    uint32_t crc = 0xffffffffU;
+    for (size_t index = 0U; index < length; ++index) {
+        crc ^= data[index];
+        for (unsigned bit = 0U; bit < 8U; ++bit)
+            crc = (crc >> 1U) ^ (0xedb88320U & (uint32_t)-(int32_t)(crc & 1U));
+    }
+    return ~crc;
+}
+
+static uint32_t state_u32(const uint8_t* data) {
+    return (uint32_t)data[0] | ((uint32_t)data[1] << 8U) | ((uint32_t)data[2] << 16U) |
+           ((uint32_t)data[3] << 24U);
+}
+
+static void state_put_u32(uint8_t* data, uint32_t value) {
+    data[0] = (uint8_t)value;
+    data[1] = (uint8_t)(value >> 8U);
+    data[2] = (uint8_t)(value >> 16U);
+    data[3] = (uint8_t)(value >> 24U);
+}
+
 struct epub_userdata {
     struct runtime* runtime;
     struct platform_archive archive;
@@ -204,6 +228,47 @@ static int system_state_root(lua_State* state) {
     return 1;
 }
 
+static int system_state_load(lua_State* state) {
+    struct runtime* runtime = runtime_from_upvalue(state);
+    uint8_t record[STATE_MAX_BYTES + STATE_HEADER_BYTES];
+    size_t length = 0U;
+    if (runtime->platform.state_read == NULL ||
+        runtime->platform.state_read(runtime->platform.context, runtime->state_directory,
+                                     "state.bin", record, sizeof(record), &length) != PLATFORM_OK) {
+        lua_pushnil(state);
+        return 1;
+    }
+    if (length < STATE_HEADER_BYTES || memcmp(record, "XRST", 4U) != 0 ||
+        state_u32(&record[4]) != 1U)
+        return luaL_error(state, "invalid state record");
+    const uint32_t payload_length = state_u32(&record[8]);
+    const uint32_t expected_crc = state_u32(&record[12]);
+    if (payload_length > STATE_MAX_BYTES || (size_t)payload_length + STATE_HEADER_BYTES != length ||
+        state_crc32(&record[STATE_HEADER_BYTES], payload_length) != expected_crc)
+        return luaL_error(state, "corrupt state record");
+    lua_pushlstring(state, (const char*)&record[STATE_HEADER_BYTES], payload_length);
+    return 1;
+}
+
+static int system_state_save(lua_State* state) {
+    struct runtime* runtime = runtime_from_upvalue(state);
+    size_t length = 0U;
+    const char* payload = luaL_checklstring(state, 1, &length);
+    if (length > STATE_MAX_BYTES || runtime->platform.state_write == NULL)
+        return luaL_error(state, "state record too large or unavailable");
+    uint8_t record[STATE_MAX_BYTES + STATE_HEADER_BYTES];
+    memcpy(record, "XRST", 4U);
+    state_put_u32(&record[4], 1U);
+    state_put_u32(&record[8], (uint32_t)length);
+    memcpy(&record[STATE_HEADER_BYTES], payload, length);
+    state_put_u32(&record[12], state_crc32(&record[STATE_HEADER_BYTES], length));
+    if (runtime->platform.state_write(runtime->platform.context, runtime->state_directory,
+                                      "state.bin", record,
+                                      length + STATE_HEADER_BYTES) != PLATFORM_OK)
+        return luaL_error(state, "state record write failed");
+    return 0;
+}
+
 static int library_list(lua_State* state) {
     struct runtime* runtime = runtime_from_upvalue(state);
     const char* relative = luaL_optstring(state, 1, "");
@@ -375,6 +440,12 @@ static void register_services(struct runtime* runtime) {
     push_runtime_userdata(state, runtime);
     lua_pushcclosure(state, system_state_root, 1);
     lua_setfield(state, -2, "state_root");
+    push_runtime_userdata(state, runtime);
+    lua_pushcclosure(state, system_state_load, 1);
+    lua_setfield(state, -2, "state_load");
+    push_runtime_userdata(state, runtime);
+    lua_pushcclosure(state, system_state_save, 1);
+    lua_setfield(state, -2, "state_save");
     lua_setglobal(state, "system");
 
     lua_newtable(state);
@@ -601,6 +672,13 @@ void runtime_destroy(struct runtime* runtime) {
         lua_close(runtime->state);
     }
     free(runtime);
+}
+
+enum platform_status runtime_stop(struct runtime* runtime) {
+    if (runtime == NULL)
+        return PLATFORM_INVALID_ARGUMENT;
+    lua_pushliteral(runtime->state, "shutdown");
+    return call_application(runtime, "stop", 1, 0);
 }
 
 enum platform_status runtime_step(struct runtime* runtime, const struct platform_event* event) {
