@@ -33,7 +33,7 @@ void app_main(void) {
         .script_directory = "/lua",
         .library_directory = "/sdcard",
         .state_directory = "/state",
-        .memory_limit = 512U * 1024U,
+        .memory_limit = 3U * 1024U * 1024U,
         .instruction_limit = 1000000U,
     };
     ESP_LOGI(TAG, "starting Lua runtime");
