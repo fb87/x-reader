@@ -1,24 +1,27 @@
 local layout = require("layout")
 local theme = require("theme")
 local widget = require("ui.widget")
+local text = require("text")
 
-local function truncate_text(text, size, width)
-    local suffix = "..."
-    if canvas.measure(text, size) <= width then
-        return text
-    end
-    local length = #text
-    while length > 0 and canvas.measure(text:sub(1, length) .. suffix, size) > width do
-        length = length - 1
-        while length > 0 do
-            local byte = text:byte(length)
-            if byte < 128 or byte >= 192 then
-                break
-            end
-            length = length - 1
+local function index_of(rows, id)
+    for index, row in ipairs(rows) do
+        if row.id == id then
+            return index
         end
     end
-    return text:sub(1, length) .. suffix
+    return 1
+end
+
+-- Recomputes page_size/page_count from the current bounds, then moves
+-- `page` to whichever page contains `selected_id` -- the bit every caller
+-- (layout change or selection change) needs redone, now owned in one place.
+local function sync_page(self)
+    local page_size = math.max(1, math.floor(self.bounds.height / layout.scale_y(self.row_height)))
+    self.page_size = page_size
+    self.page_count = math.max(1, math.ceil(#self.rows / page_size))
+    if #self.rows > 0 then
+        self.page = math.floor((index_of(self.rows, self.selected_id) - 1) / page_size) + 1
+    end
 end
 
 return function(properties)
@@ -29,24 +32,18 @@ return function(properties)
     list.row_height = properties.row_height or 84
     list.page = 1
     list.on_activate = properties.on_activate
+    function list:layout(bounds)
+        self.bounds = bounds
+        sync_page(self)
+    end
     function list:move(direction)
         if #self.rows == 0 then
             return
         end
-        local selected = 1
-        for index, row in ipairs(self.rows) do
-            if row.id == self.selected_id then
-                selected = index
-                break
-            end
-        end
+        local selected = index_of(self.rows, self.selected_id)
         selected = ((selected - 1 + direction) % #self.rows) + 1
         self.selected_id = self.rows[selected].id
-        local page_size =
-            math.max(1, math.floor(self.bounds.height / layout.scale_y(self.row_height)))
-        self.page_size = page_size
-        self.page_count = math.max(1, math.ceil(#self.rows / page_size))
-        self.page = math.floor((selected - 1) / page_size) + 1
+        sync_page(self)
     end
     function list:activate()
         for _, row in ipairs(self.rows) do
@@ -57,9 +54,7 @@ return function(properties)
     end
     function list:draw()
         local row_height = layout.scale_y(self.row_height)
-        local page_size = math.max(1, math.floor(self.bounds.height / row_height))
-        self.page_size = page_size
-        self.page_count = math.max(1, math.ceil(#self.rows / page_size))
+        local page_size = self.page_size or 1
         local first = (self.page - 1) * page_size + 1
         local last = math.min(#self.rows, first + page_size - 1)
         for index = first, last do
@@ -85,10 +80,10 @@ return function(properties)
             local text_width = bounds.width
                 - (text_x - bounds.x)
                 - layout.scale_x(row.trailing and 96 or 16)
-            local title = truncate_text(row.title, 2, text_width)
+            local title = text.truncate(row.title, 2, text_width)
             local subtitle = row.subtitle
                     and row.subtitle ~= ""
-                    and truncate_text(row.subtitle, 1, text_width)
+                    and text.truncate(row.subtitle, 1, text_width)
                 or nil
             local text_y
             if subtitle then

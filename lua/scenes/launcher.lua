@@ -1,4 +1,9 @@
 local scene = { id = "launcher", chrome = "standard" }
+scene.persist_fields = {
+    { key = "selected", kind = "number" },
+    { key = "dock_selected", kind = "number" },
+    { key = "focus_scope", kind = "string" },
+}
 local icons = require("icons")
 local layout = require("layout")
 local List = require("ui.list")

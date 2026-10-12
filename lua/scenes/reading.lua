@@ -3,30 +3,16 @@ local settings = require("settings")
 local icons = require("icons")
 local layout = require("layout")
 local theme = require("theme")
+local text = require("text")
 local ActionBar = require("ui.action_bar")
 local scene = { id = "reading", chrome = "fullscreen", status = true, status_title = true }
+scene.persist_fields = {
+    { key = "dock_selected", kind = "number" },
+    { key = "focus_scope", kind = "string" },
+}
 
 function scene.title(stage)
     return stage.book and stage.book.title or "Reader"
-end
-
-local function truncate_text(text, size, width)
-    local suffix = "..."
-    if canvas.measure(text, size) <= width then
-        return text
-    end
-    local length = #text
-    while length > 0 and canvas.measure(text:sub(1, length) .. suffix, size) > width do
-        length = length - 1
-        while length > 0 do
-            local byte = text:byte(length)
-            if byte < 128 or byte >= 192 then
-                break
-            end
-            length = length - 1
-        end
-    end
-    return text:sub(1, length) .. suffix
 end
 
 function scene.create(context)
@@ -61,11 +47,20 @@ function scene.create(context)
         action_bar = ActionBar({ actions = actions, selected = 1 }),
     }
 end
-function scene.show(stage, params)
-    stage.book = params and params.book or stage.book
+local function open_book(stage, book)
+    stage.book = book
     if stage.book then
         reader.open(stage.book)
     end
+end
+function scene.show(stage, params)
+    open_book(stage, params and params.book or stage.book)
+end
+-- The book itself isn't a persist_fields scalar -- persistence.lua already
+-- carries reader.last_book/page/spine separately (see persistence.load()),
+-- so restoring a stage just needs to re-open whatever that resolved to.
+function scene.restore(stage)
+    open_book(stage, reader.last_book)
 end
 function scene.dock(stage)
     return stage.action_bar.actions
@@ -156,7 +151,7 @@ function scene.draw(stage, bounds)
     end
     local progress_width = reader.progress_width(text_width)
     local page_label = string.format("%d / %d", reader.page, reader.page_count)
-    local chapter = truncate_text(reader.chapter_name(), 1, text_width - layout.scale_x(100))
+    local chapter = text.truncate(reader.chapter_name(), 1, text_width - layout.scale_x(100))
     local page_label_x = text_right - canvas.measure(page_label, 1)
     canvas.rectangle(footer.x, footer.y, footer.width, footer.height, theme.color.surface)
     canvas.text(text_x, footer.y + layout.scale_y(5), chapter, 1, 0)

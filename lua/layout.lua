@@ -187,6 +187,43 @@ function layout.text_group_y(rect, entries, gap)
     return positions
 end
 
+-- The standard "header strip / scrollable content / footer strip" shape
+-- shared by every standard-chrome scene (library, file browser, settings).
+-- Keeps their header/footer sizing and padding from drifting independently.
+function layout.scene(box, options)
+    options = options or {}
+    local regions = layout.column(
+        box,
+        { padding = options.padding or 24, gap = options.gap or 8 },
+        {
+            { size = options.header or 60 },
+            { fill = true },
+            { size = options.footer or 28 },
+        }
+    )
+    return { header = regions[1], content = regions[2], footer = regions[3] }
+end
+
+-- Centers `text` on both axes within `rect` (the "Page N / M" footer label
+-- shape, used by several scenes).
+function layout.center_text(rect, text, size, gray)
+    local width = canvas.measure(text, size)
+    canvas.text(
+        rect.x + math.floor((rect.width - width) / 2),
+        layout.text_y(rect, text, size),
+        text,
+        size,
+        gray
+    )
+end
+
+-- Centers `text` horizontally across the full display width at a fixed y
+-- (the splash-screen label shape, independent of any particular rect).
+function layout.center_x(y, text, size, gray)
+    local width = canvas.measure(text, size)
+    canvas.text(math.floor((layout.width - width) / 2), y, text, size, gray)
+end
+
 -- Structural chrome regions, adapting to orientation: the status bar is
 -- always a strip pinned to the top; the dock is a strip pinned to the
 -- bottom in portrait, or a rail pinned to the left in landscape, so it

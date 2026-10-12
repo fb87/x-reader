@@ -2,6 +2,12 @@ local icons = require("icons")
 local layout = require("layout")
 local List = require("ui.list")
 local scene = { id = "file_manager", chrome = "standard" }
+scene.persist_fields = {
+    { key = "selected", kind = "number" },
+    { key = "dock_selected", kind = "number" },
+    { key = "focus_scope", kind = "string" },
+    { key = "path", kind = "string" },
+}
 function scene.title(stage)
     if stage.path == "" then
         return "SD Card"
@@ -52,6 +58,17 @@ function scene.create()
         focus_scope = "content",
         list = List({ rows = rows, selected_id = rows[1] and rows[1].id, row_height = 84 }),
     }
+end
+-- Restoring a persisted stage sets `path`/`selected` directly on the stage
+-- (see app.lua's `persist_fields` restore), but `list.rows` was built fresh
+-- by `create()` for the root directory -- re-derive it for the restored
+-- path, same as a live `enter_path` navigation would.
+function scene.restore(stage)
+    local selected = stage.selected or 1
+    enter_path(stage, stage.path or "")
+    stage.selected = math.max(1, math.min(#stage.list.rows, selected))
+    stage.list.selected_id = stage.list.rows[stage.selected] and stage.list.rows[stage.selected].id
+        or (stage.list.rows[1] and stage.list.rows[1].id)
 end
 function scene.dock()
     return {
@@ -121,12 +138,8 @@ function scene.event(stage, event, context)
     scene.open_selected(stage, context)
 end
 function scene.draw(stage, bounds)
-    local regions = layout.column(bounds, { padding = 20, gap = 8 }, {
-        { size = 64 },
-        { fill = true },
-        { size = 28 },
-    })
-    local header, list_area, footer = regions[1], regions[2], regions[3]
+    local regions = layout.scene(bounds, { padding = 20, header = 64 })
+    local header, list_area, footer = regions.header, regions.content, regions.footer
     canvas.text(
         header.x + layout.scale_x(4),
         layout.text_y(header, icons.folder, 6),
@@ -143,25 +156,11 @@ function scene.draw(stage, bounds)
     )
     stage.list.active = stage.focus_scope == "content"
     stage.list:layout(list_area)
-    stage.list.page = math.floor(
-        (stage.selected - 1)
-            / math.max(
-                1,
-                math.floor(stage.list.bounds.height / layout.scale_y(stage.list.row_height))
-            )
-    ) + 1
     stage.list:draw()
     local page_label = "Page "
         .. tostring(stage.list.page)
         .. " / "
         .. tostring(stage.list.page_count)
-    local label_width = canvas.measure(page_label, 1)
-    canvas.text(
-        footer.x + math.floor((footer.width - label_width) / 2),
-        layout.text_y(footer, page_label, 1),
-        page_label,
-        1,
-        5
-    )
+    layout.center_text(footer, page_label, 1, 5)
 end
 return scene

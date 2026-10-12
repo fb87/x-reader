@@ -4,6 +4,11 @@ local layout = require("layout")
 local List = require("ui.list")
 local Dialog = require("ui.dialog")
 local scene = { id = "library", chrome = "standard" }
+scene.persist_fields = {
+    { key = "selected", kind = "number" },
+    { key = "dock_selected", kind = "number" },
+    { key = "focus_scope", kind = "string" },
+}
 function scene.title()
     return "Library"
 end
@@ -159,21 +164,10 @@ function scene.event(stage, event, context)
 end
 function scene.draw(stage, bounds)
     stage.list.selected_id = "book:" .. tostring(stage.selected)
-    local regions = layout.column(bounds, { padding = 20, gap = 8 }, {
-        { size = 60 },
-        { fill = true },
-        { size = 28 },
-    })
-    local header, list_area, footer = regions[1], regions[2], regions[3]
+    local regions = layout.scene(bounds, { padding = 20 })
+    local header, list_area, footer = regions.header, regions.content, regions.footer
     canvas.text(header.x, layout.text_y(header, "Library", 3), "Library", 3, 0)
     stage.list:layout(list_area)
-    stage.list.page = math.floor(
-        (stage.selected - 1)
-            / math.max(
-                1,
-                math.floor(stage.list.bounds.height / layout.scale_y(stage.list.row_height))
-            )
-    ) + 1
     stage.list:draw()
     local halves = layout.row(footer, {}, { { fill = true }, { fill = true } })
     stage.footer_prev, stage.footer_next = halves[1], halves[2]
@@ -181,13 +175,6 @@ function scene.draw(stage, bounds)
         .. tostring(stage.list.page)
         .. " / "
         .. tostring(stage.list.page_count)
-    local label_width = canvas.measure(page_label, 1)
-    canvas.text(
-        footer.x + math.floor((footer.width - label_width) / 2),
-        layout.text_y(footer, page_label, 1),
-        page_label,
-        1,
-        5
-    )
+    layout.center_text(footer, page_label, 1, 5)
 end
 return scene

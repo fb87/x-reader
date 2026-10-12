@@ -6,6 +6,14 @@ local List = require("ui.list")
 local theme = require("theme")
 -- watcher verification
 local scene = { id = "settings", chrome = "standard" }
+scene.persist_fields = {
+    { key = "selected", kind = "number" },
+    { key = "dock_selected", kind = "number" },
+    { key = "focus_scope", kind = "string" },
+    { key = "page", kind = "string" },
+    { key = "control_selected", kind = "number" },
+    { key = "row_page", kind = "number" },
+}
 local categories = { "Reading", "Display", "Storage", "System", "About" }
 local category_icons = { icons.book, icons.display, icons.storage, icons.tune, icons.info }
 local page_rows = {
@@ -235,12 +243,8 @@ function scene.event(stage, event, context)
     end
 end
 function scene.draw(stage, bounds)
-    local regions = layout.column(bounds, { padding = 24, gap = 8 }, {
-        { size = 60 },
-        { fill = true },
-        { size = 28 },
-    })
-    local header, content, footer = regions[1], regions[2], regions[3]
+    local regions = layout.scene(bounds)
+    local header, content, footer = regions.header, regions.content, regions.footer
     if stage.page == "root" then
         stage.list.selected_id = "settings:" .. categories[stage.selected]
         stage.list.active = stage.focus_scope == "content"
@@ -310,14 +314,7 @@ function scene.draw(stage, bounds)
         end
         if stage.notice == nil and page_count > 1 then
             local page_label = "Page " .. tostring(stage.row_page) .. " / " .. tostring(page_count)
-            local label_width = canvas.measure(page_label, 1)
-            canvas.text(
-                footer.x + math.floor((footer.width - label_width) / 2),
-                layout.text_y(footer, page_label, 1),
-                page_label,
-                1,
-                5
-            )
+            layout.center_text(footer, page_label, 1, 5)
         end
     end
     if stage.notice ~= nil then

@@ -2,27 +2,9 @@ local layout = require("layout")
 local icons = require("icons")
 local settings = require("settings")
 local theme = require("theme")
+local text = require("text")
 local chrome = {}
 -- The simulator watcher reloads this module after every Lua edit.
-
-local function truncate_title(title, width)
-    local suffix = "..."
-    if canvas.measure(title, 1) <= width then
-        return title
-    end
-    local length = #title
-    while length > 0 and canvas.measure(title:sub(1, length) .. suffix, 1) > width do
-        length = length - 1
-        while length > 0 do
-            local byte = title:byte(length)
-            if byte < 128 or byte >= 192 then
-                break
-            end
-            length = length - 1
-        end
-    end
-    return title:sub(1, length) .. suffix
-end
 
 function chrome.status(area, title, show_title)
     canvas.rectangle(area.x, area.y, area.width, area.height, theme.color.background)
@@ -33,7 +15,7 @@ function chrome.status(area, title, show_title)
     if show_title and title ~= nil and title ~= "" then
         local title_x = layout.scale_x(96)
         local title_right = area.x + area.width - layout.scale_x(126)
-        title = truncate_title(title, title_right - title_x - 4)
+        title = text.truncate(title, 1, title_right - title_x - 4)
         local title_width = canvas.measure(title, 1)
         canvas.text(title_x, layout.text_y(area, title, 1), title, 1, 0)
     end

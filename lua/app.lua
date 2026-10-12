@@ -129,6 +129,68 @@ local function create_application()
         return scenes[id], stage_for(id)
     end
 
+    -- Captures just the handful of scalar fields each scene declares via
+    -- `scene.persist_fields` (highlight, scroll/page, focus zone, dock
+    -- selection, ...) -- not the whole stage, which also holds widget
+    -- instances (List/Dialog/ActionBar) that aren't meant to survive a
+    -- restart and rebuild themselves from these scalars on resume anyway.
+    function context.navigation_snapshot()
+        local snapshot_stack = {}
+        for index, id in ipairs(stack) do
+            snapshot_stack[index] = id
+        end
+        local snapshot_stages = {}
+        for _, id in ipairs(snapshot_stack) do
+            local scene_fields = scenes[id].persist_fields
+            local stage = stages[id]
+            if scene_fields ~= nil and stage ~= nil then
+                local values = {}
+                for _, field in ipairs(scene_fields) do
+                    values[field.key] = stage[field.key]
+                end
+                snapshot_stages[id] = values
+            end
+        end
+        return { stack = snapshot_stack, stages = snapshot_stages }
+    end
+
+    -- Replays a persisted stack (oldest first) exactly as `navigation_snapshot`
+    -- captured it: recreate each stage, reapply its persisted scalars, then
+    -- let the scene re-derive anything else (e.g. file_manager's row list
+    -- from its persisted `path`, reading's open document from the book
+    -- `persistence.load()` already restored) via an optional `scene.restore`.
+    function context.restore_navigation(navigation)
+        if navigation == nil or navigation.stack == nil or #navigation.stack == 0 then
+            return false
+        end
+        local restored_stack = {}
+        for _, id in ipairs(navigation.stack) do
+            if scenes[id] == nil then
+                return false
+            end
+            restored_stack[#restored_stack + 1] = id
+        end
+        stack = restored_stack
+        for _, id in ipairs(stack) do
+            local stage = stage_for(id)
+            local raw = navigation.stages[id]
+            local scene_fields = scenes[id].persist_fields
+            if raw ~= nil and scene_fields ~= nil then
+                for _, field in ipairs(scene_fields) do
+                    local value = raw[field.key]
+                    if value ~= nil then
+                        stage[field.key] = field.kind == "number" and tonumber(value) or value
+                    end
+                end
+            end
+            if scenes[id].restore then
+                scenes[id].restore(stage, context)
+            end
+        end
+        return true
+    end
+    persistence.set_navigation_provider(context.navigation_snapshot)
+
     local application = {}
 
     local function configure_layout()
@@ -169,7 +231,7 @@ local function create_application()
         last_activity = system.monotonic_ms()
         if snapshot and snapshot.screen and scenes[snapshot.screen] then
             context.replace(snapshot.screen)
-        else
+        elseif not context.restore_navigation(persistence.navigation) then
             if scenes.loader.show then
                 scenes.loader.show(stage_for("loader"), nil, "start")
             end
@@ -302,8 +364,6 @@ local function create_application()
     function application.stop()
         persistence.save()
     end
-
-    function application.stop(_) end
 
     return application
 end

@@ -18,11 +18,6 @@ function scene.update(stage, now, context)
     end
     return false
 end
-local function centered_text(y, text, size, gray)
-    local width = canvas.measure(text, size)
-    canvas.text(math.floor((layout.width - width) / 2), y, text, size, gray)
-end
-
 function scene.draw()
     canvas.clear(theme.color.background)
     local box_size = layout.scale_x(120)
@@ -33,8 +28,8 @@ function scene.draw()
         layout.scale_y(120),
         2
     )
-    centered_text(layout.scale_y(400), "X-Reader", 3, 0)
-    centered_text(layout.scale_y(458), "EPUB reader for ESP32", 1, 4)
-    centered_text(layout.scale_y(700), "Loading", 1, 0)
+    layout.center_x(layout.scale_y(400), "X-Reader", 3, 0)
+    layout.center_x(layout.scale_y(458), "EPUB reader for ESP32", 1, 4)
+    layout.center_x(layout.scale_y(700), "Loading", 1, 0)
 end
 return scene

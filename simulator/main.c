@@ -132,7 +132,8 @@ int main(int argc, char** argv) {
         }
         if (event.type == PLATFORM_EVENT_QUIT) {
             running = false;
-        } else if (watch && event.type == PLATFORM_EVENT_BUTTON && event.button == SDLK_r) {
+        } else if (watch && event.type == PLATFORM_EVENT_BUTTON && event.button == SDLK_r &&
+                   event.pressed) {
             if (runtime_reload(&runtime, &config) != PLATFORM_OK) {
                 fprintf(stderr, "Lua reload failed: %s\n", runtime_error(runtime));
             } else {
