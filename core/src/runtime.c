@@ -241,14 +241,27 @@ static int system_state_load(lua_State* state) {
         lua_pushnil(state);
         return 1;
     }
+    /* A missing file and a corrupt/unreadable one are both just "no usable
+     * saved state" from the caller's perspective (persistence.load() already
+     * falls back to a fresh bookshelf/settings start on nil) -- raising a
+     * hard Lua error here instead would abort application.start() entirely
+     * and leave the device stuck on a blank boot screen over a record that's
+     * supposed to be power-loss-safe to lose. Log the reason so a corrupt
+     * record is still diagnosable, but never let it block boot. */
     if (length < STATE_HEADER_BYTES || memcmp(record, "XRST", 4U) != 0 ||
-        state_u32(&record[4]) != 1U)
-        return luaL_error(state, "invalid state record");
+        state_u32(&record[4]) != 1U) {
+        (void)fprintf(stderr, "state record ignored: invalid header\n");
+        lua_pushnil(state);
+        return 1;
+    }
     const uint32_t payload_length = state_u32(&record[8]);
     const uint32_t expected_crc = state_u32(&record[12]);
     if (payload_length > STATE_MAX_BYTES || (size_t)payload_length + STATE_HEADER_BYTES != length ||
-        state_crc32(&record[STATE_HEADER_BYTES], payload_length) != expected_crc)
-        return luaL_error(state, "corrupt state record");
+        state_crc32(&record[STATE_HEADER_BYTES], payload_length) != expected_crc) {
+        (void)fprintf(stderr, "state record ignored: failed size/checksum validation\n");
+        lua_pushnil(state);
+        return 1;
+    }
     lua_pushlstring(state, (const char*)&record[STATE_HEADER_BYTES], payload_length);
     return 1;
 }

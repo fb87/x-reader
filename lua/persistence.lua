@@ -124,7 +124,16 @@ function persistence.save()
             end
         end
     end
-    system.state_save(table.concat(values, "\n"))
+    -- A write failure (SD card removed, full, write-protected, transient
+    -- I/O error) must not be fatal: persistence.save() is called from
+    -- ordinary event handling (e.g. a settings toggle), which the C runtime
+    -- invokes through a protected call that treats any propagated error as
+    -- reason to tear the whole app down -- turning a lost save into a device
+    -- hang. Losing this save is recoverable; killing the running app is not.
+    local saved, failure = pcall(system.state_save, table.concat(values, "\n"))
+    if not saved then
+        print("persistence.save failed: " .. tostring(failure))
+    end
 end
 
 return persistence

@@ -497,25 +497,16 @@ static void close_archive(void* opaque, struct platform_archive* archive) {
     m5paper_storage_close_archive(&context->storage, archive);
 }
 
-static enum platform_status unavailable_state(void* opaque, const char* root, const char* name,
-                                              uint8_t* buffer, size_t capacity, size_t* length) {
-    (void)opaque;
-    (void)root;
-    (void)name;
-    (void)buffer;
-    (void)capacity;
-    (void)length;
-    return PLATFORM_ERROR;
+static enum platform_status state_read(void* opaque, const char* root, const char* name,
+                                       uint8_t* buffer, size_t capacity, size_t* length) {
+    struct app_platform* context = opaque;
+    return m5paper_storage_state_read(&context->storage, root, name, buffer, capacity, length);
 }
 
-static enum platform_status unavailable_write(void* opaque, const char* root, const char* name,
-                                              const uint8_t* data, size_t length) {
-    (void)opaque;
-    (void)root;
-    (void)name;
-    (void)data;
-    (void)length;
-    return PLATFORM_NOT_SUPPORTED;
+static enum platform_status state_write(void* opaque, const char* root, const char* name,
+                                        const uint8_t* data, size_t length) {
+    struct app_platform* context = opaque;
+    return m5paper_storage_state_write(&context->storage, root, name, data, length);
 }
 
 esp_err_t esp_platform_create(struct platform* platform) {
@@ -618,8 +609,8 @@ esp_err_t esp_platform_create(struct platform* platform) {
         .list_storage = list_storage,
         .open_archive = open_archive,
         .close_archive = close_archive,
-        .state_read = unavailable_state,
-        .state_write = unavailable_write,
+        .state_read = state_read,
+        .state_write = state_write,
     };
     return ESP_OK;
 }

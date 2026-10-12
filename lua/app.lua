@@ -179,7 +179,25 @@ local function create_application()
                 for _, field in ipairs(scene_fields) do
                     local value = raw[field.key]
                     if value ~= nil then
-                        stage[field.key] = field.kind == "number" and tonumber(value) or value
+                        -- A garbled numeric field (e.g. a truncated/corrupt
+                        -- record that still happened to pass the CRC check)
+                        -- makes tonumber() fail; leave the scene's own
+                        -- create()-time default in place rather than
+                        -- overwriting it with a non-number, which would
+                        -- crash the first time the scene does arithmetic on
+                        -- it. (Not `kind == "number" and tonumber(value) or
+                        -- value` -- that idiom falls through to `value` when
+                        -- tonumber returns nil, silently keeping the raw
+                        -- string instead of rejecting it.)
+                        local coerced
+                        if field.kind == "number" then
+                            coerced = tonumber(value)
+                        else
+                            coerced = value
+                        end
+                        if coerced ~= nil then
+                            stage[field.key] = coerced
+                        end
                     end
                 end
             end

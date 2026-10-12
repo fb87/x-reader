@@ -1,5 +1,6 @@
 local reader = require("reader")
 local settings = require("settings")
+local persistence = require("persistence")
 local icons = require("icons")
 local layout = require("layout")
 local theme = require("theme")
@@ -55,6 +56,12 @@ local function open_book(stage, book)
 end
 function scene.show(stage, params)
     open_book(stage, params and params.book or stage.book)
+    -- Save immediately, not just on a clean shutdown: a physical reset or
+    -- power loss on real hardware skips application.stop() entirely (there's
+    -- no OS-level warning before the MCU just restarts), so "open a book"
+    -- must itself be a persisted checkpoint or the device forgets it even
+    -- survived to the next page.
+    persistence.save()
 end
 -- The book itself isn't a persist_fields scalar -- persistence.lua already
 -- carries reader.last_book/page/spine separately (see persistence.load()),

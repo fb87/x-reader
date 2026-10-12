@@ -32,7 +32,7 @@ void app_main(void) {
     const struct runtime_config config = {
         .script_directory = "/lua",
         .library_directory = "/sdcard",
-        .state_directory = "/state",
+        .state_directory = "/sdcard/.x-reader",
         .memory_limit = 3U * 1024U * 1024U,
         .instruction_limit = 1000000U,
     };

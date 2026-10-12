@@ -19,5 +19,9 @@ enum platform_status m5paper_storage_list(void* opaque, const char* root, const 
 enum platform_status m5paper_storage_open_archive(void* opaque, const char* root, const char* path,
                                                   struct platform_archive* archive);
 void m5paper_storage_close_archive(void* opaque, struct platform_archive* archive);
+enum platform_status m5paper_storage_state_read(void* opaque, const char* root, const char* name,
+                                                uint8_t* buffer, size_t capacity, size_t* length);
+enum platform_status m5paper_storage_state_write(void* opaque, const char* root, const char* name,
+                                                 const uint8_t* data, size_t length);
 
 #endif

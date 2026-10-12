@@ -5,14 +5,17 @@
 #include "zip.h"
 
 #include <dirent.h>
+#include <errno.h>
 #include <esp_log.h>
 #include <esp_vfs_fat.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <miniz.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 struct firmware_archive {
     FILE* file;
@@ -210,4 +213,84 @@ void m5paper_storage_close_archive(void* opaque, struct platform_archive* archiv
     free(firmware);
     archive->archive = NULL;
     archive->context = NULL;
+}
+
+enum platform_status m5paper_storage_state_read(void* opaque, const char* root, const char* name,
+                                                uint8_t* buffer, size_t capacity, size_t* length) {
+    struct m5paper_storage* storage = opaque;
+    if (storage == NULL || !storage->mounted || root == NULL || name == NULL || buffer == NULL ||
+        length == NULL) {
+        return PLATFORM_ERROR;
+    }
+    char path[PLATFORM_PATH_MAX];
+    const int written = snprintf(path, sizeof(path), "%s/%s", root, name);
+    if (written < 0 || (size_t)written >= sizeof(path)) {
+        return PLATFORM_ERROR;
+    }
+    FILE* file = fopen(path, "rb");
+    if (file == NULL) {
+        return PLATFORM_ERROR;
+    }
+    if (fseek(file, 0, SEEK_END) != 0) {
+        fclose(file);
+        return PLATFORM_ERROR;
+    }
+    const long end = ftell(file);
+    if (end < 0 || (unsigned long)end > capacity) {
+        fclose(file);
+        return PLATFORM_ERROR;
+    }
+    rewind(file);
+    const size_t expected = (size_t)end;
+    const bool valid = fread(buffer, 1U, expected, file) == expected;
+    fclose(file);
+    if (!valid) {
+        return PLATFORM_ERROR;
+    }
+    *length = expected;
+    return PLATFORM_OK;
+}
+
+/* Writes to a `.tmp` sibling, fsyncs it, then renames over the destination --
+ * the rename is atomic on FAT, so a power loss mid-write leaves either the
+ * old state record or nothing, never a half-written one. Mirrors
+ * platform/sdl/platform.c's state_write exactly; ESP-IDF's FATFS VFS
+ * supports the same POSIX stdio/fcntl calls the simulator uses. */
+enum platform_status m5paper_storage_state_write(void* opaque, const char* root, const char* name,
+                                                 const uint8_t* data, size_t length) {
+    struct m5paper_storage* storage = opaque;
+    if (storage == NULL || !storage->mounted || root == NULL || name == NULL || data == NULL) {
+        return PLATFORM_ERROR;
+    }
+    if (mkdir(root, 0755) != 0 && errno != EEXIST) {
+        return PLATFORM_ERROR;
+    }
+    char temporary[PLATFORM_PATH_MAX];
+    char destination[PLATFORM_PATH_MAX];
+    const int temporary_written = snprintf(temporary, sizeof(temporary), "%s/%s.tmp", root, name);
+    const int destination_written = snprintf(destination, sizeof(destination), "%s/%s", root, name);
+    if (temporary_written < 0 || destination_written < 0 ||
+        (size_t)temporary_written >= sizeof(temporary) ||
+        (size_t)destination_written >= sizeof(destination)) {
+        return PLATFORM_ERROR;
+    }
+    FILE* file = fopen(temporary, "wb");
+    if (file == NULL) {
+        return PLATFORM_ERROR;
+    }
+    const bool written = fwrite(data, 1U, length, file) == length && fflush(file) == 0;
+    const int descriptor = written ? open(temporary, O_RDONLY) : -1;
+    const bool synced = !written || (descriptor >= 0 && fsync(descriptor) == 0);
+    if (descriptor >= 0) {
+        close(descriptor);
+    }
+    if (fclose(file) != 0 || !written || !synced) {
+        remove(temporary);
+        return PLATFORM_ERROR;
+    }
+    if (rename(temporary, destination) != 0) {
+        remove(temporary);
+        return PLATFORM_ERROR;
+    }
+    return PLATFORM_OK;
 }
